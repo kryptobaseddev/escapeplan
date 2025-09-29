@@ -1,0 +1,98 @@
+import { afterAll, beforeAll, describe, expect, test } from 'vitest';
+import type { FastifyInstance } from 'fastify';
+import { buildServer } from '../src/index.js';
+import { sqlite } from '../src/db/client.js';
+
+let server: FastifyInstance;
+let token: string;
+let sessionFixture: { bookingId: string; sessionId: string; timerSlug: string } | null = null;
+
+beforeAll(async () => {
+  server = await buildServer();
+});
+
+afterAll(async () => {
+  if (sessionFixture) {
+    sqlite.prepare(`DELETE FROM timer_slugs WHERE slug = ?`).run(sessionFixture.timerSlug);
+    sqlite.prepare(`DELETE FROM session_hints WHERE session_id = ?`).run(sessionFixture.sessionId);
+    sqlite.prepare(`DELETE FROM session_puzzles WHERE session_id = ?`).run(sessionFixture.sessionId);
+    sqlite.prepare(`DELETE FROM sessions WHERE id = ?`).run(sessionFixture.sessionId);
+    sqlite.prepare(`DELETE FROM bookings WHERE id = ?`).run(sessionFixture.bookingId);
+  }
+  await server.close();
+});
+
+describe('EscapePlan mock API', () => {
+  test('authenticates operator and returns token', async () => {
+    const response = await server.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: 'escapeplan' }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const json = response.json() as { token: string };
+    expect(json.token).toBeDefined();
+    token = json.token;
+  });
+
+  test('returns dashboard data', async () => {
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/dashboard',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const json = response.json() as { activeSessions: unknown[]; upcomingBookings: unknown[] };
+    expect(Array.isArray(json.activeSessions)).toBe(true);
+    expect(Array.isArray(json.upcomingBookings)).toBe(true);
+  });
+
+  test('provides timer broadcast for slug', async () => {
+    if (!sessionFixture) {
+      const now = new Date();
+      const bookingId = `booking-${now.getTime()}`;
+      const sessionId = `session-${now.getTime()}`;
+      const timerSlug = 'pirate-mutany-live';
+
+      const game = sqlite.prepare(`SELECT id FROM games WHERE slug = ?`).get('pirate-mutany') as { id: string };
+      const room = sqlite.prepare(`SELECT id FROM rooms WHERE game_id = ? LIMIT 1`).get(game.id) as { id: string };
+
+      sqlite.prepare(
+        `INSERT INTO bookings (id, booking_code, game_id, room_id, start_time, end_time, status, party_size, deposit_due_cents, total_due_cents, price_tier, discount_code, is_mobile, location_note, contact_name, contact_phone)
+         VALUES (?, ?, ?, ?, ?, ?, 'checked_in', 4, 0, 0, 'standard', NULL, 0, NULL, 'Test Crew', '555-0100')`
+      ).run(
+        bookingId,
+        `TEST-${now.getTime()}`,
+        game.id,
+        room.id,
+        new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
+        new Date(now.getTime() + 55 * 60 * 1000).toISOString()
+      );
+
+      sqlite.prepare(
+        `INSERT INTO sessions (id, booking_id, status, timer_total_seconds, timer_remaining_seconds, timer_status, started_at, scheduled_end, hints_used, stream_thumbnail_url, background_audio_track, background_audio_is_playing, crew_primary, crew_support, recent_alert)
+         VALUES (?, ?, 'running', 3600, 3300, 'running', ?, ?, 0, NULL, NULL, 0, 'Console Operator', NULL, NULL)`
+      ).run(
+        sessionId,
+        bookingId,
+        new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
+        new Date(now.getTime() + 55 * 60 * 1000).toISOString()
+      );
+
+      sqlite.prepare(`INSERT INTO timer_slugs (slug, session_id, narrative) VALUES (?, ?, ?)`)
+        .run(timerSlug, sessionId, 'Live mission feed.');
+
+      sessionFixture = { bookingId, sessionId, timerSlug };
+    }
+
+    const response = await server.inject({
+      method: 'GET',
+      url: `/api/public/timer/${sessionFixture!.timerSlug}`
+    });
+    expect(response.statusCode).toBe(200);
+    const json = response.json() as { slug: string };
+    expect(json.slug).toBe(sessionFixture!.timerSlug);
+  });
+});

@@ -1,0 +1,26 @@
+# Node / pnpm
+node_modules/
+pnpm-debug.log
+npm-debug.log
+*.log
+
+# Build outputs
+apps/escapeplan-web/.svelte-kit/
+apps/escapeplan-web/build/
+apps/escapeplan-web/dev-dist/
+apps/escapeplan-web/dist/
+apps/escapeplan-web/.vite/
+apps/escapeplan-api/dist/
+apps/escapeplan-api/data/
+packages/contracts/dist/
+
+# Environment files
+.env
+*.env
+.env.*
+
+# OS files
+.DS_Store
+
+# External repositories handled separately
+platform/escapeplan-base/

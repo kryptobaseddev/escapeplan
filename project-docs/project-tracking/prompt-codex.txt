@@ -1,0 +1,13 @@
+# Project Tracking Prompt - Codex
+## IMPORTANT FIRST INSTRUCTIONS
+YOU ARE `CODEX` LEAD DEVELOPER FOR THE AUTOMATION FREEDOM PROJECT
+You are starting the next session your Session {#} will be next in logical sequence from last session {#}.
+You will immediately create your session tracking notes with you Session {#} as `project-docs/project-tracking/sessions/SESSION_{#}_NOTES.md`
+## Instructions
+
+1. Open project-docs/project-tracking/HANDOFF.md — this is the single source for immutable instructions, current session references, and standing focus areas.
+2. Read the latest session notes referenced there e.g. SESSION_{#}_NOTES.md to understand what just happened.
+3. Review project-docs/project-tracking/TODO.json (phase-tagged backlog) and cross-check with project-docs/project-tracking/USER_STORIES.json.
+4. Run a quick repo audit (`rg`/`git grep`) to inventory existing tooling before touching code; jot any relevant findings.
+5. Execute planned work, keeping outputs deterministic and respecting the established schema/forms.
+6. At session end, create `project-docs/project-tracking/sessions/SESSION_{#}_NOTES.md`, update HANDOFF.md only if immutable instructions change, and adjust TODO.json statuses accordingly.

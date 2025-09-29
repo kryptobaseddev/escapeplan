@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json.schemastore.org/web-manifest-combined.json",
+  "id": "/",
+  "name": "EscapePlan Operator Console",
+  "short_name": "EscapePlan",
+  "description": "EscapePlan operators manage bookings, rooms, timers, and hints from any device on the EscapePlan network.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0B0F10",
+  "theme_color": "#0B0F10",
+  "categories": ["business", "productivity"],
+  "screenshots": [
+    {
+      "src": "/logo.png",
+      "sizes": "539x680",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "EscapePlan neon maze crest"
+    }
+  ],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48 32x32 16x16",
+      "type": "image/x-icon"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Review live sessions and system status.",
+      "url": "/dashboard"
+    },
+    {
+      "name": "Bookings",
+      "short_name": "Bookings",
+      "description": "Manage storefront and mobile bookings.",
+      "url": "/bookings"
+    }
+  ]
+}

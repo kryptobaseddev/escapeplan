@@ -1,0 +1,97 @@
+@import "tailwindcss";
+@source "./**/*.{html,svelte,ts,js}";
+@plugin "daisyui";
+
+@theme {
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+[data-theme='escapeplan'] {
+  color-scheme: dark;
+  --color-base-100: #0f1115;
+  --color-base-200: #14171d;
+  --color-base-300: #191d24;
+  --color-base-content: #f6f7fb;
+  --color-primary: #00d5c8;
+  --color-primary-content: #012a27;
+  --color-secondary: #c43131;
+  --color-secondary-content: #ffe1e1;
+  --color-accent: #1e88e5;
+  --color-accent-content: #e3f2fd;
+  --color-neutral: #1a1d23;
+  --color-neutral-content: #f1f3f8;
+  --color-info: #2196f3;
+  --color-info-content: #0b2546;
+  --color-success: #4caf50;
+  --color-success-content: #041808;
+  --color-warning: #ffb300;
+  --color-warning-content: #291401;
+  --color-error: #f44336;
+  --color-error-content: #2d0703;
+  --radius-box: 1rem;
+  --radius-field: 0.75rem;
+  --radius-selector: 0.6rem;
+  --size-selector: 0.35rem;
+  --border: 1px;
+  --depth: 1.15;
+  --noise: 0.08;
+}
+
+body {
+  @apply min-h-screen bg-base-100 text-base-content font-sans antialiased;
+  background-image: radial-gradient(circle at 20% 20%, rgba(196, 49, 49, 0.08), transparent 55%),
+    radial-gradient(circle at 80% 10%, rgba(0, 213, 200, 0.12), transparent 45%),
+    radial-gradient(circle at 50% 80%, rgba(30, 136, 229, 0.08), transparent 55%);
+  background-attachment: fixed;
+}
+
+a {
+  @apply text-primary underline-offset-4 hover:underline;
+}
+
+.glass-panel {
+  @apply rounded-2xl border border-white/5 bg-base-200/60 backdrop-blur-lg shadow-lg shadow-black/30;
+}
+
+.section-heading {
+  @apply text-3xl font-display font-semibold text-base-content/90 sm:text-4xl;
+}
+
+[data-theme='escapeplan'] .nav-link {
+  @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-base-content/60 transition duration-200 ease-out hover:bg-base-300/60 hover:text-base-content;
+}
+
+[data-theme='escapeplan'] .nav-link[data-active='true'] {
+  @apply bg-primary/20 text-primary shadow-inner shadow-primary/10;
+}
+
+[data-theme='escapeplan'] [data-collapsed='true'] .nav-link {
+  justify-content: center;
+  gap: 0;
+  padding-inline: 0.75rem;
+}
+
+[data-theme='escapeplan'] [data-collapsed='true'] .nav-link span[data-label] {
+  display: none;
+}
+
+[data-theme='escapeplan'] [data-collapsed='true'] .nav-link > span:first-child {
+  margin-inline: auto;
+}
+
+.badge-pill {
+  @apply inline-flex items-center gap-2 rounded-full bg-neutral/70 px-3 py-1 text-xs font-medium text-neutral-content/80;
+}
+
+.metric-card {
+  @apply rounded-2xl border border-white/10 bg-base-200/70 backdrop-blur-lg shadow-lg shadow-black/30 p-5 transition duration-200 hover:border-primary/40 hover:shadow-primary/20;
+}
+
+[data-theme='escapeplan'] .hero-title {
+  @apply text-4xl font-display tracking-tight text-base-content;
+}

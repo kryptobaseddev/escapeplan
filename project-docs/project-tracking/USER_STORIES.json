@@ -1,0 +1,1155 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-09-29",
+  "projectName": "EscapePlan",
+  "projectVersion": "0.1.0",
+  "stories": [
+    {
+      "id": "US-001",
+      "title": "Understand competitor landscape for EscapePlan",
+      "persona": "Owner Operator",
+      "epic": "Strategic Foundations",
+      "priority": "HIGH",
+      "status": "COMPLETED",
+      "implementedIn": "P1-001",
+      "relatedTodos": [
+        "P1-001"
+      ],
+      "story": "As an owner operator, I want a clear competitor matrix so that we can position EscapePlan around offline reliability and mobile capabilities.",
+      "acceptanceCriteria": [
+        "Feature comparison for OffTheCouch, Houdini MC, Escape Room Master, Escape Room Admin, and ClueMaster is documented.",
+        "Differentiators for offline-first Pi deployments are listed.",
+        "Risks from parity gaps captured in risk register."
+      ],
+      "businessValue": "Ensures the roadmap emphasizes competitive advantages for store and mobile operations; informs MVP focus.",
+      "technicalNotes": "project-docs/project-overview.md \u00a71.1.1 holds matrix; sync with TODO risk register RISK-002.",
+      "risks": [
+        "Missing competitor insights leads to scope creep later."
+      ],
+      "effort": 3,
+      "dependencies": [],
+      "mockups": [],
+      "testCases": [
+        "Review project-docs/project-overview.md and confirm competitor matrix exists."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-002",
+      "title": "Lock MVP scope and success metrics",
+      "persona": "Owner Operator",
+      "epic": "Strategic Foundations",
+      "priority": "CRITICAL",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P1-002",
+      "relatedTodos": [
+        "P1-002"
+      ],
+      "story": "As an owner operator, I need the MVP boundaries defined so that we can deliver a focused release quickly.",
+      "acceptanceCriteria": [
+        "MVP feature list split between store-front and mobile operations is documented.",
+        "Success metrics (uptime, setup time, operator clicks) appear in overview section 1.5.",
+        "Out-of-scope backlog created for future releases."
+      ],
+      "businessValue": "Prevents scope drift and aligns pilot expectations.",
+      "technicalNotes": "Update roadmap in section 17 with v0.2+ candidates.",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-001"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Validate overview document contains success metrics table.",
+        "Verify project-docs/project-overview.md \u00a71.4 and \u00a717 describe MVP scope and roadmap with store/mobile split."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-003",
+      "title": "Document hardware and network baseline",
+      "persona": "Platform Lead",
+      "epic": "Platform & Deployment",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P1-003",
+      "relatedTodos": [
+        "P1-003"
+      ],
+      "story": "As the platform lead, I want a hardware/network baseline so the base image meets performance needs.",
+      "acceptanceCriteria": [
+        "Pi performance envelope and camera capacity are listed.",
+        "AC600M configuration parameters recorded.",
+        "Peripheral checklist created for store and mobile kits."
+      ],
+      "businessValue": "Guides pi-gen configuration and procurement planning.",
+      "technicalNotes": "Include thermal considerations and power budgets.",
+      "risks": [],
+      "effort": 3,
+      "dependencies": [
+        "US-002"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Check architecture docs for hardware baseline appendix."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-10-01",
+      "modifiedBy": "Session 2"
+    },
+    {
+      "id": "US-004",
+      "title": "Clarify domain model and service boundaries",
+      "persona": "Backend Lead",
+      "epic": "Strategic Foundations",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P1-004",
+      "relatedTodos": [
+        "P1-004"
+      ],
+      "story": "As the backend lead, I need domain context diagrams so that services remain modular.",
+      "acceptanceCriteria": [
+        "Domain model covers users, games, rooms, bookings, sessions, hints, cameras, mobile kits.",
+        "Context diagrams highlight interactions between API, streaming, scheduling, and reporting modules.",
+        "Artifacts stored in project-docs/architecture/."
+      ],
+      "businessValue": "Reduces rework during API implementation.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-002"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Open architecture diagrams and confirm coverage of all core entities."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-10-01",
+      "modifiedBy": "Session 2"
+    },
+    {
+      "id": "US-005",
+      "title": "Define UX strategy and DaisyUI theme",
+      "persona": "Frontend Lead",
+      "epic": "Strategic Foundations",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P1-005",
+      "relatedTodos": [
+        "P1-005"
+      ],
+      "story": "As the frontend lead, I need a documented design system so the PWA feels cohesive on mobile devices.",
+      "acceptanceCriteria": [
+        "Custom DaisyUI theme tokens defined with target palette.",
+        "Responsive layout guidelines documented for phone and tablet viewports.",
+        "Accessibility checklist created (WCAG AA targets)."
+      ],
+      "businessValue": "Accelerates UI build and ensures accessibility from day one.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-002"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Inspect design docs for DaisyUI theme configuration."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-10-01",
+      "modifiedBy": "Session 2"
+    },
+    {
+      "id": "US-006",
+      "title": "Build escapeplan-base pi-gen image",
+      "persona": "Platform Lead",
+      "epic": "Platform & Deployment",
+      "priority": "CRITICAL",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P2-001",
+      "relatedTodos": [
+        "P2-001"
+      ],
+      "story": "As the platform lead, I want a reproducible base image so deployment to Pi is turnkey.",
+      "acceptanceCriteria": [
+        "pi-gen repo builds image containing Node.js 22, ffmpeg, and nginx.",
+        "Automated build:image script documented and passing.",
+        "Image boots to configured EscapePlan services baseline."
+      ],
+      "businessValue": "Guarantees consistent field deployments and simplifies support.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-003"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Execute pnpm run build:image and verify success on arm64 runner."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-10-01",
+      "modifiedBy": "Session 2"
+    },
+    {
+      "id": "US-007",
+      "title": "Automate Wi-Fi AP and DHCP for EscapePlan",
+      "persona": "Platform Lead",
+      "epic": "Platform & Deployment",
+      "priority": "CRITICAL",
+      "status": "NOT_STARTED",
+      "implementedIn": "P2-002",
+      "relatedTodos": [
+        "P2-002"
+      ],
+      "story": "As the platform lead, I need the Pi to broadcast a reliable private network so operators can connect anywhere.",
+      "acceptanceCriteria": [
+        "hostapd/dnsmasq configs generated from templates with EscapePlan SSID.",
+        "Services auto-start on boot and recover after power loss.",
+        "Channel plan documented for crowded events."
+      ],
+      "businessValue": "Ensures offline independence without manual setup.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-006"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Boot image and confirm SSID broadcast + DHCP lease assignment."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-008",
+      "title": "Keep services resilient and observable",
+      "persona": "Platform Lead",
+      "epic": "Platform & Deployment",
+      "priority": "HIGH",
+      "status": "NOT_STARTED",
+      "implementedIn": "P2-003",
+      "relatedTodos": [
+        "P2-003",
+        "P2-004"
+      ],
+      "story": "As the platform lead, I want managed systemd units and health checks so downtime is minimized.",
+      "acceptanceCriteria": [
+        "escapeplan-api and escapeplan-ffmpeg@ units restart on failure with logging.",
+        "Health endpoints expose service state and disk usage.",
+        "Runbook documents restart and troubleshooting steps."
+      ],
+      "businessValue": "Supports reliable game-day operations without engineering support.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-006"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Simulate service crash and confirm auto-restart and alert logging."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-009",
+      "title": "Secure system and ensure recoverability",
+      "persona": "Platform Lead",
+      "epic": "Platform & Deployment",
+      "priority": "HIGH",
+      "status": "NOT_STARTED",
+      "implementedIn": "P2-005",
+      "relatedTodos": [
+        "P2-005",
+        "P2-006"
+      ],
+      "story": "As the platform lead, I need security hardening and backups so data is safe even offline.",
+      "acceptanceCriteria": [
+        "Firewall, SSH policy, and user accounts defined.",
+        "Automated database and asset backups scheduled with retention.",
+        "OTA/rollback process documented for operators."
+      ],
+      "businessValue": "Protects customer data and reduces recovery time after incidents.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-008"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Run backup job and restore on test Pi."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-010",
+      "title": "Establish database migrations and seed data",
+      "persona": "Backend Lead",
+      "epic": "Core Services",
+      "priority": "CRITICAL",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P3-002",
+      "relatedTodos": [
+        "P3-002",
+        "P3-003"
+      ],
+      "story": "As the backend lead, I need schema migrations and real seed data so the system boots with meaningful records.",
+      "acceptanceCriteria": [
+        "Drizzle migrations cover all MVP tables with constraints.",
+        "Seed scripts populate roles, games, rooms, pricing, and mobile kit templates.",
+        "Migrations run idempotently during CI and device provisioning."
+      ],
+      "businessValue": "Prevents mock data reliance and accelerates QA.",
+      "technicalNotes": "Initial migration scaffolding added; schema mirrored in seed but lint fixes pending before enabling automated migrations. Rollup/esbuild binaries must be reinstalled on current host before CI verifies seeds.",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-004"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Run migration + seed on clean SQLite DB and verify data counts."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Session 3"
+    },
+    {
+      "id": "US-011",
+      "title": "Provide secure authentication and RBAC",
+      "persona": "General Manager",
+      "epic": "Core Services",
+      "priority": "CRITICAL",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P3-004",
+      "relatedTodos": [
+        "P3-004",
+        "P3-011"
+      ],
+      "story": "As a general manager, I need role-based access so staff only see what they need.",
+      "acceptanceCriteria": [
+        "Admins manage users and reset passwords locally.",
+        "Session cookies expire appropriately with secure flags.",
+        "RBAC guards protect admin settings and bookings."
+      ],
+      "businessValue": "Protects operations while keeping workflow efficient.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-010"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Attempt unauthorized access and confirm denial across roles."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Session 3",
+      "notes": [
+        "2025-09-29: Token-based auth with Argon2id hashing and role-permission matrix in place; evaluating Better-Auth for persistent sessions and audit trails.",
+        "2025-09-29: Admin console migrated to Svelte runes; bearer token flow live while Better-Auth evaluation continues.",
+        "2025-09-29: Console supports self-service profile edits (name/email/bio/avatar) while admin management forms capture the new fields."
+      ]
+    },
+    {
+      "id": "US-012",
+      "title": "Manage games, puzzles, and hints",
+      "persona": "Content Designer",
+      "epic": "Content Management",
+      "priority": "HIGH",
+      "status": "NOT_STARTED",
+      "implementedIn": "P3-005",
+      "relatedTodos": [
+        "P3-005",
+        "P4-007"
+      ],
+      "story": "As a content designer, I want to curate puzzles and hints so each game stays up to date.",
+      "acceptanceCriteria": [
+        "CRUD operations for games, rooms, puzzles, hints with media upload.",
+        "Hints ordered and categorized for quick access during sessions, supporting text, image, audio, and video formats.",
+        "Set room screen background asset and theme tokens per game, with audit log entries."
+      ],
+      "businessValue": "Keeps experiences fresh and ensures hints are operator-ready.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-011"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Create new puzzle with hints and confirm availability in game runner."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-013",
+      "title": "Schedule bookings for store and mobile events",
+      "persona": "General Manager",
+      "epic": "Bookings & CRM",
+      "priority": "CRITICAL",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P3-006",
+      "relatedTodos": [
+        "P3-006",
+        "P4-006"
+      ],
+      "story": "As a general manager, I need unified booking tools so I can avoid conflicts across rooms and mobile events.",
+      "acceptanceCriteria": [
+        "Bookings capture party size, pricing tiers, deposit amount, and discount code.",
+        "System prevents double-booking of rooms or simultaneous sessions for the same game.",
+        "Provide daily calendar and printable schedule filtered by storefront vs mobile flag."
+      ],
+      "businessValue": "Maximizes utilization and prevents on-site conflicts.",
+      "technicalNotes": "Bookings manifest wired to stores with print action; offline queue + export still need live data stream. Vite dev server currently blocked by missing Rollup binary until node_modules are rebuilt locally.",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-010",
+        "US-007"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Create overlapping bookings and verify conflict warning."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Session 3"
+    },
+    {
+      "id": "US-014",
+      "title": "Control sessions with real-time timers and hints",
+      "persona": "Game Master",
+      "epic": "Game Control",
+      "priority": "CRITICAL",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P3-007",
+      "relatedTodos": [
+        "P3-007",
+        "P4-005"
+      ],
+      "story": "As a game master, I need a responsive game runner so I can keep teams engaged and track hints.",
+      "acceptanceCriteria": [
+        "Start/pause/resume timers with <500ms latency on updates.",
+        "Send predefined or custom hints (text/image/audio/video) and log automatically.",
+        "Mark puzzles completed and view history per session; play audio cue when hint delivered."
+      ],
+      "businessValue": "Delivers smooth in-room experience and accurate records.",
+      "technicalNotes": "Runner UI hooked to realtime stores with offline queue; backend Socket.IO ack + build fixes pending before completion. Rollup reinstall required before we can test websocket ack path locally.",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-012"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Run simulated session verifying timer resilience after refresh."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Session 3"
+    },
+    {
+      "id": "US-015",
+      "title": "Monitor cameras and stream health",
+      "persona": "Technician",
+      "epic": "Streaming & Monitoring",
+      "priority": "HIGH",
+      "status": "NOT_STARTED",
+      "implementedIn": "P3-008",
+      "relatedTodos": [
+        "P3-008",
+        "P4-004"
+      ],
+      "story": "As the technician, I want to manage cameras so video tiles stay reliable.",
+      "acceptanceCriteria": [
+        "Register cameras with encrypted credentials and assign to rooms.",
+        "See live status and restart failing streams from UI.",
+        "Receive alerts when streams drop frames or stall."
+      ],
+      "businessValue": "Maintains situational awareness without manual restarts.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-007"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Disable camera feed and verify alert plus auto-recovery."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-016",
+      "title": "View operations dashboard",
+      "persona": "General Manager",
+      "epic": "Game Control",
+      "priority": "CRITICAL",
+      "status": "NOT_STARTED",
+      "implementedIn": "P4-004",
+      "relatedTodos": [
+        "P4-004"
+      ],
+      "story": "As a general manager, I need a dashboard to see all active games, timers, and alerts at a glance.",
+      "acceptanceCriteria": [
+        "Dashboard lists active sessions with timers and camera thumbnails.",
+        "Quick actions available without leaving dashboard.",
+        "Health banner indicates network/offline status."
+      ],
+      "businessValue": "Enables one operator to oversee multiple rooms efficiently.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-014",
+        "US-015"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Launch dashboard on tablet and confirm layout remains responsive."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-017",
+      "title": "Provide game-specific timer view for players",
+      "persona": "Customer (Participant)",
+      "epic": "Game Control",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P4-005",
+      "relatedTodos": [
+        "P3-007",
+        "P4-005"
+      ],
+      "story": "As a participant in the room, I want a branded timer display so I can track progress and receive hints visually.",
+      "acceptanceCriteria": [
+        "Each game slug renders timer, hint notifications, and room background image/video.",
+        "Display updates in sync with operator actions with drift \u22641s.",
+        "Works offline within local network tablets without authentication."
+      ],
+      "businessValue": "Improves immersion and reduces need for separate timer hardware.",
+      "technicalNotes": "Timer slug page subscribes to websocket updates with polling fallback; bundler issues need resolution before full offline package. Requires reinstalling Rollup native binary on current host.",
+      "risks": [],
+      "effort": 3,
+      "dependencies": [
+        "US-014"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Open slug page and verify timer matches operator console."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Session 3"
+    },
+    {
+      "id": "US-018",
+      "title": "Label mobile-ready games and assets",
+      "persona": "Owner Operator",
+      "epic": "Mobile Operations",
+      "priority": "MEDIUM",
+      "status": "NOT_STARTED",
+      "implementedIn": "P5-001",
+      "relatedTodos": [
+        "P5-001"
+      ],
+      "story": "As the owner, I want to flag which games are mobile-ready so I can schedule them for offsite events.",
+      "acceptanceCriteria": [
+        "Games include an `is_mobile` flag visible in admin UI and APIs.",
+        "Bookings list mobile games separately with location notes and required transport instructions.",
+        "Reports can filter by mobile vs storefront bookings."
+      ],
+      "businessValue": "Keeps catalog organized for mobile deployments without full kit inventory.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-012",
+        "US-013"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Mark kit item missing and verify warning on upcoming event."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-019",
+      "title": "Capture mobile booking logistics notes",
+      "persona": "Mobile Coordinator",
+      "epic": "Mobile Operations",
+      "priority": "MEDIUM",
+      "status": "NOT_STARTED",
+      "implementedIn": "P5-002",
+      "relatedTodos": [
+        "P5-002"
+      ],
+      "story": "As the owner, I need to record logistics for mobile bookings so crews know where to go.",
+      "acceptanceCriteria": [
+        "Bookings support free-form location notes, arrival window, and contact details.",
+        "System warns when mobile bookings overlap for the same game or crew but does not auto-route travel.",
+        "Printable run sheet includes mobile-specific notes."
+      ],
+      "businessValue": "Protects customer experience and reduces overtime.",
+      "technicalNotes": "Travel time calculations deferred; manual buffers only.",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-013",
+        "US-018"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Schedule overlapping mobile events and ensure conflict detection triggers."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-020",
+      "title": "Operate offline with reliable sync",
+      "persona": "Mobile Coordinator",
+      "epic": "Mobile Operations",
+      "priority": "HIGH",
+      "status": "NOT_STARTED",
+      "implementedIn": "P5-003",
+      "relatedTodos": [
+        "P5-003",
+        "P4-009"
+      ],
+      "story": "As the mobile coordinator, I need offline access and sync so events run even without internet.",
+      "acceptanceCriteria": [
+        "Critical data (bookings, puzzles, hints) cached on devices prior to events.",
+        "Offline hint/session actions queue locally and sync when back online.",
+        "Operators see sync status and conflict prompts with manual resolution steps."
+      ],
+      "businessValue": "Enables revenue from remote events without connectivity costs.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-019"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Simulate offline session and confirm data syncs correctly after reconnection."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-021",
+      "title": "Review analytics and daily run sheets",
+      "persona": "Owner Operator",
+      "epic": "Analytics & Reporting",
+      "priority": "HIGH",
+      "status": "NOT_STARTED",
+      "implementedIn": "P5-004",
+      "relatedTodos": [
+        "P5-004",
+        "P5-005"
+      ],
+      "story": "As the owner, I want visibility into performance so I can plan staffing and marketing.",
+      "acceptanceCriteria": [
+        "Dashboard shows throughput, hint usage, and revenue summaries derived from deposits/balances.",
+        "Exports available as CSV/PDF without internet access.",
+        "Reports differentiate store vs mobile bookings."
+      ],
+      "businessValue": "Supports data-driven decisions and future growth.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 5,
+      "dependencies": [
+        "US-013",
+        "US-014"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Generate daily report and confirm metrics accuracy against sample data."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-022",
+      "title": "Receive alerts for operational issues",
+      "persona": "General Manager",
+      "epic": "Streaming & Monitoring",
+      "priority": "MEDIUM",
+      "status": "NOT_STARTED",
+      "implementedIn": "P5-006",
+      "relatedTodos": [
+        "P5-006"
+      ],
+      "story": "As a general manager, I need local alerts when streams or timers fail so I can act immediately.",
+      "acceptanceCriteria": [
+        "Alerts triggered for camera downtime, paused timers, and offline services.",
+        "Operators can acknowledge, mute, or escalate alerts.",
+        "Alerts logged for later review."
+      ],
+      "businessValue": "Reduces downtime and keeps games on schedule.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 3,
+      "dependencies": [
+        "US-015"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Force ffmpeg failure and confirm alert notifications appear."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-023",
+      "title": "Pilot, test, and launch EscapePlan",
+      "persona": "Owner Operator",
+      "epic": "Quality & Launch",
+      "priority": "HIGH",
+      "status": "NOT_STARTED",
+      "implementedIn": "P6-001",
+      "relatedTodos": [
+        "P6-001",
+        "P6-002",
+        "P6-003",
+        "P6-004",
+        "P6-005",
+        "P6-006",
+        "P6-007"
+      ],
+      "story": "As the owner, I want a disciplined pilot and launch plan so the MVP is reliable from day one.",
+      "acceptanceCriteria": [
+        "E2E tests automated across critical flows.",
+        "Load/performance tests documented with mitigation strategies.",
+        "Pilot feedback captured and release package assembled."
+      ],
+      "businessValue": "Ensures the MVP can be trusted in production environments.",
+      "technicalNotes": "",
+      "risks": [],
+      "effort": 8,
+      "dependencies": [
+        "US-014",
+        "US-019",
+        "US-021"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Review pilot report and verify backlog updates created for feedback."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Planning Session",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Planning Session"
+    },
+    {
+      "id": "US-034",
+      "title": "Ensure EscapePlan appliances back up data and telemetry automatically",
+      "persona": "Operations Lead",
+      "epic": "Platform Operations",
+      "priority": "MEDIUM",
+      "status": "NOT_STARTED",
+      "implementedIn": "P3-012",
+      "relatedTodos": [
+        "P3-012"
+      ],
+      "story": "As an operations lead, I need automated backups and scheduled maintenance tasks so that no session or auth data is lost if a Pi fails.",
+      "acceptanceCriteria": [
+        "Nightly database and auth backups stored locally with export instructions.",
+        "Cron jobs documented for cleanup/log rotation.",
+        "Restore runbook validated on a fresh appliance."
+      ],
+      "businessValue": "Protects bookings and operational data during pilot incidents and simplifies disaster recovery.",
+      "technicalNotes": "Coordinate with Better-Auth/Better-Auth storage decision before finalizing backup scope.",
+      "risks": [
+        "Backups consuming SD card space if retention not enforced."
+      ],
+      "effort": 5,
+      "dependencies": [
+        "P3-002"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Simulate nightly backup cron and verify archives exist.",
+        "Restore backup onto clean database and confirm operator login works."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Operations Planning",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Codex"
+    },
+    {
+      "id": "US-035",
+      "title": "Streamline EscapePlan admin console workflows",
+      "persona": "General Manager",
+      "epic": "Operator Experience",
+      "priority": "HIGH",
+      "status": "NOT_STARTED",
+      "implementedIn": "P4-010",
+      "relatedTodos": [
+        "P4-010"
+      ],
+      "story": "As a general manager, I want a polished admin console so I can manage users, games, and network settings quickly during live operations.",
+      "acceptanceCriteria": [
+        "All admin forms provide inline validation and success/error feedback.",
+        "Role/permission visibility is clear for each navigation link.",
+        "PWA prompts and update banners behave consistently across browsers."
+      ],
+      "businessValue": "Reduces training time and minimizes operational mistakes during busy sessions.",
+      "technicalNotes": "Build on Better-Auth/Refine foundation once finalized; reuse DaisyUI theme tokens.",
+      "risks": [
+        "Design churn if Better-Auth components differ from current layout."
+      ],
+      "effort": 8,
+      "dependencies": [
+        "P3-011",
+        "P4-010"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Run usability walkthrough covering user creation, game edits, network updates.",
+        "Verify offline queue + PWA reload prompt flow after service worker update."
+      ],
+      "createdDate": "2025-09-29",
+      "createdBy": "Codex",
+      "lastModified": "2025-09-29",
+      "modifiedBy": "Codex",
+      "notes": []
+    }
+  ],
+  "epics": {
+    "Strategic Foundations": [
+      "US-001",
+      "US-002",
+      "US-004",
+      "US-005"
+    ],
+    "Platform & Deployment": [
+      "US-003",
+      "US-006",
+      "US-007",
+      "US-008",
+      "US-009"
+    ],
+    "Core Services": [
+      "US-010",
+      "US-011",
+      "US-012"
+    ],
+    "Bookings & CRM": [
+      "US-013"
+    ],
+    "Game Control": [
+      "US-014",
+      "US-016",
+      "US-017"
+    ],
+    "Streaming & Monitoring": [
+      "US-015",
+      "US-022"
+    ],
+    "Mobile Operations": [
+      "US-018",
+      "US-019",
+      "US-020"
+    ],
+    "Analytics & Reporting": [
+      "US-021"
+    ],
+    "Quality & Launch": [
+      "US-023"
+    ]
+  },
+  "personas": [
+    {
+      "name": "Owner Operator",
+      "description": "Runs both the physical escape room venue and mobile event business.",
+      "characteristics": [
+        "Hands-on",
+        "Data-driven",
+        "Budget conscious"
+      ],
+      "goals": [
+        "Keep games running smoothly",
+        "Grow mobile bookings",
+        "Track profitability"
+      ],
+      "frustrations": [
+        "Disconnected data",
+        "Complex tech setups",
+        "Unreliable wifi at events"
+      ],
+      "technicalProficiency": "advanced",
+      "tools": [
+        "EscapePlan dashboard",
+        "Analytics exports",
+        "Seed data scripts"
+      ]
+    },
+    {
+      "name": "General Manager",
+      "description": "Coordinates daily operations, staffing, and customer experience across locations.",
+      "characteristics": [
+        "Organized",
+        "Responsive",
+        "Multi-tasker"
+      ],
+      "goals": [
+        "Prevent scheduling conflicts",
+        "Monitor live sessions",
+        "React to issues quickly"
+      ],
+      "frustrations": [
+        "Juggling multiple tools",
+        "Slow status updates"
+      ],
+      "technicalProficiency": "advanced",
+      "tools": [
+        "Operator dashboard",
+        "Bookings calendar",
+        "Alert console"
+      ]
+    },
+    {
+      "name": "Game Master",
+      "description": "Operates games in real time, orchestrating hints, timers, and customer interactions.",
+      "characteristics": [
+        "Customer-focused",
+        "Quick decision maker"
+      ],
+      "goals": [
+        "Keep players engaged",
+        "Maintain game pacing",
+        "Log hints accurately"
+      ],
+      "frustrations": [
+        "Laggy timers",
+        "Missing hints",
+        "Confusing camera views"
+      ],
+      "technicalProficiency": "intermediate",
+      "tools": [
+        "Game Runner UI",
+        "Hint library",
+        "Room display slugs"
+      ]
+    },
+    {
+      "name": "Mobile Coordinator",
+      "description": "Plans and executes offsite escape room experiences using portable kits.",
+      "characteristics": [
+        "Logistics expert",
+        "Detail-oriented"
+      ],
+      "goals": [
+        "Ensure kits are ready",
+        "Schedule crews efficiently",
+        "Handle offline workflows"
+      ],
+      "frustrations": [
+        "Forgotten equipment",
+        "Travel time miscalculations",
+        "Poor connectivity"
+      ],
+      "technicalProficiency": "advanced",
+      "tools": [
+        "Mobile kit inventory",
+        "Field scheduling",
+        "Offline sync console"
+      ]
+    },
+    {
+      "name": "Technician",
+      "description": "Maintains hardware, cameras, and network stability in store and mobile setups.",
+      "characteristics": [
+        "Proactive",
+        "Hardware-savvy"
+      ],
+      "goals": [
+        "Keep video streams clean",
+        "Diagnose issues quickly",
+        "Minimize downtime"
+      ],
+      "frustrations": [
+        "Hard-to-access logs",
+        "Manual restarts"
+      ],
+      "technicalProficiency": "advanced",
+      "tools": [
+        "Camera management",
+        "System health UI",
+        "Logs & alerts"
+      ]
+    },
+    {
+      "name": "Content Designer",
+      "description": "Designs puzzles and hint flows that operators execute.",
+      "characteristics": [
+        "Creative",
+        "Detail-oriented"
+      ],
+      "goals": [
+        "Update puzzles easily",
+        "Control hint sequencing",
+        "Ensure operators see clear instructions"
+      ],
+      "frustrations": [
+        "Cluttered admin tools",
+        "Outdated hints"
+      ],
+      "technicalProficiency": "intermediate",
+      "tools": [
+        "Content admin UI",
+        "Asset manager",
+        "Audit trail"
+      ]
+    },
+    {
+      "name": "Customer (Participant)",
+      "description": "Players experiencing the game, either in-store or through mobile events.",
+      "characteristics": [
+        "Immersive seeker",
+        "Collaborative"
+      ],
+      "goals": [
+        "Clear progress feedback",
+        "Timely hints",
+        "Immersive atmosphere"
+      ],
+      "frustrations": [
+        "Unclear timer",
+        "Delayed hints"
+      ],
+      "technicalProficiency": "beginner",
+      "tools": [
+        "Room display",
+        "Event instructions"
+      ]
+    }
+  ],
+  "metrics": {
+    "totalStories": 23,
+    "notStarted": 13,
+    "inProgress": 9,
+    "inReview": 0,
+    "completed": 1,
+    "blocked": 0,
+    "critical": 8,
+    "high": 12,
+    "medium": 3,
+    "low": 0
+  },
+  "riskAssessment": [
+    {
+      "category": "Technology",
+      "risks": [
+        "Pi performance limits with multiple camera streams",
+        "Offline sync conflicts during mobile events"
+      ]
+    },
+    {
+      "category": "Operations",
+      "risks": [
+        "Crew scheduling gaps for mobile events",
+        "Training overhead for new operators"
+      ]
+    }
+  ],
+  "qualityGates": [
+    {
+      "name": "MVP Exit Criteria",
+      "criteria": [
+        "All CRITICAL stories completed and tested",
+        "E2E tests pass on Raspberry Pi",
+        "Pilot feedback addressed or triaged"
+      ]
+    }
+  ],
+  "configuration": {
+    "effortScale": {
+      "1": "Trivial (1-2h)",
+      "3": "Small (0.5 day)",
+      "5": "Medium (1 day)",
+      "8": "Large (2+ days)"
+    },
+    "priorityDefinitions": {
+      "CRITICAL": "Must be delivered for MVP viability.",
+      "HIGH": "Strongly desired for MVP pilot.",
+      "MEDIUM": "Important but can slip to 0.1.x patch if needed.",
+      "LOW": "Nice to have; consider post-MVP."
+    },
+    "statusDefinitions": {
+      "NOT_STARTED": "No work begun.",
+      "IN_PROGRESS": "Implementation underway.",
+      "IN_REVIEW": "Awaiting validation or review.",
+      "COMPLETED": "Meets acceptance criteria.",
+      "BLOCKED": "Needs resolution before continuing."
+    },
+    "reviewCycle": {
+      "frequency": "Weekly",
+      "participants": [
+        "Owner Operator",
+        "Platform Lead",
+        "Backend Lead",
+        "Frontend Lead",
+        "Mobile Coordinator"
+      ],
+      "activities": [
+        "Review progress",
+        "Reassess risks",
+        "Adjust backlog"
+      ]
+    }
+  }
+}

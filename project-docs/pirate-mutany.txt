@@ -1,0 +1,66 @@
+Game:
+Name: Pirate Mutany
+Internal Name (slug): pirate-mutany
+Description: The Captain has decided to keep 90% of the treasure when you find it.  This is unacceptable!  You break into his quarters while he is out in search for the treasure map.  Once the map is yours, you can make the captain walk the plank and claim the entire treasure for yourself!
+
+Images:
+Room Screen:
+Game Logo:
+Game Background:
+
+Pricing:
+Minimum 1 players, maximum 5 players.
+Price: $20 per player
+Time: 20 minutes
+Difficulty: 3/5
+Resources: 1
+Pricing Model: PER_PERSON
+Categories: Person, Private
+Validation: participants within game min/max; resource availability; room free in window.
+
+Puzzles:
+Name	Description	Solution	Image	Actions
+1	
+Intro
+Intro Audio
+Find map
+-	
+2	
+Skulls
+Line up the 5 skulls biggest to smallest as suggested by the "HEAD SHRINKER" on the treasure box.
+84639?
+-	
+3	
+Helms
+Turn the 3 helms to the correct positions as indicated on the telescope, gun, and something else.
+Maglock - opens Captain Portrait
+-	
+4	
+Kraken
+Place 4 blocks into the kraken picture
+Opens Kraken
+-	
+5	
+Swords
+Two people hold the swords to make a secret compartment open up
+Hold swords - box opens to reveal the last chess pieces
+-	
+6	
+Map/Chess
+Use the scanner on the map to find 5 grid spots that light up.  Put the chess pieces on the chessboard in those spots. 
+F4, C5, G7, B3, D2 - opens drawer in desk
+-	
+7	
+Dice
+Colored dice will open the lock on the music box.  Combine colors to make purple and green by adding the dice. 
+not sure yet
+-	
+8	
+Music
+Push the button on the little box in the drawer to play a sound. Match the sound on the box to open it
+Notes: 3,5,4,2,1
+-	
+9	
+Bonus Tracks
+Extra Audio for fun
+fun

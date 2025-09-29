@@ -1,0 +1,48 @@
+# Project configuration for project-tracker
+# Fill in the fields below, then run:
+#   ./project-tracker init-config --config project-docs/project-tracking/project.yaml
+# to apply the values across the tracker files.
+
+$schema: ./schemas/project-schema.json
+project_name: EscapePlan
+project_version: 0.1.0
+summary: "Offline-first escape room management suite for a Raspberry Pi-hosted network."
+goal: "Ship a Pi-hosted MVP that lets operators manage bookings and run games with reliable video, timers, and hints entirely offline."
+overview_path: project-docs/project-overview.md
+current_phase: PHASE_3
+stack:
+  - Raspberry Pi OS Bookworm (64-bit)
+  - Custom pi-gen image (EscapePlan Base)
+  - Node.js 22 LTS + TypeScript 5
+  - Fastify 5 API with Pino logging
+  - Argon2id password hashing + bearer token auth
+  - Socket.IO 5 for real-time control
+  - SQLite WAL mode with runtime schema bootstrap
+  - ffmpeg 7 for RTSP->HLS pipelines
+  - Nginx 1.26 reverse proxy
+  - SvelteKit 2 + Svelte 5
+  - Tailwind CSS 4 + DaisyUI 5.1.25+ theme components
+  - "@vite-pwa/sveltekit PWA integration"
+  - pnpm 9 workspace tooling
+commands:
+  validate: "./project-tracker validate"
+  quick_check: "./project-tracker quick-check"
+  base_image_build: "cd platform/escapeplan-base && pnpm run build:image"
+  base_image_test:
+    - "cd platform/escapeplan-base && pnpm run lint"
+    - "cd platform/escapeplan-base && pnpm run test"
+  webapp_dev: "cd apps/escapeplan-web && pnpm run dev --host"
+  webapp_build: "cd apps/escapeplan-web && pnpm run build"
+  webapp_test:
+    - "cd apps/escapeplan-api && pnpm run test"
+    - "cd apps/escapeplan-web && pnpm run test"
+  package_deb: "cd platform/escapeplan-base && ./scripts/package-deb.sh"
+environments: "Local dev via Docker/Podman; production on Raspberry Pi 5 + USB AC600M Wi-Fi AP."
+notes:
+  - "Two-repo setup: platform/escapeplan-base (OS image + services) and apps/escapeplan-web (API + PWA)."
+  - "Primary UI palette: charcoals/blacks with #C43131 and #00D5C8 accents for high-contrast dark mode."
+  - "Mobile-first responsive layout with PWA install support and desktop control room scaling."
+  - "Each game publishes a slugged session page delivering synchronized countdowns and hints via WebSocket."
+  - "Offline-first posture with optional OTA update channel when WAN is available."
+  - "No mock or hardcoded data; use database seeds/migrations for canonical records and load everything dynamically."
+  - "RBAC permissions drive both API guards and Svelte admin consoles; Better-Auth adoption under evaluation."
