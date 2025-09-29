@@ -1,0 +1,14 @@
+[Unit]
+Description=Provision EscapePlan TLS bundle
+After=escapeplan-platform-init.service
+Before=nginx.service
+ConditionPathExists=!/etc/escapeplan/certs/escapeplan.local.crt
+ConditionPathExists=!/etc/escapeplan/certs/escapeplan.local.key
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/escapeplan-certgen
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

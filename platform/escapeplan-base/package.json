@@ -1,0 +1,13 @@
+{
+  "name": "escapeplan-platform",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "pi-gen based Raspberry Pi image and packaging for EscapePlan.",
+  "scripts": {
+    "build:image": "bash ./scripts/build-image.sh",
+    "lint": "bash ./scripts/lint.sh",
+    "test": "bash ./scripts/test.sh",
+    "check:health": "bash ./scripts/check-health.sh"
+  }
+}

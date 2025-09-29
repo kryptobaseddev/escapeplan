@@ -242,10 +242,10 @@
           "id": "P2-001",
           "title": "Scaffold escapeplan-base pi-gen pipeline",
           "feature": "Platform",
-          "status": "NOT_STARTED",
+          "status": "IN_PROGRESS",
           "priority": "CRITICAL",
           "estimatedHours": 10,
-          "actualHours": 0,
+          "actualHours": 6,
           "assignee": "Morgan Blake",
           "createdDate": "2025-09-29",
           "dueDate": null,
@@ -263,7 +263,8 @@
           "notes": [
             "Store GNUPG key handling and package pinning for reproducible builds.",
             "Ensure build works on CI runner targeting arm64.",
-            "Ensure pi-gen build includes Avahi, self-signed cert generation, and CLI utilities (cert-export)."
+            "Ensure pi-gen build includes Avahi, self-signed cert generation, and CLI utilities (cert-export).",
+            "2025-09-29: pi-gen pipeline scripted with Stage 2 overlay, NodeSource setup, config CLI, and packaging scripts; first Docker build pending host qemu-user-static availability."
           ],
           "labels": [
             "platform",
@@ -326,7 +327,8 @@
           "notes": [
             "Ensure ffmpeg units pick up camera environment variables at runtime.",
             "Plan for templated units per camera slug.",
-            "Verify mDNS (`escapeplan.local`) and HTTPS cert health surfaced in maintenance dashboard."
+            "Verify mDNS (`escapeplan.local`) and HTTPS cert health surfaced in maintenance dashboard.",
+            "2025-09-29: Systemd unit templates added for escapeplan-api, escapeplan-web, escapeplan-ffmpeg@, along with bootstrap services."
           ],
           "labels": [
             "operations",
@@ -559,7 +561,8 @@
             "Support offline password reset using admin console.",
             "2025-09-29: Fastify auth now issues short-lived tokens with role-based permissions; admin/user/password endpoints shipped, persistent session store pending.",
             "2025-09-29: Runes-enabled console + logout fix in place; evaluating Better-Auth for persistent sessions and audit trail.",
-            "2025-09-29: Operators can now PATCH /users/me to update display name, email, avatar, and bio; admin user endpoints accept the new profile fields."
+            "2025-09-29: Operators can now PATCH /users/me to update display name, email, avatar, and bio; admin user endpoints accept the new profile fields.",
+            "2025-09-29: Vitest suite seeds database via /src/db/seed.ts before buildServer() to keep auth fixtures deterministic."
           ],
           "labels": [
             "backend",
@@ -947,7 +950,11 @@
           "notes": [
             "Auth shell now uses username-based login; session guard wired to Fastify mock endpoints.",
             "Pending Socket.IO indicator and offline cache once backend real-time layer is ready.",
-            "2025-09-29: Sidebar now features EscapePlan crest, collapsible icon mode, and dynamic page title bar aligned with mobile-first navigation."
+            "2025-09-29: Sidebar now features EscapePlan crest, collapsible icon mode, and dynamic page title bar aligned with mobile-first navigation.",
+            "2025-09-29: Root route now redirects unauthenticated visitors to /login and guards API-bound loads until session token present.",
+            "2025-09-29: Explicit /login form action removes 405 POST / errors when submitting credentials.",
+            "2025-09-29: Navigation switched to classic Svelte (`runes=false`) reactivity so headings/profile initials render correctly without leaking function source.",
+            "2025-09-29: Corrected /(app) layout stylesheet import to '../../app.css' and reinstated head manifest injection to eliminate SSR load failures."
           ],
           "labels": [
             "frontend",

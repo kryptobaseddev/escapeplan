@@ -188,7 +188,7 @@
         "Image boots to configured EscapePlan services baseline."
       ],
       "businessValue": "Guarantees consistent field deployments and simplifies support.",
-      "technicalNotes": "",
+      "technicalNotes": "2025-09-29: pi-gen Stage 2 overlay installs Node 22, network services, systemd units, and packaging/health scripts; image build pending qemu-user-static on host.",
       "risks": [],
       "effort": 8,
       "dependencies": [
@@ -374,7 +374,8 @@
       "notes": [
         "2025-09-29: Token-based auth with Argon2id hashing and role-permission matrix in place; evaluating Better-Auth for persistent sessions and audit trails.",
         "2025-09-29: Admin console migrated to Svelte runes; bearer token flow live while Better-Auth evaluation continues.",
-        "2025-09-29: Console supports self-service profile edits (name/email/bio/avatar) while admin management forms capture the new fields."
+        "2025-09-29: Console supports self-service profile edits (name/email/bio/avatar) while admin management forms capture the new fields.",
+        "2025-09-29: Backend seed auto-runs in tests and UI redirects unauthenticated users to /login before hitting protected APIs."
       ]
     },
     {

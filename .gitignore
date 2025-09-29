@@ -23,4 +23,9 @@ packages/contracts/dist/
 .DS_Store
 
 # External repositories handled separately
-platform/escapeplan-base/
+
+# Platform build outputs
+platform/escapeplan-base/work/
+platform/escapeplan-base/deploy/
+platform/escapeplan-base/artifacts/
+platform/escapeplan-base/tools/

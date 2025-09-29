@@ -1,0 +1,17 @@
+[Unit]
+Description=EscapePlan Fastify API
+After=network.target escapeplan-platform-init.service
+ConditionPathExists=/opt/escapeplan/api/systemd/start.sh
+
+[Service]
+Type=simple
+User=escapeplan
+Group=escapeplan
+EnvironmentFile=-/etc/escapeplan/api.env
+WorkingDirectory=/opt/escapeplan/api
+ExecStart=/opt/escapeplan/api/systemd/start.sh
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

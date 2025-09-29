@@ -1,0 +1,12 @@
+IMG_NAME="escapeplan-os"
+RELEASE="bookworm"
+ENABLE_SSH=1
+KERNEL=64
+DEPLOY_ZIP=0
+LOCALE_DEFAULT="en_US.UTF-8"
+TARGET_HOSTNAME="escapeplan"
+FIRST_USER_NAME="escapeplan"
+FIRST_USER_PASS="escapeplan"
+FIRST_USER_PASS_CHANGE=1
+WPA_COUNTRY="US"
+STAGE_LIST="stage0 stage1 stage2"

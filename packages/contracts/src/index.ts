@@ -296,6 +296,54 @@ export interface NetworkProfile {
   lastUpdated: string;
 }
 
+
+export interface NetworkServiceToggles {
+  enableApi?: boolean;
+  enableWeb?: boolean;
+  enableWifi?: boolean;
+}
+
+export interface NetworkEnvConfig {
+  api?: Record<string, string>;
+  web?: Record<string, string>;
+}
+
+export interface ApplyNetworkConfigRequest {
+  wifi: {
+    ssid: string;
+    passphrase: string;
+    channel: number;
+    band?: '2g' | '5g' | 'auto';
+    country?: string;
+  };
+  network: {
+    router: string;
+    dns: string;
+    dhcpRangeStart: string;
+    dhcpRangeEnd: string;
+    domain: string;
+  };
+  nginx: {
+    serverName: string;
+    apiUpstream: string;
+    webRoot?: string;
+    webUpstream?: string;
+  };
+  env?: NetworkEnvConfig;
+  services?: NetworkServiceToggles;
+}
+
+export interface ApplyNetworkConfigResponse {
+  appliedAt: string;
+  stdout?: string;
+  stderr?: string;
+  services: {
+    hostapd: 'active' | 'inactive' | 'unknown';
+    dnsmasq: 'active' | 'inactive' | 'unknown';
+    api: 'active' | 'inactive' | 'unknown';
+    web: 'active' | 'inactive' | 'unknown';
+  };
+}
 export interface UpdateNetworkProfileRequest {
   name?: string;
   ssid?: string;

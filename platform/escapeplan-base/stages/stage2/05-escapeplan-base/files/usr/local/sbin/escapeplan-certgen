@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CERT_DIR=/etc/escapeplan/certs
+KEY_FILE=${CERT_DIR}/escapeplan.local.key
+CRT_FILE=${CERT_DIR}/escapeplan.local.crt
+PEM_FILE=${CERT_DIR}/escapeplan.local.pem
+PFX_FILE=${CERT_DIR}/escapeplan.local.pfx
+
+mkdir -p "$CERT_DIR"
+chown escapeplan:escapeplan "$CERT_DIR"
+chmod 0750 "$CERT_DIR"
+
+if [ -f "$KEY_FILE" ] && [ -f "$CRT_FILE" ]; then
+  exit 0
+fi
+
+openssl req -x509 -nodes -newkey rsa:4096 \
+  -keyout "$KEY_FILE" \
+  -out "$CRT_FILE" \
+  -days 825 \
+  -subj "/CN=escapeplan.local" \
+  -addext "subjectAltName=DNS:escapeplan.local,IP:10.10.10.1" >/dev/null 2>&1
+
+cat "$CRT_FILE" "$KEY_FILE" >"$PEM_FILE"
+chmod 0640 "$KEY_FILE" "$CRT_FILE" "$PEM_FILE"
+chown escapeplan:escapeplan "$KEY_FILE" "$CRT_FILE" "$PEM_FILE"
+
+openssl pkcs12 -export -out "$PFX_FILE" -inkey "$KEY_FILE" -in "$CRT_FILE" -password pass:escapeplan >/dev/null 2>&1
+chmod 0640 "$PFX_FILE"
+chown escapeplan:escapeplan "$PFX_FILE"
+
+exit 0
