@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
-import argon2 from 'argon2';
 import { runMigrations, sqlite } from './db/client.js';
 import {
+  emitBookingsUpdate,
   emitCommandAck,
   emitDashboardUpdate,
   emitSessionUpdate,
@@ -17,13 +17,19 @@ import type {
   CreateOperatorRequest,
   DashboardResponse,
   GameDetails,
+  GameBookingRules,
   GameRoomDefinition,
   GamePuzzleDefinition,
+  GameHintDefinition,
+  GameMediaConfig,
+  GamePricingConfig,
   GameSessionDetails,
   NetworkHealth,
   NetworkProfile,
   OperatorProfile,
   OperatorSummary,
+  QuickStartSessionRequest,
+  QuickStartSessionResponse,
   ResetOperatorPasswordRequest,
   SaveGameRequest,
   TimerBroadcast,
@@ -31,24 +37,51 @@ import type {
   UpdateOperatorRequest,
   UpdateOwnProfileRequest
 } from '@escapeplan/contracts';
-import { normalizePermissions, permissionsForRole } from './security.js';
+import { auth } from './auth.js';
+import { normalizePermissions, permissionsForRole, normalizeRole } from './security.js';
 
 runMigrations();
+
+const authContextPromise = auth.$context;
+
+async function getAuthContext() {
+  return authContextPromise;
+}
+
+async function getInternalAdapter() {
+  const context = await getAuthContext();
+  return context.internalAdapter;
+}
+
+function safeParse<T>(value: string | null): T | undefined {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
+}
 
 type OperatorRow = {
   id: string;
   username: string;
   name: string;
   role: string;
-  avatar_url: string | null;
+  avatar_config: string | null;
   bio: string | null;
   permissions: string | null;
-  password_hash: string;
-  email: string | null;
+  email: string;
+  email_verified: number;
   must_reset_password: number;
   created_at: string;
   updated_at: string;
   last_login_at: string | null;
+  banned: number | null;
+  ban_reason: string | null;
+  ban_expires: string | null;
+  archived_at: string | null;
+  archived_by: string | null;
+  archived_reason: string | null;
 };
 
 type BookingRow = {
@@ -65,6 +98,8 @@ type BookingRow = {
   price_tier: 'standard' | 'premier' | 'offsite' | string;
   discount_code: string | null;
   is_mobile: number;
+  is_adhoc: number;
+  notes: string | null;
   location_note: string | null;
   contact_name: string;
   contact_phone: string;
@@ -91,8 +126,12 @@ type SessionRow = {
   recent_alert: string | null;
   party_size: number;
   is_mobile: number;
+  is_adhoc: number;
   game_id: string;
   game_name: string;
+  game_slug: string;
+  room_id: string;
+  room_uuid: string | null;
   room_name: string;
 };
 
@@ -112,12 +151,19 @@ type GameRow = {
   price_per_player_cents: number;
   resources_required: number;
   validation_notes: string | null;
+  media_config: string | null;
+  pricing_config: string | null;
+  booking_rules_config: string | null;
   created_at: string;
   updated_at: string;
+  archived_at: string | null;
+  archived_by: string | null;
+  archived_reason: string | null;
 };
 
 type GamePuzzleRow = {
   id: string;
+  uuid: string | null;
   game_id: string;
   title: string;
   description: string | null;
@@ -125,6 +171,8 @@ type GamePuzzleRow = {
   media_asset: string | null;
   operator_actions: string | null;
   display_order: number;
+  hints: string | null;
+  media_asset_meta: string | null;
 };
 
 type NetworkProfileRow = {
@@ -144,24 +192,50 @@ type NetworkProfileRow = {
 
 type RoomRow = {
   id: string;
+  uuid: string | null;
   game_id: string;
   name: string;
   is_mobile_capable: number;
   theme_token: string | null;
+  description: string | null;
+  slug: string | null;
+  capacity: number | null;
 };
 
 function mapOperator(row: OperatorRow | undefined): OperatorProfile | undefined {
   if (!row) return undefined;
-  const permissions = normalizePermissions(row.role as OperatorProfile['role'], row.permissions);
+  const resolvedRole = normalizeRole(row.role);
+  if (row.role !== resolvedRole) {
+    sqlite
+      .prepare(`UPDATE operators SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(resolvedRole, row.id);
+  }
+  const permissions = normalizePermissions(resolvedRole, row.permissions);
+  let avatarConfig;
+  if (row.avatar_config) {
+    try {
+      avatarConfig = JSON.parse(row.avatar_config);
+    } catch {
+      avatarConfig = undefined;
+    }
+  }
+
   return {
     id: row.id,
     username: row.username,
     name: row.name,
-    role: row.role as OperatorProfile['role'],
-    avatarUrl: row.avatar_url ?? undefined,
+    role: resolvedRole,
+    avatarConfig,
     bio: row.bio ?? undefined,
     permissions,
-    email: row.email ?? undefined
+    email: row.email ?? undefined,
+    emailVerified: Boolean(row.email_verified),
+    banned: row.banned ? Boolean(row.banned) : undefined,
+    banReason: row.ban_reason ?? undefined,
+    banExpires: row.ban_expires ?? undefined,
+    archivedAt: row.archived_at ?? undefined,
+    archivedBy: row.archived_by ?? undefined,
+    archivedReason: row.archived_reason ?? undefined
   };
 }
 
@@ -186,24 +260,34 @@ const networkProfileStmt = sqlite.prepare(
 
 const gameByIdStmt = sqlite.prepare(
   `SELECT id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories,
-          min_players, max_players, price_per_player_cents, resources_required, validation_notes, created_at, updated_at
+          min_players, max_players, price_per_player_cents, resources_required, validation_notes, created_at, updated_at,
+          archived_at, archived_by, archived_reason
    FROM games WHERE id = ? LIMIT 1`
 );
 
-const listGamesStmt = sqlite.prepare(
-  `SELECT id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories,
-          min_players, max_players, price_per_player_cents, resources_required, validation_notes, created_at, updated_at
-   FROM games ORDER BY name ASC`
-);
-
 const puzzlesByGameStmt = sqlite.prepare(
-  `SELECT id, game_id, title, description, solution, media_asset, operator_actions, display_order
+  `SELECT id, uuid, game_id, title, description, solution, media_asset, operator_actions, display_order, hints, media_asset_meta
    FROM game_puzzles WHERE game_id = ? ORDER BY display_order ASC`
 );
 
 const roomsByGameStmt = sqlite.prepare(
-  `SELECT id, game_id, name, is_mobile_capable, theme_token
+  `SELECT id, uuid, game_id, name, is_mobile_capable, theme_token, description, slug, capacity
    FROM rooms WHERE game_id = ? ORDER BY name ASC`
+);
+
+const roomByIdStmt = sqlite.prepare(
+  `SELECT r.id, r.uuid, r.game_id, r.name, r.is_mobile_capable, r.theme_token, r.description, r.slug, r.capacity,
+          g.slug AS game_slug
+   FROM rooms r
+   JOIN games g ON g.id = r.game_id
+   WHERE r.id = ? LIMIT 1`
+);
+
+const activeSessionsByRoomStmt = sqlite.prepare(
+  `SELECT COUNT(1) as count
+   FROM sessions s
+   JOIN bookings b ON b.id = s.booking_id
+   WHERE b.room_id = ? AND s.status IN ('running', 'paused')`
 );
 
 function mapNetworkProfile(row: NetworkProfileRow | undefined): NetworkProfile {
@@ -284,19 +368,30 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
   const roomRows = roomsByGameStmt.all(row.id) as RoomRow[];
   const puzzles: GamePuzzleDefinition[] = puzzleRows.map((puzzle) => ({
     id: puzzle.id,
+    uuid: puzzle.uuid ?? puzzle.id,
     title: puzzle.title,
     description: puzzle.description ?? undefined,
     solution: puzzle.solution ?? undefined,
     mediaAsset: puzzle.media_asset ?? undefined,
     operatorActions: puzzle.operator_actions ?? undefined,
-    displayOrder: puzzle.display_order
+    displayOrder: puzzle.display_order,
+    hints: puzzle.hints ? (JSON.parse(puzzle.hints) as GameHintDefinition[]) : undefined,
+    mediaMeta: puzzle.media_asset_meta ? (JSON.parse(puzzle.media_asset_meta) as Record<string, unknown>) : undefined
   }));
   const rooms: GameRoomDefinition[] = roomRows.map((room) => ({
     id: room.id,
+    uuid: room.uuid ?? room.id,
     name: room.name,
     isMobileCapable: Boolean(room.is_mobile_capable),
-    themeToken: room.theme_token ?? undefined
+    themeToken: room.theme_token ?? undefined,
+    description: room.description ?? undefined,
+    slug: room.slug ?? undefined,
+    capacity: room.capacity ?? undefined
   }));
+  const mediaConfig = safeParse<GameMediaConfig>(row.media_config);
+  const pricingConfig = safeParse<GamePricingConfig>(row.pricing_config);
+  const bookingRulesConfig = safeParse<GameBookingRules>(row.booking_rules_config);
+
   return {
     id: row.id,
     slug: row.slug,
@@ -312,15 +407,88 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
     pricePerPlayerCents: row.price_per_player_cents,
     resourcesRequired: row.resources_required,
     validationNotes: row.validation_notes ?? undefined,
+    media: mediaConfig
+      ? {
+          thumbnailAssetId: mediaConfig.thumbnailAssetId ?? null,
+          roomScreenAssetId: mediaConfig.roomScreenAssetId ?? null,
+          galleryAssetIds: mediaConfig.galleryAssetIds ?? []
+        }
+      : undefined,
+    pricing: pricingConfig
+      ? {
+          model: pricingConfig.model ?? (row.pricing_model as GamePricingConfig['model']),
+          tiers: pricingConfig.tiers ?? [],
+          deposit: pricingConfig.deposit,
+          discounts: pricingConfig.discounts ?? []
+        }
+      : undefined,
+    bookingRules: bookingRulesConfig
+      ? {
+          isMobile: bookingRulesConfig.isMobile ?? undefined,
+          locationNotes: bookingRulesConfig.locationNotes ?? null,
+          travelBufferMinutes: bookingRulesConfig.travelBufferMinutes ?? null,
+          equipmentChecklist: bookingRulesConfig.equipmentChecklist ?? [],
+          reservationStyle: bookingRulesConfig.reservationStyle ?? 'public',
+          cancellationPolicy: bookingRulesConfig.cancellationPolicy ?? null,
+          customFields: bookingRulesConfig.customFields ?? []
+        }
+      : undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    archivedAt: row.archived_at ?? undefined,
+    archivedBy: row.archived_by ?? undefined,
+    archivedReason: row.archived_reason ?? undefined,
     puzzles,
     rooms
   };
 }
 
-export function listGameDetails(): GameDetails[] {
-  const rows = listGamesStmt.all() as GameRow[];
+export interface GameListFilters {
+  search?: string;
+  status?: 'active' | 'archived' | 'all';
+  category?: string;
+}
+
+export function listGameDetails(filters: GameListFilters = {}): GameDetails[] {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  const status = filters.status ?? 'active';
+  if (status === 'active') {
+    conditions.push('archived_at IS NULL');
+  } else if (status === 'archived') {
+    conditions.push('archived_at IS NOT NULL');
+  }
+
+  if (filters.search && filters.search.trim().length) {
+    const normalized = `%${filters.search.trim().toLowerCase()}%`;
+    conditions.push(
+      '(LOWER(name) LIKE ? OR LOWER(slug) LIKE ? OR LOWER(COALESCE(description, "")) LIKE ?)' 
+    );
+    params.push(normalized, normalized, normalized);
+  }
+
+  if (filters.category && filters.category.trim().length) {
+    const normalizedCategory = filters.category.trim().toLowerCase();
+    conditions.push(
+      `EXISTS (SELECT 1 FROM json_each(COALESCE(categories, '[]')) WHERE LOWER(value) = ?)`
+    );
+    params.push(normalizedCategory);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const stmt = sqlite.prepare(
+    `SELECT id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories,
+            min_players, max_players, price_per_player_cents, resources_required, validation_notes,
+            media_config, pricing_config, booking_rules_config,
+            created_at, updated_at, archived_at, archived_by, archived_reason
+     FROM games
+     ${whereClause}
+     ORDER BY CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END, name COLLATE NOCASE ASC`
+  );
+
+  const rows = stmt.all(...params) as GameRow[];
   return rows.map(mapGameDetailsRow);
 }
 
@@ -332,24 +500,33 @@ export function getGameDetails(gameId: string): GameDetails | undefined {
 
 function normalizePuzzleInput(puzzle: GamePuzzleDefinition, index: number): GamePuzzleDefinition {
   const id = puzzle.id && puzzle.id.trim().length > 0 ? puzzle.id : `gpz-${nanoid(12)}`;
+  const uuid = puzzle.uuid && puzzle.uuid.trim().length > 0 ? puzzle.uuid : nanoid();
   return {
     id,
+    uuid,
     title: puzzle.title,
     description: puzzle.description,
     solution: puzzle.solution,
     mediaAsset: puzzle.mediaAsset,
     operatorActions: puzzle.operatorActions,
-    displayOrder: puzzle.displayOrder ?? index + 1
+    displayOrder: puzzle.displayOrder ?? index + 1,
+    hints: puzzle.hints ?? [],
+    mediaMeta: puzzle.mediaMeta ?? null
   };
 }
 
 function normalizeRoomInput(room: GameRoomDefinition, index: number): GameRoomDefinition {
   const id = room.id && room.id.trim().length > 0 ? room.id : `room-${nanoid(10)}`;
+  const uuid = room.uuid && room.uuid.trim().length > 0 ? room.uuid : nanoid();
   return {
     id,
+    uuid,
     name: room.name,
     isMobileCapable: room.isMobileCapable,
     themeToken: room.themeToken,
+    description: room.description,
+    slug: room.slug,
+    capacity: room.capacity,
     // ensure order stable by index when returning - stored order is alphabetical by query
   };
 }
@@ -358,12 +535,12 @@ function persistGameRelations(gameId: string, rooms: GameRoomDefinition[], puzzl
   const deleteRooms = sqlite.prepare(`DELETE FROM rooms WHERE game_id = ?`);
   const deletePuzzles = sqlite.prepare(`DELETE FROM game_puzzles WHERE game_id = ?`);
   const insertRoom = sqlite.prepare(
-    `INSERT INTO rooms (id, game_id, name, is_mobile_capable, theme_token)
-     VALUES (@id, @game_id, @name, @is_mobile_capable, @theme_token)`
+    `INSERT INTO rooms (id, uuid, game_id, name, is_mobile_capable, theme_token, description, slug, capacity)
+     VALUES (@id, @uuid, @game_id, @name, @is_mobile_capable, @theme_token, @description, @slug, @capacity)`
   );
   const insertPuzzle = sqlite.prepare(
-    `INSERT INTO game_puzzles (id, game_id, title, description, solution, media_asset, operator_actions, display_order)
-     VALUES (@id, @game_id, @title, @description, @solution, @media_asset, @operator_actions, @display_order)`
+    `INSERT INTO game_puzzles (id, uuid, game_id, title, description, solution, media_asset, operator_actions, display_order, hints, media_asset_meta)
+     VALUES (@id, @uuid, @game_id, @title, @description, @solution, @media_asset, @operator_actions, @display_order, @hints, @media_asset_meta)`
   );
 
   deleteRooms.run(gameId);
@@ -372,23 +549,30 @@ function persistGameRelations(gameId: string, rooms: GameRoomDefinition[], puzzl
   for (const room of rooms) {
     insertRoom.run({
       id: room.id,
+      uuid: room.uuid ?? room.id,
       game_id: gameId,
       name: room.name,
       is_mobile_capable: room.isMobileCapable ? 1 : 0,
-      theme_token: room.themeToken ?? null
+      theme_token: room.themeToken ?? null,
+      description: room.description ?? null,
+      slug: room.slug ?? null,
+      capacity: room.capacity ?? null
     });
   }
 
   for (const puzzle of puzzles) {
     insertPuzzle.run({
       id: puzzle.id,
+      uuid: puzzle.uuid ?? puzzle.id,
       game_id: gameId,
       title: puzzle.title,
       description: puzzle.description ?? null,
       solution: puzzle.solution ?? null,
       media_asset: puzzle.mediaAsset ?? null,
       operator_actions: puzzle.operatorActions ?? null,
-      display_order: puzzle.displayOrder
+      display_order: puzzle.displayOrder,
+      hints: puzzle.hints && puzzle.hints.length ? JSON.stringify(puzzle.hints) : null,
+      media_asset_meta: puzzle.mediaMeta ? JSON.stringify(puzzle.mediaMeta) : null
     });
   }
 }
@@ -401,12 +585,19 @@ export function createGame(payload: SaveGameRequest): GameDetails {
   }
   const gameId = `game-${payload.slug}`;
   const categories = JSON.stringify(payload.categories ?? []);
+  const mediaConfig = payload.media ? JSON.stringify(payload.media) : null;
+  const pricingConfig = payload.pricing ? JSON.stringify(payload.pricing) : null;
+  const bookingRulesConfig = payload.bookingRules ? JSON.stringify(payload.bookingRules) : null;
   sqlite
     .prepare(
       `INSERT INTO games (id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories,
-                          min_players, max_players, price_per_player_cents, resources_required, validation_notes, created_at, updated_at)
+                          min_players, max_players, price_per_player_cents, resources_required, validation_notes,
+                          media_config, pricing_config, booking_rules_config,
+                          created_at, updated_at, archived_at, archived_by, archived_reason)
        VALUES (@id, @slug, @name, @description, @story_intro, @duration_minutes, @difficulty, @pricing_model, @category, @categories,
-               @min_players, @max_players, @price_per_player_cents, @resources_required, @validation_notes, @created_at, @updated_at)`
+               @min_players, @max_players, @price_per_player_cents, @resources_required, @validation_notes,
+               @media_config, @pricing_config, @booking_rules_config,
+               @created_at, @updated_at, NULL, NULL, NULL)`
     )
     .run({
       id: gameId,
@@ -424,6 +615,9 @@ export function createGame(payload: SaveGameRequest): GameDetails {
       price_per_player_cents: payload.pricePerPlayerCents,
       resources_required: payload.resourcesRequired,
       validation_notes: payload.validationNotes ?? null,
+      media_config: mediaConfig,
+      pricing_config: pricingConfig,
+      booking_rules_config: bookingRulesConfig,
       created_at: now,
       updated_at: now
     });
@@ -449,6 +643,9 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
   }
 
   const now = new Date().toISOString();
+  const mediaConfig = payload.media ? JSON.stringify(payload.media) : null;
+  const pricingConfig = payload.pricing ? JSON.stringify(payload.pricing) : null;
+  const bookingRulesConfig = payload.bookingRules ? JSON.stringify(payload.bookingRules) : null;
   sqlite
     .prepare(
       `UPDATE games
@@ -466,6 +663,9 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
            price_per_player_cents = @price_per_player_cents,
            resources_required = @resources_required,
            validation_notes = @validation_notes,
+           media_config = @media_config,
+           pricing_config = @pricing_config,
+           booking_rules_config = @booking_rules_config,
            updated_at = @updated_at
        WHERE id = @id`
     )
@@ -485,6 +685,9 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
       price_per_player_cents: payload.pricePerPlayerCents,
       resources_required: payload.resourcesRequired,
       validation_notes: payload.validationNotes ?? null,
+      media_config: mediaConfig,
+      pricing_config: pricingConfig,
+      booking_rules_config: bookingRulesConfig,
       updated_at: now
     });
 
@@ -501,44 +704,137 @@ export function deleteGame(gameId: string) {
   sqlite.prepare(`DELETE FROM games WHERE id = ?`).run(gameId);
 }
 
+export function archiveGame(gameId: string, actorId: string, reason?: string | null): GameDetails {
+  const existing = gameByIdStmt.get(gameId) as GameRow | undefined;
+  if (!existing) {
+    throw new Error('Game not found');
+  }
+
+  const now = new Date().toISOString();
+  sqlite
+    .prepare(
+      `UPDATE games
+       SET archived_at = @archived_at,
+           archived_by = @archived_by,
+           archived_reason = @archived_reason,
+           updated_at = @updated_at
+       WHERE id = @id`
+    )
+    .run({
+      id: gameId,
+      archived_at: now,
+      archived_by: actorId,
+      archived_reason: reason ?? null,
+      updated_at: now
+    });
+
+  const details = getGameDetails(gameId);
+  if (!details) {
+    throw new Error('Unable to load archived game');
+  }
+  return details;
+}
+
+export function unarchiveGame(gameId: string): GameDetails {
+  const existing = gameByIdStmt.get(gameId) as GameRow | undefined;
+  if (!existing) {
+    throw new Error('Game not found');
+  }
+
+  const now = new Date().toISOString();
+  sqlite
+    .prepare(
+      `UPDATE games
+       SET archived_at = NULL,
+           archived_by = NULL,
+           archived_reason = NULL,
+           updated_at = @updated_at
+       WHERE id = @id`
+    )
+    .run({
+      id: gameId,
+      updated_at: now
+    });
+
+  const details = getGameDetails(gameId);
+  if (!details) {
+    throw new Error('Unable to load restored game');
+  }
+  return details;
+}
+
 function getOperatorRow(id: string): OperatorRow | undefined {
   return sqlite.prepare(`SELECT * FROM operators WHERE id = ? LIMIT 1`).get(id) as OperatorRow | undefined;
 }
 
 export async function createOperatorAccount(input: CreateOperatorRequest): Promise<OperatorSummary> {
+  const username = input.username.trim();
   const existing = sqlite
     .prepare(`SELECT id FROM operators WHERE username = ? LIMIT 1`)
-    .get(input.username) as { id: string } | undefined;
+    .get(username) as { id: string } | undefined;
   if (existing) {
     throw new Error('Username already exists');
   }
-  const id = `op-${nanoid(12)}`;
-  const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
-  const permissions = permissionsForRole(input.role);
-  const now = new Date().toISOString();
-  const avatarUrl = input.avatarUrl?.trim() ? input.avatarUrl.trim() : null;
-  const bio = input.bio?.trim() ? input.bio.trim() : null;
-  sqlite
-    .prepare(
-      `INSERT INTO operators (id, username, name, role, avatar_url, bio, permissions, password_hash, email, must_reset_password, created_at, updated_at)
-       VALUES (@id, @username, @name, @role, @avatar_url, @bio, @permissions, @password_hash, @email, @must_reset_password, @created_at, @updated_at)`
-    )
-    .run({
-      id,
-      username: input.username,
-      name: input.name,
-      role: input.role,
-      avatar_url: avatarUrl,
-      bio,
-      permissions: JSON.stringify(permissions),
-      password_hash: passwordHash,
-      email: input.email ?? null,
-      must_reset_password: input.mustResetPassword ? 1 : 0,
-      created_at: now,
-      updated_at: now
-    });
 
-  const row = getOperatorRow(id);
+  const email = input.email?.trim();
+
+  const role = normalizeRole(input.role);
+  const permissions = permissionsForRole(role);
+  const serializedPermissions = JSON.stringify(permissions);
+  const context = await getAuthContext();
+  const adapter = await getInternalAdapter();
+
+  if (email) {
+    const existingByEmail = await adapter.findUserByEmail(email);
+    if (existingByEmail) {
+      throw new Error('Email already exists');
+    }
+  }
+
+  const trimmedName = input.name.trim();
+  const trimmedBio = input.bio?.trim() ?? null;
+  const avatarConfig = input.avatarConfig ? JSON.stringify(input.avatarConfig) : null;
+
+  const hashedPassword = await context.password.hash(input.password);
+
+  const user = await adapter.createUser({
+    email: email ?? undefined,
+    name: trimmedName,
+    username,
+    role,
+    bio: trimmedBio ?? undefined,
+    mustResetPassword: input.mustResetPassword ?? false,
+    emailVerified: Boolean(email),
+    passwordHash: hashedPassword,
+    archivedAt: null,
+    archivedBy: null,
+    archivedReason: null
+  });
+
+  await adapter.createAccount({
+    userId: user.id,
+    providerId: 'credential',
+    accountId: user.id,
+    password: hashedPassword
+  });
+
+  // Set avatar_config via direct DB update
+  if (avatarConfig) {
+    db.prepare(`UPDATE operators SET avatar_config = ? WHERE id = ?`).run(avatarConfig, user.id);
+  }
+
+  await adapter.updateUser(user.id, {
+    role,
+    permissions: serializedPermissions,
+    bio: trimmedBio ?? undefined,
+    mustResetPassword: input.mustResetPassword ?? false,
+    passwordHash: hashedPassword,
+    archivedAt: null,
+    archivedBy: null,
+    archivedReason: null
+  });
+
+  const row = getOperatorRow(user.id);
   if (!row) {
     throw new Error('Failed to load created operator');
   }
@@ -550,39 +846,43 @@ export async function updateOperatorAccount(id: string, input: UpdateOperatorReq
   if (!row) {
     throw new Error('Operator not found');
   }
-  const nextRole = input.role ?? (row.role as CreateOperatorRequest['role']);
-  const permissions = JSON.stringify(permissionsForRole(nextRole));
-  const mustReset =
-    typeof input.mustResetPassword === 'boolean' ? (input.mustResetPassword ? 1 : 0) : row.must_reset_password;
-  const name = input.name?.trim();
-  const email = input.email?.trim();
-  const avatarUrl =
-    input.avatarUrl === undefined ? row.avatar_url : input.avatarUrl?.trim() ? input.avatarUrl.trim() : null;
-  const bio = input.bio === undefined ? row.bio : input.bio?.trim() ? input.bio.trim() : null;
-  sqlite
-    .prepare(
-      `UPDATE operators
-       SET name = @name,
-           role = @role,
-           email = @email,
-           avatar_url = @avatar_url,
-           bio = @bio,
-           permissions = @permissions,
-           must_reset_password = @must_reset_password,
-           updated_at = @updated_at
-       WHERE id = @id`
-    )
-    .run({
-      id,
-      name: name ?? row.name,
-      role: nextRole,
-      email: input.email === undefined ? row.email : email || null,
-      avatar_url: avatarUrl,
-      bio,
-      permissions,
-      must_reset_password: mustReset,
-      updated_at: new Date().toISOString()
-    });
+
+  const roleValue = input.role ?? row.role;
+  const resolvedRole = normalizeRole(roleValue);
+  const permissions = permissionsForRole(resolvedRole);
+  const serializedPermissions = JSON.stringify(permissions);
+  const context = await getAuthContext();
+  const adapter = await getInternalAdapter();
+
+  const updates: Record<string, unknown> = {
+    role: resolvedRole,
+    permissions: serializedPermissions
+  };
+
+  if (input.name !== undefined) {
+    updates.name = input.name.trim();
+  }
+  if (input.email !== undefined) {
+    updates.email = input.email?.trim();
+  }
+  if (input.avatarConfig !== undefined) {
+    updates.avatarConfig = input.avatarConfig ? JSON.stringify(input.avatarConfig) : null;
+  }
+  if (input.bio !== undefined) {
+    const trimmed = input.bio?.trim();
+    updates.bio = trimmed && trimmed.length > 0 ? trimmed : null;
+  }
+  if (input.mustResetPassword !== undefined) {
+    updates.mustResetPassword = input.mustResetPassword;
+  }
+
+  await adapter.updateUser(id, updates);
+
+  if (Object.prototype.hasOwnProperty.call(updates, 'avatarConfig')) {
+    db
+      .prepare(`UPDATE operators SET avatar_config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
+      .run(updates.avatarConfig ?? null, id);
+  }
 
   const updated = getOperatorRow(id);
   if (!updated) {
@@ -599,11 +899,27 @@ export async function resetOperatorPassword(
   if (!row) {
     throw new Error('Operator not found');
   }
-  const passwordHash = await argon2.hash(input.password, { type: argon2.argon2id });
+
+  const context = await getAuthContext();
+  const adapter = await getInternalAdapter();
+  const hashedPassword = await context.password.hash(input.password);
+
+  const accounts = await adapter.findAccounts(id);
+  const credential = accounts.find((account) => account.providerId === 'credential');
+  if (!credential) {
+    await adapter.createAccount({
+      userId: id,
+      providerId: 'credential',
+      accountId: id,
+      password: hashedPassword
+    });
+  } else {
+    await adapter.updatePassword(id, hashedPassword);
+  }
+
   const mustReset = input.forceReset ?? true;
-  sqlite
-    .prepare(`UPDATE operators SET password_hash = ?, must_reset_password = ?, updated_at = ? WHERE id = ?`)
-    .run(passwordHash, mustReset ? 1 : 0, new Date().toISOString(), id);
+  await adapter.updateUser(id, { mustResetPassword: mustReset, passwordHash: hashedPassword });
+
   const updated = getOperatorRow(id);
   if (!updated) {
     throw new Error('Unable to read operator');
@@ -612,18 +928,22 @@ export async function resetOperatorPassword(
 }
 
 export async function changeOwnPassword(operatorId: string, payload: ChangeOwnPasswordRequest): Promise<void> {
-  const row = getOperatorRow(operatorId);
-  if (!row) {
-    throw new Error('Operator not found');
+  const context = await getAuthContext();
+  const adapter = await getInternalAdapter();
+  const accounts = await adapter.findAccounts(operatorId);
+  const credential = accounts.find((account) => account.providerId === 'credential');
+  if (!credential || !credential.password) {
+    throw new Error('Credential account not configured for this user');
   }
-  const valid = await argon2.verify(row.password_hash, payload.currentPassword);
+
+  const valid = await context.password.verify({ password: payload.currentPassword, hash: credential.password });
   if (!valid) {
     throw new Error('Current password is incorrect');
   }
-  const passwordHash = await argon2.hash(payload.newPassword, { type: argon2.argon2id });
-  sqlite
-    .prepare(`UPDATE operators SET password_hash = ?, must_reset_password = 0, updated_at = ? WHERE id = ?`)
-    .run(passwordHash, new Date().toISOString(), operatorId);
+
+  const hashedPassword = await context.password.hash(payload.newPassword);
+  await adapter.updatePassword(operatorId, hashedPassword);
+  await adapter.updateUser(operatorId, { mustResetPassword: false, passwordHash: hashedPassword });
 }
 
 export function updateOwnProfile(operatorId: string, payload: UpdateOwnProfileRequest): OperatorProfile {
@@ -633,15 +953,19 @@ export function updateOwnProfile(operatorId: string, payload: UpdateOwnProfileRe
   }
   const name = payload.name?.trim() ?? row.name;
   const email = payload.email === undefined ? row.email : payload.email?.trim() || null;
-  const avatarUrl =
-    payload.avatarUrl === undefined ? row.avatar_url : payload.avatarUrl?.trim() ? payload.avatarUrl.trim() : null;
+  const avatarConfig =
+    payload.avatarConfig === undefined
+      ? row.avatar_config
+      : payload.avatarConfig
+        ? JSON.stringify(payload.avatarConfig)
+        : null;
   const bio = payload.bio === undefined ? row.bio : payload.bio?.trim() ? payload.bio.trim() : null;
 
   sqlite
     .prepare(
-      `UPDATE operators SET name = ?, email = ?, avatar_url = ?, bio = ?, updated_at = ? WHERE id = ?`
+      `UPDATE operators SET name = ?, email = ?, avatar_config = ?, bio = ?, updated_at = ? WHERE id = ?`
     )
-    .run(name, email, avatarUrl, bio, new Date().toISOString(), operatorId);
+    .run(name, email, avatarConfig, bio, new Date().toISOString(), operatorId);
 
   const updated = getOperatorRow(operatorId);
   const profile = mapOperator(updated);
@@ -651,7 +975,7 @@ export function updateOwnProfile(operatorId: string, payload: UpdateOwnProfileRe
   return profile;
 }
 
-export function deleteOperatorAccount(id: string) {
+export async function deleteOperatorAccount(id: string) {
   const row = getOperatorRow(id);
   if (!row) return;
   if (row.role === 'admin') {
@@ -662,18 +986,64 @@ export function deleteOperatorAccount(id: string) {
       throw new Error('Cannot remove the final admin account');
     }
   }
-  sqlite.prepare(`DELETE FROM operators WHERE id = ?`).run(id);
+  const adapter = await getInternalAdapter();
+  await adapter.deleteUser(id);
 }
 
-export function findOperatorByUsername(
-  username: string
-): (OperatorProfile & { passwordHash: string; mustResetPassword: boolean }) | undefined {
-  const stmt = sqlite.prepare(`SELECT * FROM operators WHERE username = ? LIMIT 1`);
-  const row = stmt.get(username) as OperatorRow | undefined;
-  if (!row) return undefined;
-  const profile = mapOperator(row);
-  if (!profile) return undefined;
-  return { ...profile, passwordHash: row.password_hash, mustResetPassword: Boolean(row.must_reset_password) };
+export async function archiveOperatorAccount(
+  id: string,
+  actorId: string,
+  reason?: string | null
+): Promise<OperatorSummary> {
+  const row = getOperatorRow(id);
+  if (!row) {
+    throw new Error('Operator not found');
+  }
+
+  if (row.role === 'admin') {
+    const adminCount = sqlite
+      .prepare(`SELECT COUNT(*) as count FROM operators WHERE role = 'admin' AND archived_at IS NULL`)
+      .get() as { count: number };
+    if (adminCount.count <= 1) {
+      throw new Error('Cannot archive the final active admin');
+    }
+  }
+
+  const now = new Date().toISOString();
+  const adapter = await getInternalAdapter();
+  await adapter.updateUser(id, {
+    archivedAt: now,
+    archivedBy: actorId,
+    archivedReason: reason ?? null
+  });
+
+  sqlite.prepare(`DELETE FROM operator_auth_sessions WHERE user_id = ?`).run(id);
+
+  const updated = getOperatorRow(id);
+  if (!updated) {
+    throw new Error('Unable to read archived operator');
+  }
+  return mapOperatorSummary(updated);
+}
+
+export async function unarchiveOperatorAccount(id: string): Promise<OperatorSummary> {
+  const row = getOperatorRow(id);
+  if (!row) {
+    throw new Error('Operator not found');
+  }
+
+  const adapter = await getInternalAdapter();
+  await adapter.updateUser(id, {
+    archivedAt: null,
+    archivedBy: null,
+    archivedReason: null
+  });
+
+  const updated = getOperatorRow(id);
+  if (!updated) {
+    throw new Error('Unable to read restored operator');
+  }
+  return mapOperatorSummary(updated);
 }
 
 export function findOperatorById(id: string): OperatorProfile | undefined {
@@ -682,10 +1052,46 @@ export function findOperatorById(id: string): OperatorProfile | undefined {
   return mapOperator(row);
 }
 
-export function listOperatorSummaries(): OperatorSummary[] {
+export interface OperatorListFilters {
+  search?: string;
+  role?: OperatorRole | 'all';
+  status?: 'active' | 'archived' | 'all';
+}
+
+export function listOperatorSummaries(filters: OperatorListFilters = {}): OperatorSummary[] {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+
+  if (filters.status === 'archived') {
+    conditions.push('archived_at IS NOT NULL');
+  } else if (filters.status === 'active') {
+    conditions.push('archived_at IS NULL');
+  }
+
+  if (filters.role && filters.role !== 'all') {
+    conditions.push('role = ?');
+    params.push(filters.role);
+  }
+
+  if (filters.search && filters.search.trim().length) {
+    const normalized = `%${filters.search.trim().toLowerCase()}%`;
+    conditions.push(
+      '(LOWER(username) LIKE ? OR LOWER(name) LIKE ? OR LOWER(COALESCE(email, "")) LIKE ?)'
+    );
+    params.push(normalized, normalized, normalized);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
   const rows = sqlite
-    .prepare(`SELECT * FROM operators ORDER BY created_at ASC`)
-    .all() as OperatorRow[];
+    .prepare(
+      `SELECT *
+       FROM operators
+       ${whereClause}
+       ORDER BY CASE WHEN archived_at IS NULL THEN 0 ELSE 1 END,
+                name COLLATE NOCASE ASC`
+    )
+    .all(...params) as OperatorRow[];
   return rows.map(mapOperatorSummary);
 }
 
@@ -709,6 +1115,8 @@ function mapBooking(row: BookingRow): BookingSummary {
     priceTier: row.price_tier as BookingSummary['priceTier'],
     discountCode: row.discount_code ?? undefined,
     isMobile: Boolean(row.is_mobile),
+    isAdhoc: Boolean(row.is_adhoc),
+    notes: row.notes ?? undefined,
     locationNote: row.location_note ?? undefined,
     contactName: row.contact_name,
     contactPhone: row.contact_phone,
@@ -721,12 +1129,16 @@ function mapSessionRow(row: SessionRow): GameSessionDetails {
     id: row.session_id,
     gameId: row.game_id,
     gameName: row.game_name,
+    gameSlug: row.game_slug,
     roomName: row.room_name,
+    roomId: row.room_id,
+    roomUuid: row.room_uuid ?? undefined,
     startedAt: row.started_at,
     scheduledEnd: row.scheduled_end,
     status: row.session_status as GameSessionDetails['status'],
     players: row.party_size,
     isMobile: Boolean(row.is_mobile),
+    isAdhoc: Boolean(row.is_adhoc),
     timer: {
       totalSeconds: row.timer_total_seconds,
       remainingSeconds: row.timer_remaining_seconds,
@@ -769,9 +1181,9 @@ export function listActiveSessions(): ActiveSessionsResponse {
       `SELECT s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
               s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
               s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
-              b.party_size, b.is_mobile, b.start_time, b.end_time,
-              g.id AS game_id, g.name AS game_name,
-              r.name AS room_name
+              b.party_size, b.is_mobile, b.is_adhoc, b.start_time, b.end_time,
+              g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
+              r.id AS room_id, r.uuid AS room_uuid, r.name AS room_name
        FROM sessions s
        JOIN bookings b ON b.id = s.booking_id
        JOIN games g ON g.id = b.game_id
@@ -813,9 +1225,9 @@ export function getSessionById(id: string): GameSessionDetails | undefined {
     `SELECT s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
             s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
             s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
-            b.party_size, b.is_mobile,
-            g.id AS game_id, g.name AS game_name,
-            r.name AS room_name
+            b.party_size, b.is_mobile, b.is_adhoc,
+            g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
+            r.id AS room_id, r.uuid AS room_uuid, r.name AS room_name
      FROM sessions s
      JOIN bookings b ON b.id = s.booking_id
      JOIN games g ON g.id = b.game_id
@@ -854,9 +1266,9 @@ export function getSessionBySlug(slug: string): { session: GameSessionDetails; s
             s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
             s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
             s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
-            b.party_size, b.is_mobile,
-            g.id AS game_id, g.name AS game_name,
-            r.name AS room_name
+            b.party_size, b.is_mobile, b.is_adhoc,
+            g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
+            r.id AS room_id, r.uuid AS room_uuid, r.name AS room_name
      FROM timer_slugs t
      JOIN sessions s ON s.id = t.session_id
      JOIN bookings b ON b.id = s.booking_id
@@ -935,6 +1347,144 @@ export function getDashboard(): DashboardResponse {
       })),
     upcomingBookings: upcoming
   };
+}
+
+export function quickStartSession(
+  payload: QuickStartSessionRequest,
+  operatorId: string
+): QuickStartSessionResponse {
+  const room = roomByIdStmt.get(payload.roomId) as (RoomRow & { game_slug: string }) | undefined;
+  if (!room) {
+    throw new Error('Room not found');
+  }
+  if (room.game_id !== payload.gameId) {
+    throw new Error('Room does not belong to selected game');
+  }
+
+  const gameRow = gameByIdStmt.get(payload.gameId) as GameRow | undefined;
+  if (!gameRow) {
+    throw new Error('Game not found');
+  }
+
+  if (payload.partySize < gameRow.min_players || payload.partySize > gameRow.max_players) {
+    throw new Error('Party size outside allowed range for this game');
+  }
+
+  const active = activeSessionsByRoomStmt.get(room.id) as { count: number };
+  if (active.count > 0) {
+    throw new Error('Room already has an active session');
+  }
+
+  const durationMinutes = payload.durationMinutes && payload.durationMinutes > 0
+    ? payload.durationMinutes
+    : gameRow.duration_minutes;
+
+  const now = new Date();
+  const nowIso = now.toISOString();
+  const totalSeconds = durationMinutes * 60;
+  const scheduledEndIso = new Date(now.getTime() + totalSeconds * 1000).toISOString();
+
+  const bookingId = `booking-${nanoid(12)}`;
+  const sessionId = `session-${nanoid(12)}`;
+  const bookingCode = `ADHOC-${now.getTime()}`;
+
+  const bookingRules = safeParse<GameBookingRules>(gameRow.booking_rules_config);
+  const operator = findOperatorById(operatorId);
+  const crewPrimary = operator?.name ?? 'Quick Start';
+
+  sqlite
+    .prepare(
+      `INSERT INTO bookings (
+         id, booking_code, game_id, room_id, start_time, end_time, status,
+         party_size, deposit_due_cents, total_due_cents, price_tier, discount_code,
+         is_mobile, is_adhoc, location_note, notes, contact_name, contact_phone
+       ) VALUES (
+         @id, @booking_code, @game_id, @room_id, @start_time, @end_time, @status,
+         @party_size, @deposit_due_cents, @total_due_cents, @price_tier, @discount_code,
+         @is_mobile, @is_adhoc, @location_note, @notes, @contact_name, @contact_phone
+       )`
+    )
+    .run({
+      id: bookingId,
+      booking_code: bookingCode,
+      game_id: payload.gameId,
+      room_id: payload.roomId,
+      start_time: nowIso,
+      end_time: scheduledEndIso,
+      status: 'ADHOC',
+      party_size: payload.partySize,
+      deposit_due_cents: 0,
+      total_due_cents: 0,
+      price_tier: 'standard',
+      discount_code: null,
+      is_mobile: room.is_mobile_capable ? 1 : 0,
+      is_adhoc: 1,
+      location_note: bookingRules?.locationNotes ?? null,
+      notes: payload.notes ?? null,
+      contact_name: 'Walk-in',
+      contact_phone: 'N/A'
+    });
+
+  sqlite
+    .prepare(
+      `INSERT INTO sessions (
+         id, booking_id, status, timer_total_seconds, timer_remaining_seconds, timer_status,
+         started_at, scheduled_end, hints_used, stream_thumbnail_url,
+         background_audio_track, background_audio_is_playing, crew_primary, crew_support, recent_alert
+       ) VALUES (
+         @id, @booking_id, 'running', @timer_total_seconds, @timer_total_seconds, 'running',
+         @started_at, @scheduled_end, 0, NULL, NULL, 0, @crew_primary, NULL, NULL
+       )`
+    )
+    .run({
+      id: sessionId,
+      booking_id: bookingId,
+      timer_total_seconds: totalSeconds,
+      started_at: nowIso,
+      scheduled_end: scheduledEndIso,
+      crew_primary: crewPrimary
+    });
+
+  const basePuzzles = puzzlesByGameStmt.all(payload.gameId) as GamePuzzleRow[];
+  const insertSessionPuzzle = sqlite.prepare(
+    `INSERT INTO session_puzzles (id, session_id, title, status, display_order)
+     VALUES (?, ?, ?, ?, ?)`
+  );
+  basePuzzles.forEach((puzzle, index) => {
+    insertSessionPuzzle.run(
+      `spz-${nanoid(10)}`,
+      sessionId,
+      puzzle.title,
+      index === 0 ? 'available' : 'locked',
+      puzzle.display_order ?? index + 1
+    );
+  });
+
+  sqlite
+    .prepare(
+      `INSERT INTO timer_slugs (slug, session_id, narrative)
+       VALUES (@slug, @session_id, @narrative)
+       ON CONFLICT(slug) DO UPDATE SET session_id = excluded.session_id, narrative = excluded.narrative`
+    )
+    .run({
+      slug: gameRow.slug,
+      session_id: sessionId,
+      narrative: payload.notes ?? bookingRules?.locationNotes ?? null
+    });
+
+  const sessionDetails = getSessionById(sessionId);
+  if (!sessionDetails) {
+    throw new Error('Failed to initialize session');
+  }
+
+  emitSessionUpdate(sessionDetails);
+  emitDashboardUpdate(getDashboard());
+  broadcastTimerSessions(sessionId, sessionDetails);
+
+  const bookingDate = nowIso.slice(0, 10);
+  emitBookingsUpdate(getBookingsByDate(bookingDate, 'all'));
+
+  return { session: sessionDetails };
 }
 
 export function getBookingsByDate(date: string, scope: 'all' | 'storefront' | 'mobile'): BookingCalendarResponse {
@@ -1077,10 +1627,4 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
   broadcastTimerSessions(sessionId, updated);
 
   return response;
-}
-
-export function rotateAdminCredentials() {
-  const newPassword = nanoid(12);
-  sqlite.prepare(`UPDATE operators SET password = ? WHERE username = 'admin'`).run(newPassword);
-  return { username: 'admin', password: newPassword };
 }

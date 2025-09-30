@@ -1,28 +1,98 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import { formatDate, formatTime, formatTimer } from '$lib/utils/datetime';
-  import { getContext, onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { initializeRealtime } from '$lib/realtime';
   import { bookingsStore, dashboardStore, sessionsStore } from '$lib/realtime/stores';
+  import QuickStartModal from '$lib/components/sessions/QuickStartModal.svelte';
+  import type { GameSessionDetails, GameDetails } from '@escapeplan/contracts';
 
   let { data } = $props<{ data: PageData }>();
 
   let dashboard = $state(data.dashboard ?? null);
   let sessions = $state(data.dashboard?.activeSessions ?? []);
   let bookings = $state(data.dashboard?.upcomingBookings ?? []);
+  let games = $state(data.games ?? []);
+  let quickStartOpen = $state(false);
+  let toast = $state<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  let canManageSessions = $derived($page.data.user?.permissions?.includes('manage_sessions') ?? false);
   let canViewNetwork = $derived($page.data.user?.permissions?.includes('view_network') ?? false);
   let networkLink = $derived(canViewNetwork ? (dashboard?.network.detailsUrl ?? '/admin/network') : null);
 
-  const sessionToken = getContext<string | null>('sessionToken');
+  const setToast = (message: string, type: 'success' | 'error' = 'success') => {
+    toast = { message, type };
+    setTimeout(() => {
+      if (toast?.message === message) {
+        toast = null;
+      }
+    }, 4000);
+  };
+
+  const handleQuickStartSuccess = (session: GameSessionDetails) => {
+    quickStartOpen = false;
+    setToast('Session started successfully.');
+    if (!sessions.some((existing: GameSessionDetails) => existing.id === session.id)) {
+      sessions = [session, ...sessions];
+    }
+    goto(`/games/${session.id}`);
+  };
+
+  const buildTimerUrl = (session: GameSessionDetails) => {
+    const slug = session.gameSlug ?? session.gameId;
+    if (!slug) return '';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
+    const url = new URL(`/timer/${slug}`, origin);
+    const roomIdentity = session.roomUuid ?? session.roomId;
+    if (roomIdentity) {
+      url.searchParams.set('room', roomIdentity);
+    }
+    return url.toString();
+  };
+
+  const copyTimerLink = async (session: GameSessionDetails) => {
+    const url = buildTimerUrl(session);
+    if (!url) {
+      setToast('Timer link unavailable for this session.', 'error');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      setToast('Timer link copied to clipboard.');
+    } catch (error) {
+      console.error('Failed to copy timer link', error);
+      setToast('Unable to copy timer link.', 'error');
+    }
+  };
+
+  const openTimerLink = (session: GameSessionDetails) => {
+    const url = buildTimerUrl(session);
+    if (!url) {
+      setToast('Timer link unavailable for this session.', 'error');
+      return;
+    }
+    window.open(url, '_blank', 'noopener');
+  };
 
   onMount(() => {
-    initializeRealtime(sessionToken ?? null, {
+    initializeRealtime({
       dashboard,
       sessions,
       bookings: []
     });
+
+    const handleKeydown = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        if (canManageSessions && games.length) {
+          quickStartOpen = true;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeydown);
 
     const unsubDashboard = dashboardStore.subscribe((value) => {
       if (value) {
@@ -47,7 +117,12 @@
       unsubDashboard();
       unsubSessions();
       unsubBookings();
+      window.removeEventListener('keydown', handleKeydown);
     });
+  });
+
+  $effect(() => {
+    games = data.games ?? [];
   });
 </script>
 
@@ -60,12 +135,19 @@
         All metrics are sourced locally from the Fastify control API.
       </p>
     </div>
-    {#if dashboard}
-      <div class="badge-pill">
-        <span class="inline-flex size-2 rounded-full {dashboard.network.status === 'online' ? 'bg-success' : dashboard.network.status === 'degraded' ? 'bg-warning' : 'bg-error'}"></span>
-        <span>Network {dashboard.network.status} · refreshed {formatTime(dashboard.generatedAt)}</span>
-      </div>
-    {/if}
+    <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
+      {#if dashboard}
+        <div class="badge-pill">
+          <span class="inline-flex size-2 rounded-full {dashboard.network.status === 'online' ? 'bg-success' : dashboard.network.status === 'degraded' ? 'bg-warning' : 'bg-error'}"></span>
+          <span>Network {dashboard.network.status} · refreshed {formatTime(dashboard.generatedAt)}</span>
+        </div>
+      {/if}
+      {#if canManageSessions && games.length}
+        <button class="btn btn-secondary w-full sm:w-auto" onclick={() => (quickStartOpen = true)}>
+          + Quick start session
+        </button>
+      {/if}
+    </div>
   </header>
 
   {#if data.dashboardError}
@@ -140,6 +222,14 @@
       </div>
     {/if}
 
+    {#if toast}
+      <div
+        class={`alert ${toast.type === 'error' ? 'alert-error border-error/30 bg-error/10 text-error-content' : 'alert-success border-success/30 bg-success/10 text-success-content'} mt-4`}
+      >
+        <span>{toast.message}</span>
+      </div>
+    {/if}
+
     <div class="grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
       <section class="glass-panel border-white/10 bg-base-200/70 p-6">
         <header class="flex items-center justify-between gap-4">
@@ -160,7 +250,12 @@
                 <div class="flex flex-wrap items-start justify-between gap-4">
                   <div class="space-y-1">
                     <p class="text-sm uppercase tracking-[0.25em] text-base-content/40">{session.roomName}</p>
-                    <h3 class="text-xl font-display text-base-content">{session.gameName}</h3>
+                    <h3 class="flex items-center gap-2 text-xl font-display text-base-content">
+                      {session.gameName}
+                      {#if session.isAdhoc}
+                        <span class="badge badge-outline border-primary/40 text-[11px] text-primary">Ad-hoc</span>
+                      {/if}
+                    </h3>
                     <p class="text-xs text-base-content/60">{session.players} players · {session.isMobile ? 'Mobile kit' : 'Storefront room'}</p>
                   </div>
                   <div class="text-right">
@@ -180,6 +275,12 @@
                   <div class="flex flex-wrap gap-2">
                     <a class="btn btn-sm btn-primary" href={`/games/${session.id}`}>Open runner</a>
                     <a class="btn btn-sm btn-ghost border border-white/10" href={`/bookings?focus=${session.id}`}>View booking</a>
+                    <button type="button" class="btn btn-sm btn-ghost border border-white/10" onclick={() => copyTimerLink(session)}>
+                      Copy timer link
+                    </button>
+                    <button type="button" class="btn btn-sm btn-ghost border border-white/10" onclick={() => openTimerLink(session)}>
+                      Open room display
+                    </button>
                   </div>
                 </div>
               </article>
@@ -200,45 +301,37 @@
           <table class="table table-zebra table-sm">
             <thead class="bg-base-300/60 text-xs uppercase tracking-[0.3em] text-base-content/40">
               <tr>
-                <th>Start</th>
-                <th>Game</th>
-                <th>Party</th>
-                <th>Channel</th>
-                <th>Status</th>
+                <th class="text-left">Time</th>
+                <th class="text-left">Game</th>
+                <th class="text-left hidden sm:table-cell">Party</th>
+                <th class="text-left">Room</th>
+                <th class="text-left">Status</th>
               </tr>
             </thead>
             <tbody>
-              {#if bookings.length === 0}
-                <tr>
-                  <td colspan="5" class="py-6 text-center text-sm text-base-content/60">No upcoming bookings.</td>
+              {#each bookings as booking}
+                <tr class="text-xs sm:text-sm">
+                  <td class="whitespace-nowrap">{formatDate(booking.startTime)} · {formatTime(booking.startTime)}</td>
+                  <td>
+                    <div class="flex flex-col">
+                      <span class="font-medium text-base-content">{booking.gameName}</span>
+                      {#if booking.notes}
+                        <span class="text-[11px] text-base-content/50">{booking.notes}</span>
+                      {/if}
+                    </div>
+                  </td>
+                  <td class="hidden sm:table-cell">{booking.partySize} guests</td>
+                  <td>{booking.roomName}</td>
+                  <td class="flex items-center gap-2">
+                    <span class={`badge badge-outline border-white/15 text-[11px] ${booking.status === 'checked_in' ? 'text-success' : 'text-base-content/60'}`}>
+                      {booking.status}
+                    </span>
+                    {#if booking.isAdhoc}
+                      <span class="badge badge-secondary badge-xs">Ad-hoc</span>
+                    {/if}
+                  </td>
                 </tr>
-              {:else}
-                {#each bookings as booking}
-                  <tr class={booking.conflict ? 'bg-secondary/10' : ''}>
-                    <td>
-                      <div class="flex flex-col">
-                        <span class="font-semibold text-base-content">{formatTime(booking.startTime)}</span>
-                        <span class="text-xs text-base-content/50">{formatDate(booking.startTime)}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div class="flex flex-col">
-                        <span class="font-semibold text-base-content/90">{booking.gameName}</span>
-                        <span class="text-xs text-base-content/50">{booking.roomName}</span>
-                      </div>
-                    </td>
-                    <td class="text-sm text-base-content/80">{booking.partySize}</td>
-                    <td>
-                      <span class={`badge badge-sm ${booking.isMobile ? 'badge-info' : 'badge-neutral'}`}>
-                        {booking.isMobile ? 'Mobile' : 'Storefront'}
-                      </span>
-                    </td>
-                    <td>
-                      <span class="badge badge-outline badge-sm text-base-content/70">{booking.status}</span>
-                    </td>
-                  </tr>
-                {/each}
-              {/if}
+              {/each}
             </tbody>
           </table>
         </div>
@@ -246,3 +339,11 @@
     </div>
   {/if}
 </section>
+
+<QuickStartModal
+  open={quickStartOpen}
+  games={games}
+  activeSessions={sessions}
+  onclose={() => (quickStartOpen = false)}
+  onsuccess={handleQuickStartSuccess}
+/>

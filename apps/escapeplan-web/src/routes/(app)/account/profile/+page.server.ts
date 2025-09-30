@@ -24,17 +24,26 @@ export const actions: Actions = {
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();
     const emailRaw = form.get('email');
-    const avatarRaw = form.get('avatarUrl');
+    const avatarConfigRaw = form.get('avatarConfig');
     const bioRaw = form.get('bio');
 
     if (!name) {
       return fail(400, { message: 'Display name is required.' });
     }
 
+    let avatarConfig;
+    if (avatarConfigRaw) {
+      try {
+        avatarConfig = JSON.parse(String(avatarConfigRaw));
+      } catch {
+        return fail(400, { message: 'Invalid avatar configuration.' });
+      }
+    }
+
     const payload: UpdateOwnProfileRequest = {
       name,
       email: emailRaw ? (String(emailRaw).trim() || null) : null,
-      avatarUrl: avatarRaw ? (String(avatarRaw).trim() || null) : null,
+      avatarConfig: avatarConfig ?? null,
       bio: bioRaw ? (String(bioRaw).trim() || null) : null
     };
 
@@ -44,7 +53,7 @@ export const actions: Actions = {
         method: 'PATCH',
         body: JSON.stringify(payload)
       });
-      locals.user = profile;
+      locals.user = { ...locals.user, ...profile };
       return { success: true, profile };
     } catch (error) {
       console.error('Failed to update profile', error);

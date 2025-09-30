@@ -2,25 +2,50 @@ export type NetworkHealth = 'online' | 'degraded' | 'offline';
 export type SessionStatus = 'upcoming' | 'running' | 'paused' | 'completed';
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'completed';
 
-export type OperatorRole = 'admin' | 'general_manager' | 'game_master' | 'technician';
+export type OperatorRole = 'admin' | 'manager' | 'game_master' | 'customer';
+
+// DiceBear Bottts avatar configuration
+export interface BotttsAvatarConfig {
+  seed: string;
+  backgroundType?: string[];
+  backgroundColor?: string[];
+  baseColor?: string[];
+  eyes?: string[];
+  face?: string[];
+  mouth?: string[];
+  sides?: string[];
+  texture?: string[];
+  top?: string[];
+}
 
 export type OperatorPermission =
-  | 'manage_users'
-  | 'manage_games'
-  | 'manage_network'
-  | 'view_network'
+  | 'view_dashboard'
+  | 'view_bookings'
+  | 'manage_bookings'
   | 'manage_sessions'
-  | 'rotate_admin_credentials';
+  | 'view_games'
+  | 'manage_games'
+  | 'view_network'
+  | 'manage_network'
+  | 'manage_users'
+  | 'manage_files';
 
 export interface OperatorProfile {
   id: string;
   username: string;
   name: string;
   role: OperatorRole;
-  avatarUrl?: string;
+  avatarConfig?: BotttsAvatarConfig;
   bio?: string;
   permissions: OperatorPermission[];
   email?: string;
+  emailVerified?: boolean;
+  banned?: boolean;
+  banReason?: string | null;
+  banExpires?: string | null;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archivedReason?: string | null;
 }
 
 export interface OperatorSummary extends OperatorProfile {
@@ -36,7 +61,7 @@ export interface CreateOperatorRequest {
   role: OperatorRole;
   password: string;
   email?: string;
-  avatarUrl?: string;
+  avatarConfig?: BotttsAvatarConfig;
   bio?: string;
   mustResetPassword?: boolean;
 }
@@ -45,7 +70,7 @@ export interface UpdateOperatorRequest {
   name?: string;
   role?: OperatorRole;
   email?: string;
-  avatarUrl?: string | null;
+  avatarConfig?: BotttsAvatarConfig | null;
   bio?: string | null;
   mustResetPassword?: boolean;
 }
@@ -53,6 +78,18 @@ export interface UpdateOperatorRequest {
 export interface ResetOperatorPasswordRequest {
   password: string;
   forceReset?: boolean;
+}
+
+export interface ArchiveOperatorRequest {
+  reason?: string | null;
+}
+
+export interface QuickStartSessionRequest {
+  gameId: string;
+  roomId: string;
+  partySize: number;
+  durationMinutes?: number | null;
+  notes?: string | null;
 }
 
 export interface ChangeOwnPasswordRequest {
@@ -63,7 +100,7 @@ export interface ChangeOwnPasswordRequest {
 export interface UpdateOwnProfileRequest {
   name: string;
   email?: string | null;
-  avatarUrl?: string | null;
+  avatarConfig?: BotttsAvatarConfig | null;
   bio?: string | null;
 }
 
@@ -85,6 +122,7 @@ export interface ActiveSessionSummary {
   status: SessionStatus;
   players: number;
   isMobile: boolean;
+  isAdhoc?: boolean;
   timer: TimerState;
   hintsUsed: number;
   streamThumbnailUrl?: string;
@@ -106,6 +144,8 @@ export interface BookingSummary {
   priceTier: 'standard' | 'premier' | 'offsite';
   discountCode?: string | null;
   isMobile: boolean;
+  isAdhoc?: boolean;
+  notes?: string | null;
   locationNote?: string | null;
   contactName: string;
   contactPhone: string;
@@ -173,6 +213,9 @@ export interface GameSessionDetails extends ActiveSessionSummary {
     primary: string;
     support?: string | null;
   };
+  gameSlug?: string;
+  roomId?: string;
+  roomUuid?: string;
 }
 
 export interface TimerBroadcast {
@@ -196,22 +239,37 @@ export interface ActiveSessionsResponse {
   sessions: GameSessionDetails[];
 }
 
+export interface QuickStartSessionResponse {
+  session: GameSessionDetails;
+}
+
 export interface LoginRequest {
   username: string;
   password: string;
 }
 
-export interface LoginResponse {
+export interface AuthSessionInfo {
+  id: string;
+  userId: string;
   token: string;
-  user: OperatorProfile;
+  createdAt: string;
+  updatedAt: string;
   expiresAt: string;
-  mustResetPassword?: boolean;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  impersonatedBy?: string | null;
 }
 
-export interface SessionResponse {
-  user: OperatorProfile;
-  issuedAt: string;
-  expiresAt: string;
+export interface AuthSessionUser extends OperatorSummary {
+  emailVerified: boolean;
+  banned?: boolean;
+  banReason?: string | null;
+  banExpires?: string | null;
+}
+
+export interface AuthSessionEnvelope {
+  session: AuthSessionInfo;
+  user: AuthSessionUser;
 }
 
 export interface CommandRequest {
@@ -227,19 +285,71 @@ export interface CommandResponse {
 
 export interface GamePuzzleDefinition {
   id: string;
+  uuid: string;
   title: string;
   description?: string;
   solution?: string;
   mediaAsset?: string;
   operatorActions?: string;
   displayOrder: number;
+  hints?: GameHintDefinition[];
+  mediaMeta?: Record<string, unknown> | null;
 }
 
 export interface GameRoomDefinition {
   id: string;
+  uuid: string;
   name: string;
+  description?: string;
+  slug?: string;
   isMobileCapable: boolean;
   themeToken?: string;
+  capacity?: number;
+}
+
+export interface GameMediaConfig {
+  thumbnailAssetId?: string | null;
+  roomScreenAssetId?: string | null;
+  galleryAssetIds: string[];
+}
+
+export type PricingModel = 'per_person' | 'flat_rate';
+
+export interface GamePricingTier {
+  id: string;
+  label: string;
+  priceCents: number;
+  minPlayers?: number | null;
+  maxPlayers?: number | null;
+}
+
+export interface GameDiscountRule {
+  code: string;
+  percentOff?: number | null;
+  amountOffCents?: number | null;
+  expiresAt?: string | null;
+  notes?: string | null;
+}
+
+export interface GamePricingConfig {
+  model: PricingModel;
+  tiers: GamePricingTier[];
+  deposit?: {
+    required: boolean;
+    type?: 'flat' | 'percent';
+    amountCents?: number | null;
+  };
+  discounts: GameDiscountRule[];
+}
+
+export interface GameBookingRules {
+  isMobile?: boolean;
+  locationNotes?: string | null;
+  travelBufferMinutes?: number | null;
+  equipmentChecklist: string[];
+  reservationStyle: 'public' | 'private';
+  cancellationPolicy?: string | null;
+  customFields?: Array<{ label: string; required: boolean }>;
 }
 
 export interface GameDetails {
@@ -250,15 +360,21 @@ export interface GameDetails {
   storyIntro?: string;
   durationMinutes: number;
   difficulty: string;
-  pricingModel: string;
+  pricingModel: PricingModel;
   categories: string[];
   minPlayers: number;
   maxPlayers: number;
   pricePerPlayerCents: number;
   resourcesRequired: number;
   validationNotes?: string;
+  media?: GameMediaConfig;
+  pricing?: GamePricingConfig;
+  bookingRules?: GameBookingRules;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
+  archivedBy?: string | null;
+  archivedReason?: string | null;
   puzzles: GamePuzzleDefinition[];
   rooms: GameRoomDefinition[];
 }
@@ -270,7 +386,7 @@ export interface SaveGameRequest {
   storyIntro?: string;
   durationMinutes: number;
   difficulty: string;
-  pricingModel: string;
+  pricingModel: PricingModel;
   categories: string[];
   minPlayers: number;
   maxPlayers: number;
@@ -279,6 +395,21 @@ export interface SaveGameRequest {
   validationNotes?: string;
   puzzles: GamePuzzleDefinition[];
   rooms: GameRoomDefinition[];
+  media?: GameMediaConfig;
+  pricing?: GamePricingConfig;
+  bookingRules?: GameBookingRules;
+}
+
+export interface GameHintDefinition {
+  uuid: string;
+  type: HintMedium;
+  content: string;
+  assetUrl?: string;
+  order: number;
+}
+
+export interface ArchiveGameRequest {
+  reason?: string | null;
 }
 
 export interface NetworkProfile {
@@ -356,3 +487,5 @@ export interface UpdateNetworkProfileRequest {
   statusMessage?: string;
   details?: string;
 }
+
+export { ROLE_PERMISSIONS, PERMISSION_LABELS, ROLE_LABELS, ALL_PERMISSIONS } from './rbac.js';

@@ -1,63 +1,38 @@
-import { nanoid } from 'nanoid';
-import type { LoginResponse, OperatorProfile, SessionResponse } from '@escapeplan/contracts';
-import { findOperatorById } from './state.js';
+import { fromNodeHeaders } from 'better-auth/node';
+import type { IncomingHttpHeaders } from 'http';
+import type { OperatorPermission, OperatorRole } from '@escapeplan/contracts';
+import { createAuth } from './auth-config.ts';
 
-interface TokenRecord {
-  userId: string;
-  expiresAt: number;
+export const auth = createAuth();
+
+type ResolvedSession = {
+  session: {
+    id: string;
+    userId: string;
+    token: string;
+  } & Record<string, unknown>;
+  user: {
+    id: string;
+    role: OperatorRole;
+    permissions: OperatorPermission[];
+  } & Record<string, unknown>;
+};
+
+export async function requireSession(headersSource: Record<string, string | number | string[] | undefined>) {
+  const normalizedEntries = Object.entries(headersSource).map(([key, value]) => {
+    if (Array.isArray(value)) {
+      return [key, value.map((item) => String(item))];
+    }
+    if (value === undefined) {
+      return [key, undefined];
+    }
+    return [key, String(value)];
+  });
+
+  const normalizedHeaders = Object.fromEntries(normalizedEntries) as IncomingHttpHeaders;
+  const headers = fromNodeHeaders(normalizedHeaders);
+  const session = await auth.api.getSession({ headers });
+  return session as ResolvedSession | null;
 }
 
-const TWELVE_HOURS = 12 * 60 * 60 * 1000;
-const tokenStore = new Map<string, TokenRecord>();
-
-export function issueToken(userId: string): LoginResponse {
-  const token = nanoid(32);
-  const expiresAt = Date.now() + TWELVE_HOURS;
-  tokenStore.set(token, { userId, expiresAt });
-
-  const user = findOperatorById(userId);
-  if (!user) {
-    throw new Error('Unknown user');
-  }
-
-  return {
-    token,
-    user,
-    expiresAt: new Date(expiresAt).toISOString()
-  };
-}
-
-export function validateToken(token: string): OperatorProfile | null {
-  const record = tokenStore.get(token);
-  if (!record) return null;
-  if (record.expiresAt < Date.now()) {
-    tokenStore.delete(token);
-    return null;
-  }
-  const operator = findOperatorById(record.userId);
-  return operator ?? null;
-}
-
-export function requireToken(authHeader?: string | null): OperatorProfile {
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new Error('Missing or invalid Authorization header');
-  }
-  const token = authHeader.split(' ')[1] ?? '';
-  const user = validateToken(token);
-  if (!user) {
-    throw new Error('Session expired or invalid');
-  }
-  return user;
-}
-
-export function describeSession(token: string, user: OperatorProfile): SessionResponse {
-  const record = tokenStore.get(token);
-  if (!record) {
-    throw new Error('Invalid session');
-  }
-  return {
-    user,
-    issuedAt: new Date(record.expiresAt - TWELVE_HOURS).toISOString(),
-    expiresAt: new Date(record.expiresAt).toISOString()
-  };
-}
+export type { ResolvedSession };

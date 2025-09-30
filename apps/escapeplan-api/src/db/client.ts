@@ -33,16 +33,60 @@ export function runMigrations() {
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      email_verified INTEGER NOT NULL DEFAULT 0,
       role TEXT NOT NULL,
       avatar_url TEXT,
       bio TEXT,
-      permissions TEXT,
-      password_hash TEXT NOT NULL,
-      email TEXT,
+      permissions TEXT NOT NULL DEFAULT '[]',
       must_reset_password INTEGER NOT NULL DEFAULT 0,
+      password_hash TEXT,
+      last_login_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      last_login_at TEXT
+      banned INTEGER NOT NULL DEFAULT 0,
+      ban_reason TEXT,
+      ban_expires TEXT,
+      archived_at TEXT,
+      archived_by TEXT,
+      archived_reason TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS operator_auth_sessions (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL REFERENCES operators(id) ON DELETE CASCADE,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      ip_address TEXT,
+      user_agent TEXT,
+      impersonated_by TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS operator_accounts (
+      id TEXT PRIMARY KEY,
+      account_id TEXT NOT NULL,
+      provider_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES operators(id) ON DELETE CASCADE,
+      access_token TEXT,
+      refresh_token TEXT,
+      id_token TEXT,
+      access_token_expires_at TEXT,
+      refresh_token_expires_at TEXT,
+      scope TEXT,
+      password TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS operator_verifications (
+      id TEXT PRIMARY KEY,
+      identifier TEXT NOT NULL,
+      value TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS games (
@@ -62,26 +106,36 @@ export function runMigrations() {
       resources_required INTEGER NOT NULL DEFAULT 1,
       validation_notes TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      archived_at TEXT,
+      archived_by TEXT,
+      archived_reason TEXT
     );
 
     CREATE TABLE IF NOT EXISTS rooms (
       id TEXT PRIMARY KEY,
+      uuid TEXT UNIQUE,
       game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       is_mobile_capable INTEGER NOT NULL DEFAULT 0,
-      theme_token TEXT
+      theme_token TEXT,
+      description TEXT,
+      slug TEXT,
+      capacity INTEGER
     );
 
     CREATE TABLE IF NOT EXISTS game_puzzles (
       id TEXT PRIMARY KEY,
+      uuid TEXT UNIQUE,
       game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
       description TEXT,
       solution TEXT,
       media_asset TEXT,
       operator_actions TEXT,
-      display_order INTEGER NOT NULL DEFAULT 0
+      display_order INTEGER NOT NULL DEFAULT 0,
+      hints TEXT,
+      media_asset_meta TEXT
     );
 
     CREATE TABLE IF NOT EXISTS bookings (
@@ -170,12 +224,25 @@ export function runMigrations() {
 
   // Ensure new columns exist for legacy databases
   ensureColumn('operators', 'email', 'TEXT');
+  ensureColumn('operators', 'email_verified', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('operators', 'permissions', "TEXT NOT NULL DEFAULT '[]'");
   ensureColumn('operators', 'must_reset_password', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('operators', 'created_at', 'TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
   ensureColumn('operators', 'updated_at', 'TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
   ensureColumn('operators', 'last_login_at', 'TEXT');
-  ensureColumn('operators', 'password_hash', 'TEXT NOT NULL DEFAULT ""');
+  ensureColumn('operators', 'password_hash', 'TEXT');
   ensureColumn('operators', 'bio', 'TEXT');
+  ensureColumn('operators', 'banned', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('operators', 'ban_reason', 'TEXT');
+  ensureColumn('operators', 'ban_expires', 'TEXT');
+  ensureColumn('operators', 'archived_at', 'TEXT');
+  ensureColumn('operators', 'archived_by', 'TEXT');
+  ensureColumn('operators', 'archived_reason', 'TEXT');
+
+  sqlite.exec(`
+    UPDATE operators SET role = 'manager' WHERE role = 'general_manager';
+    UPDATE operators SET role = 'game_master' WHERE role = 'technician';
+  `);
 
   ensureColumn('games', 'story_intro', 'TEXT');
   ensureColumn('games', 'categories', 'TEXT');
@@ -184,8 +251,39 @@ export function runMigrations() {
   ensureColumn('games', 'price_per_player_cents', 'INTEGER NOT NULL DEFAULT 0');
   ensureColumn('games', 'resources_required', 'INTEGER NOT NULL DEFAULT 1');
   ensureColumn('games', 'validation_notes', 'TEXT');
+  ensureColumn('games', 'media_config', 'TEXT');
+  ensureColumn('games', 'pricing_config', 'TEXT');
+  ensureColumn('games', 'booking_rules_config', 'TEXT');
   ensureColumn('games', 'created_at', 'TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
   ensureColumn('games', 'updated_at', 'TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
+  ensureColumn('games', 'archived_at', 'TEXT');
+  ensureColumn('games', 'archived_by', 'TEXT');
+  ensureColumn('games', 'archived_reason', 'TEXT');
+
+  ensureColumn('rooms', 'uuid', 'TEXT');
+  ensureColumn('rooms', 'description', 'TEXT');
+  ensureColumn('rooms', 'slug', 'TEXT');
+  ensureColumn('rooms', 'capacity', 'INTEGER');
+
+  ensureColumn('bookings', 'is_adhoc', 'INTEGER NOT NULL DEFAULT 0');
+  ensureColumn('bookings', 'notes', 'TEXT');
+
+  ensureColumn('game_puzzles', 'uuid', 'TEXT');
+  ensureColumn('game_puzzles', 'hints', 'TEXT');
+  ensureColumn('game_puzzles', 'media_asset_meta', 'TEXT');
+
+  sqlite.exec(`
+    UPDATE operators SET email_verified = 0 WHERE email_verified IS NULL;
+    UPDATE operators SET permissions = json('[]') WHERE permissions IS NULL;
+    UPDATE operators SET banned = 0 WHERE banned IS NULL;
+    UPDATE rooms SET uuid = id WHERE uuid IS NULL OR uuid = '';
+    UPDATE game_puzzles SET uuid = id WHERE uuid IS NULL OR uuid = '';
+  `);
+
+  sqlite.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_rooms_uuid ON rooms(uuid);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_game_puzzles_uuid ON game_puzzles(uuid);
+  `);
 
   schemaReady = true;
 }

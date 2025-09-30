@@ -1,5 +1,6 @@
 <script lang="ts">
   import '../app.css';
+  import ConfirmDialogHost from '$lib/components/ConfirmDialogHost.svelte';
   import { pwaInfo } from 'virtual:pwa-info';
   import { pwaAssetsHead } from 'virtual:pwa-assets/head';
 
@@ -26,6 +27,8 @@
 <div class="min-h-screen bg-base-200 text-base-content" data-theme="escapeplan">
   {@render children()}
 </div>
+
+<ConfirmDialogHost />
 
 {#await import('$lib/pwa/ReloadPrompt.svelte') then { default: ReloadPrompt }}
   <ReloadPrompt />

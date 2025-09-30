@@ -63,25 +63,34 @@ a {
 }
 
 [data-theme='escapeplan'] .nav-link {
-  @apply flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium text-base-content/60 transition duration-200 ease-out hover:bg-base-300/60 hover:text-base-content;
+  @apply flex items-center gap-3 rounded-xl px-2 py-2 text-sm font-medium text-base-content/60 transition-all duration-200 ease-out;
+}
+
+[data-theme='escapeplan'] .nav-link:hover {
+  @apply bg-base-300/60 text-base-content;
 }
 
 [data-theme='escapeplan'] .nav-link[data-active='true'] {
-  @apply bg-primary/20 text-primary shadow-inner shadow-primary/10;
+  @apply text-primary;
 }
 
-[data-theme='escapeplan'] [data-collapsed='true'] .nav-link {
-  justify-content: center;
-  gap: 0;
-  padding-inline: 0.75rem;
+[data-theme='escapeplan'] .nav-link[data-active='true'] span {
+  @apply bg-primary/30 text-primary;
 }
 
-[data-theme='escapeplan'] [data-collapsed='true'] .nav-link span[data-label] {
-  display: none;
-}
+/* Collapsed sidebar: only icon gets hover/active state */
+@media (min-width: 1024px) {
+  .sidebar-collapsed .nav-link {
+    @apply px-0 py-0;
+  }
 
-[data-theme='escapeplan'] [data-collapsed='true'] .nav-link > span:first-child {
-  margin-inline: auto;
+  .sidebar-collapsed .nav-link:hover {
+    @apply bg-transparent;
+  }
+
+  .sidebar-collapsed .nav-link[data-active='true'] {
+    @apply bg-transparent;
+  }
 }
 
 .badge-pill {

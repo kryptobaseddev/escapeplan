@@ -19,7 +19,7 @@
 - Reviewed platform Phase 2 backlog (P2-001..P2-006, US-006) and confirmed repo scope limited to Raspberry Pi image build.
 - Selected pi-gen upstream tag `2024-07-04-raspios-bookworm-arm64` as default base; build script allows overrides via env.
 - Confirmed `project-tracker` helper absent in workspace; noted failure for follow-up.
-- Attempted pi-gen build with auto-fetched `qemu-user-static`; container exited (137) due to host constraints, image artifact still pending.
+- Pi-gen run completed via host-network Docker opts, producing `2025-09-30-escapeplan-os-lite.img` + manifest in `platform/escapeplan-base/artifacts/`.
 
 ## Tasks Completed
 - Added real `config/` and Stage 2 overlays to pi-gen to install Node.js 22, ffmpeg, nginx, hostapd/dnsmasq, Avahi, Chrony, sqlite, and helper utilities.
@@ -31,7 +31,7 @@
 
 ## Blockers & Risks
 - Image validation currently uses offline guestfish checks only; still need full QEMU or hardware boot smoke to confirm network services.
-- Image build currently blocked by host resource limits during pi-gen Docker run (exit 137 after ca-certificates step).
+- Monitor future builds for mirror reachability; host-network + DNS overrides unblocked latest run.
 - `project-tracker` CLI missing from repo; cannot run baseline validation until provided.
 
 ## Next Steps

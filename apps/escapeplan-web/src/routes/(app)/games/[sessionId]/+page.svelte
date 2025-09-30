@@ -2,7 +2,7 @@
   import type { PageData } from './$types';
   import { browser } from '$app/environment';
   import { formatTimer } from '$lib/utils/datetime';
-  import { getContext, onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { apiFetch } from '$lib/api/client';
   import type { CommandRequest, CommandResponse } from '$lib/api/types';
   import { initializeRealtime, enqueueOfflineCommand } from '$lib/realtime';
@@ -16,14 +16,13 @@
 
   let { data, form } = $props<{ data: PageData; form: RunnerActionData }>();
   let session = $state(data.session);
-  const sessionToken = getContext<string | null>('sessionToken');
   let hintFormError = $state(form?.hintError ?? null);
   let puzzleFormError = $state(form?.puzzleError ?? null);
   let offlineNotice = $state<string | null>(null);
   let queuedCommands = $state(0);
 
   onMount(() => {
-    initializeRealtime(sessionToken ?? null, { sessions: [data.session] });
+    initializeRealtime({ sessions: [data.session] });
 
     const unsubSessions = sessionsStore.subscribe((value) => {
       const next = value.find((s) => s.id === data.session.id);
@@ -46,7 +45,6 @@
     try {
       await apiFetch<CommandResponse>(fetch, `/sessions/${session.id}/commands`, {
         method: 'POST',
-        token: sessionToken,
         body: JSON.stringify({ command, payload })
       });
       offlineNotice = null;

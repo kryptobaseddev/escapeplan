@@ -35,7 +35,7 @@
         </div>
       {/if}
 
-      <form method="POST" class="mt-8 space-y-5">
+      <form method="POST" action="/login" class="mt-8 space-y-5">
         <label class="form-control w-full">
           <span class="label-text text-xs font-semibold uppercase tracking-[0.35em] text-base-content/60">Username</span>
           <input

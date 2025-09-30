@@ -8,6 +8,6 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 
   return {
     user: locals.user,
-    sessionToken: locals.sessionToken
+    session: locals.session
   };
 };

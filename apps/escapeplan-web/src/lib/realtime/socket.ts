@@ -12,13 +12,13 @@ function resolveBaseUrl() {
   return base;
 }
 
-export function getSocket(token?: string | null) {
+export function getSocket() {
   if (!browser) return null;
   if (socket) return socket;
   const url = resolveBaseUrl();
   socket = io(url, {
     transports: ['websocket'],
-    auth: token ? { token } : undefined,
+    withCredentials: true,
     autoConnect: true
   });
   socket.on('disconnect', () => {

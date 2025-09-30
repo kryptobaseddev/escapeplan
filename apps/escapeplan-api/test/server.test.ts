@@ -4,10 +4,11 @@ import { buildServer } from '../src/index.js';
 import { sqlite } from '../src/db/client.js';
 
 let server: FastifyInstance;
-let token: string;
+let sessionCookie: string;
 let sessionFixture: { bookingId: string; sessionId: string; timerSlug: string } | null = null;
 
 beforeAll(async () => {
+  await import('../src/db/seed.ts');
   server = await buildServer();
 });
 
@@ -23,24 +24,26 @@ afterAll(async () => {
 });
 
 describe('EscapePlan mock API', () => {
-  test('authenticates operator and returns token', async () => {
+  test('authenticates operator and establishes session', async () => {
     const response = await server.inject({
       method: 'POST',
-      url: '/api/auth/login',
+      url: '/api/auth/sign-in/username',
       payload: { username: 'admin', password: 'escapeplan' }
     });
 
     expect(response.statusCode).toBe(200);
-    const json = response.json() as { token: string };
-    expect(json.token).toBeDefined();
-    token = json.token;
+    const cookies = response.headers['set-cookie'];
+    expect(cookies).toBeDefined();
+    const rawCookie = Array.isArray(cookies) ? cookies[0] : cookies;
+    expect(rawCookie).toContain('better-auth.session_token');
+    sessionCookie = rawCookie.split(';')[0];
   });
 
   test('returns dashboard data', async () => {
     const response = await server.inject({
       method: 'GET',
       url: '/api/dashboard',
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { cookie: sessionCookie }
     });
 
     expect(response.statusCode).toBe(200);

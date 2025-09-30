@@ -1,9 +1,15 @@
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
 import { Server as SocketServer } from 'socket.io';
-import argon2 from 'argon2';
 import { z } from 'zod';
-import type { CommandRequest, OperatorPermission, OperatorRole, SaveGameRequest } from '@escapeplan/contracts';
+import type {
+  CommandRequest,
+  OperatorPermission,
+  OperatorRole,
+  SaveGameRequest,
+  ApplyNetworkConfigRequest,
+  ApplyNetworkConfigResponse
+} from '@escapeplan/contracts';
 import {
   applyCommand,
   changeOwnPassword,
@@ -11,8 +17,9 @@ import {
   createOperatorAccount,
   deleteGame,
   deleteOperatorAccount,
-  findOperatorByUsername,
   getGameDetails,
+  archiveGame,
+  unarchiveGame,
   getBookingsByDate,
   getDashboard,
   getSessionById,
@@ -20,31 +27,50 @@ import {
   getNetworkProfile,
   listGameDetails,
   listActiveSessions,
+  quickStartSession,
   listOperatorSummaries,
-  rotateAdminCredentials,
   toTimerBroadcast,
   updateGame,
   updateNetworkProfile,
   updateOperatorAccount,
   updateOwnProfile,
-  updateOperatorLoginTimestamp,
-  resetOperatorPassword
+  resetOperatorPassword,
+  archiveOperatorAccount,
+  unarchiveOperatorAccount,
+  listOperatorSummaries
 } from './state.js';
-import { describeSession, issueToken, validateToken } from './auth.js';
+import { auth, requireSession } from './auth.js';
 import { runMigrations } from './db/client.js';
-import { attachRealtime, emitAuthRotation, emitDashboardUpdate, emitSessionUpdate, emitTimerUpdate } from './realtime.js';
+import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realtime.js';
+import { applyEscapePlanConfig } from './platform.js';
 
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
 
-const operatorRoleValues = ['admin', 'general_manager', 'game_master', 'technician'] as const;
+const operatorRoleValues = ['admin', 'manager', 'game_master', 'customer'] as const;
+
+const operatorRoleFilterValues = [...operatorRoleValues, 'all'] as const;
+const userStatusFilterValues = ['active', 'archived', 'all'] as const;
+
+const avatarConfigSchema = z.object({
+  seed: z.string(),
+  backgroundType: z.array(z.string()).optional(),
+  backgroundColor: z.array(z.string()).optional(),
+  baseColor: z.array(z.string()).optional(),
+  eyes: z.array(z.string()).optional(),
+  face: z.array(z.string()).optional(),
+  mouth: z.array(z.string()).optional(),
+  sides: z.array(z.string()).optional(),
+  texture: z.array(z.string()).optional(),
+  top: z.array(z.string()).optional()
+});
 
 const createUserSchema = z.object({
   username: z.string().min(2),
   name: z.string().min(1),
   role: z.enum(operatorRoleValues),
   password: z.string().min(12),
-  email: z.string().email().optional(),
-  avatarUrl: z.string().url().optional(),
+  email: z.string().email(),
+  avatarConfig: avatarConfigSchema.optional(),
   bio: z.string().max(500).optional(),
   mustResetPassword: z.boolean().optional()
 });
@@ -53,7 +79,7 @@ const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   role: z.enum(operatorRoleValues).optional(),
   email: z.string().email().optional(),
-  avatarUrl: z.string().url().optional().or(z.literal(null)),
+  avatarConfig: avatarConfigSchema.optional().or(z.literal(null)),
   bio: z.string().max(500).optional().or(z.literal(null)),
   mustResetPassword: z.boolean().optional()
 });
@@ -61,6 +87,14 @@ const updateUserSchema = z.object({
 const resetPasswordSchema = z.object({
   password: z.string().min(12),
   forceReset: z.boolean().optional()
+});
+
+const archiveUserSchema = z.object({
+  reason: z.string().max(500).optional().nullable()
+});
+
+const archiveGameSchema = z.object({
+  reason: z.string().max(500).optional().nullable()
 });
 
 const changePasswordSchema = z.object({
@@ -71,25 +105,94 @@ const changePasswordSchema = z.object({
 const updateOwnProfileSchema = z.object({
   name: z.string().min(1),
   email: z.string().email().optional().or(z.literal(null)),
-  avatarUrl: z.string().url().optional().or(z.literal(null)),
+  avatarConfig: avatarConfigSchema.optional().or(z.literal(null)),
   bio: z.string().max(500).optional().or(z.literal(null))
+});
+
+const hintSchema = z.object({
+  uuid: z.string().min(1).optional(),
+  type: z.enum(['text', 'image', 'audio', 'video']),
+  content: z.string().min(1),
+  assetUrl: z.string().url().optional(),
+  order: z.number().int().nonnegative().optional()
 });
 
 const puzzleSchema = z.object({
   id: z.string().min(1).optional(),
+  uuid: z.string().min(1).optional(),
   title: z.string().min(1),
   description: z.string().optional(),
   solution: z.string().optional(),
   mediaAsset: z.string().optional(),
   operatorActions: z.string().optional(),
-  displayOrder: z.number().int().nonnegative().optional()
+  displayOrder: z.number().int().nonnegative().optional(),
+  hints: z.array(hintSchema).optional(),
+  mediaMeta: z.record(z.unknown()).optional()
 });
 
 const roomSchema = z.object({
   id: z.string().min(1).optional(),
+  uuid: z.string().min(1).optional(),
   name: z.string().min(1),
+  description: z.string().optional(),
+  slug: z.string().regex(/^[a-z0-9-]+$/).optional(),
   isMobileCapable: z.boolean(),
-  themeToken: z.string().optional()
+  themeToken: z.string().optional(),
+  capacity: z.number().int().positive().optional()
+});
+
+const pricingModelValues = ['per_person', 'flat_rate'] as const;
+
+const mediaConfigSchema = z.object({
+  thumbnailAssetId: z.string().min(1).optional().nullable(),
+  roomScreenAssetId: z.string().min(1).optional().nullable(),
+  galleryAssetIds: z.array(z.string().min(1)).default([])
+});
+
+const pricingTierSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1),
+  priceCents: z.number().int().nonnegative(),
+  minPlayers: z.number().int().positive().optional().nullable(),
+  maxPlayers: z.number().int().positive().optional().nullable()
+});
+
+const pricingDiscountSchema = z.object({
+  code: z.string().min(1),
+  percentOff: z.number().min(0).max(100).optional().nullable(),
+  amountOffCents: z.number().int().nonnegative().optional().nullable(),
+  expiresAt: z.string().optional().nullable(),
+  notes: z.string().max(200).optional().nullable()
+});
+
+const pricingConfigSchema = z.object({
+  model: z.enum(pricingModelValues).default('per_person'),
+  tiers: z.array(pricingTierSchema).default([]),
+  deposit: z
+    .object({
+      required: z.boolean(),
+      type: z.enum(['flat', 'percent']).optional(),
+      amountCents: z.number().int().nonnegative().optional().nullable()
+    })
+    .optional(),
+  discounts: z.array(pricingDiscountSchema).default([])
+});
+
+const bookingRulesSchema = z.object({
+  isMobile: z.boolean().optional(),
+  locationNotes: z.string().max(500).optional().nullable(),
+  travelBufferMinutes: z.number().int().min(0).max(600).optional().nullable(),
+  equipmentChecklist: z.array(z.string().min(1)).default([]),
+  reservationStyle: z.enum(['public', 'private']).default('public'),
+  cancellationPolicy: z.string().max(2000).optional().nullable(),
+  customFields: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(120),
+        required: z.boolean()
+      })
+    )
+    .default([])
 });
 
 const saveGameSchema = z.object({
@@ -99,7 +202,7 @@ const saveGameSchema = z.object({
   storyIntro: z.string().optional(),
   durationMinutes: z.number().int().positive(),
   difficulty: z.string().min(1),
-  pricingModel: z.string().min(1),
+  pricingModel: z.enum(pricingModelValues),
   categories: z.array(z.string().min(1)).optional().default([]),
   minPlayers: z.number().int().positive(),
   maxPlayers: z.number().int().positive(),
@@ -107,7 +210,18 @@ const saveGameSchema = z.object({
   resourcesRequired: z.number().int().positive(),
   validationNotes: z.string().optional(),
   puzzles: z.array(puzzleSchema).optional().default([]),
-  rooms: z.array(roomSchema).optional().default([])
+  rooms: z.array(roomSchema).optional().default([]),
+  media: mediaConfigSchema.optional(),
+  pricing: pricingConfigSchema.optional(),
+  bookingRules: bookingRulesSchema.optional()
+});
+
+const quickStartSchema = z.object({
+  gameId: z.string().min(1),
+  roomId: z.string().min(1),
+  partySize: z.number().int().positive(),
+  durationMinutes: z.number().int().min(5).max(240).optional(),
+  notes: z.string().max(500).optional().nullable()
 });
 
 const networkUpdateSchema = z.object({
@@ -123,19 +237,63 @@ const networkUpdateSchema = z.object({
   details: z.string().optional()
 });
 
-function ensureAuth(request: FastifyRequest, reply: FastifyReply) {
-  const authHeader = request.headers['authorization'];
-  if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
-    reply.status(401).send({ statusCode: 401, message: 'Missing Authorization header' });
+const keyValueSchema = z.record(z.string());
+
+const networkProvisionSchema = z.object({
+  wifi: z.object({
+    ssid: z.string().min(1),
+    passphrase: z.string().min(8).max(63),
+    channel: z.number().int().positive().max(165),
+    band: z.enum(['2g', '5g', 'auto']).default('auto'),
+    country: z.string().length(2).optional()
+  }),
+  network: z.object({
+    router: z.string().min(1),
+    dns: z.string().min(1),
+    dhcpRangeStart: z.string().min(1),
+    dhcpRangeEnd: z.string().min(1),
+    domain: z.string().min(1)
+  }),
+  nginx: z.object({
+    serverName: z.string().min(1),
+    apiUpstream: z.string().min(1),
+    webRoot: z.string().min(1).optional(),
+    webUpstream: z.string().min(1).optional()
+  }),
+  env: z
+    .object({
+      api: keyValueSchema.optional(),
+      web: keyValueSchema.optional()
+    })
+    .optional(),
+  services: z
+    .object({
+      enableApi: z.boolean().optional(),
+      enableWeb: z.boolean().optional(),
+      enableWifi: z.boolean().optional()
+    })
+    .optional()
+});
+
+const listUsersQuerySchema = z
+  .object({
+    search: z.string().optional(),
+    role: z.enum(operatorRoleFilterValues).optional(),
+    status: z.enum(userStatusFilterValues).optional()
+  })
+  .partial();
+
+async function ensureAuth(request: FastifyRequest, reply: FastifyReply) {
+  const session = await requireSession(request.headers);
+  if (!session) {
+    reply.status(401).send({ statusCode: 401, message: 'Authentication required' });
     return null;
   }
-  const token = authHeader.split(' ')[1] ?? '';
-  const user = validateToken(token);
-  if (!user) {
-    reply.status(401).send({ statusCode: 401, message: 'Session expired' });
+  if (session.user && typeof (session.user as Record<string, unknown>).archivedAt === 'string') {
+    reply.status(403).send({ statusCode: 403, message: 'Account is archived' });
     return null;
   }
-  return { token, user };
+  return session;
 }
 
 function ensurePermission(reply: FastifyReply, userRole: OperatorRole, userPermissions: OperatorPermission[], permission: OperatorPermission) {
@@ -150,70 +308,102 @@ export async function buildServer() {
   runMigrations();
   const app = Fastify({ logger: true });
 
-  await app.register(cors, { origin: true });
+  const webOrigin = process.env.WEB_APP_ORIGIN ?? 'http://localhost:5173';
+
+  await app.register(cors, {
+    origin: webOrigin,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+  });
 
   app.get('/health', async () => ({ status: 'ok' }));
 
   await app.register(async (api) => {
-    api.post('/auth/login', async (request, reply) => {
-      const body = request.body as { username?: string; password?: string };
-      const username = body?.username?.trim();
-      const password = body?.password ?? '';
+    api.all('/auth/*', async (request, reply) => {
+      try {
+        const origin = `${request.protocol}://${request.headers.host}`;
+        const url = new URL(request.url, origin);
 
-      if (!username || !password) {
-        return reply.status(400).send({ statusCode: 400, message: 'Username and password are required' });
-      }
+        const headers = new Headers();
+        for (const [key, value] of Object.entries(request.headers)) {
+          if (!value) continue;
+          if (Array.isArray(value)) {
+            value.forEach((item) => headers.append(key, item));
+          } else {
+            headers.append(key, String(value));
+          }
+        }
 
-      const operator = findOperatorByUsername(username);
-      if (!operator) {
-        return reply.status(401).send({ statusCode: 401, message: 'Invalid credentials' });
-      }
-      const valid = await argon2.verify(operator.passwordHash, password);
-      if (!valid) {
-        return reply.status(401).send({ statusCode: 401, message: 'Invalid credentials' });
-      }
+        let body: BodyInit | undefined;
+        if (request.method !== 'GET' && request.body !== undefined) {
+          if (Buffer.isBuffer(request.body)) {
+            body = request.body as unknown as BodyInit;
+          } else if (typeof request.body === 'string') {
+            body = request.body;
+          } else if (typeof request.body === 'object') {
+            body = JSON.stringify(request.body);
+            if (!headers.has('content-type')) {
+              headers.set('content-type', 'application/json');
+            }
+          }
+        }
 
-      const now = new Date().toISOString();
-      updateOperatorLoginTimestamp(operator.id, now);
+        const webRequest = new Request(url.toString(), {
+          method: request.method,
+          headers,
+          body
+        });
 
-      const response = issueToken(operator.id);
-      response.mustResetPassword = operator.mustResetPassword;
-      return response;
-    });
+        const response = await auth.handler(webRequest);
 
-    api.get('/auth/session', async (request, reply) => {
-      const authHeader = request.headers['authorization'];
-      if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
-        return reply.status(401).send({ statusCode: 401, message: 'Missing Authorization header' });
+        reply.status(response.status);
+        response.headers.forEach((value, key) => {
+          reply.header(key, value);
+        });
+
+        if (response.body) {
+          const arrayBuffer = await response.arrayBuffer();
+          reply.send(Buffer.from(arrayBuffer));
+        } else {
+          reply.send();
+        }
+      } catch (error) {
+        request.log.error({ err: error }, 'Authentication handler error');
+        reply.status(500).send({ error: 'Internal authentication error', code: 'AUTH_FAILURE' });
       }
-      const token = authHeader.split(' ')[1] ?? '';
-      const user = validateToken(token);
-      if (!user) {
-        return reply.status(401).send({ statusCode: 401, message: 'Session expired' });
-      }
-      return describeSession(token, user);
     });
 
     api.get('/dashboard', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
       return getDashboard();
     });
 
     api.get('/admin/users', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users')) return;
-      return listOperatorSummaries();
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
+      const parsed = listUsersQuerySchema.safeParse(request.query ?? {});
+      const filters = parsed.success
+        ? {
+            search: parsed.data.search,
+            role: parsed.data.role ?? 'all',
+            status: parsed.data.status ?? 'active'
+          }
+        : { role: 'all', status: 'active' };
+      return listOperatorSummaries(filters);
     });
 
     api.post('/admin/users', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
       const parsed = createUserSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+      if (parsed.data.role === 'admin' && session.user.role !== 'admin') {
+        return reply.status(403).send({ statusCode: 403, message: 'Only admins can assign the admin role' });
       }
       try {
         const created = await createOperatorAccount(parsed.data);
@@ -225,13 +415,16 @@ export async function buildServer() {
     });
 
     api.patch('/admin/users/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
       const { id } = request.params as { id: string };
       const parsed = updateUserSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+      if (parsed.data.role === 'admin' && session.user.role !== 'admin') {
+        return reply.status(403).send({ statusCode: 403, message: 'Only admins can assign the admin role' });
       }
       try {
         const updated = await updateOperatorAccount(id, parsed.data);
@@ -243,12 +436,12 @@ export async function buildServer() {
     });
 
     api.delete('/admin/users/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
       const { id } = request.params as { id: string };
       try {
-        deleteOperatorAccount(id);
+        await deleteOperatorAccount(id);
         reply.status(204).send();
       } catch (error) {
         request.log.error({ err: error }, 'Failed to delete operator');
@@ -256,10 +449,42 @@ export async function buildServer() {
       }
     });
 
+    api.patch('/admin/users/:id/archive', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
+      const { id } = request.params as { id: string };
+      const parsed = archiveUserSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+      try {
+        const archived = await archiveOperatorAccount(id, session.user.id as string, parsed.data.reason ?? null);
+        return archived;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to archive operator');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.patch('/admin/users/:id/unarchive', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
+      const { id } = request.params as { id: string };
+      try {
+        const restored = await unarchiveOperatorAccount(id);
+        return restored;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to unarchive operator');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
     api.post('/admin/users/:id/reset-password', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
       const { id } = request.params as { id: string };
       const parsed = resetPasswordSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -275,15 +500,15 @@ export async function buildServer() {
     });
 
     api.post('/users/me/password', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
       const parsed = changePasswordSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
       try {
-        await changeOwnPassword(auth.user.id, parsed.data);
-        reply.send({ status: 'ok' });
+        await changeOwnPassword(session.user.id, parsed.data);
+        reply.status(204).send();
       } catch (error) {
         request.log.error({ err: error }, 'Failed to update password');
         reply.status(400).send({ statusCode: 400, message: (error as Error).message });
@@ -291,14 +516,14 @@ export async function buildServer() {
     });
 
     api.patch('/users/me', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
       const parsed = updateOwnProfileSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
       try {
-        const profile = updateOwnProfile(auth.user.id, parsed.data);
+        const profile = updateOwnProfile(session.user.id, parsed.data);
         return profile;
       } catch (error) {
         request.log.error({ err: error }, 'Failed to update profile');
@@ -307,16 +532,28 @@ export async function buildServer() {
     });
 
     api.get('/admin/games', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games')) return;
-      return listGameDetails();
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
+      const query = request.query as {
+        search?: string;
+        status?: 'active' | 'archived' | 'all';
+        category?: string;
+      };
+
+      const filters = {
+        search: query?.search?.trim() || undefined,
+        status: query?.status,
+        category: query?.category?.trim() || undefined
+      };
+
+      return listGameDetails(filters);
     });
 
     api.get('/admin/games/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
       const { id } = request.params as { id: string };
       const game = getGameDetails(id);
       if (!game) {
@@ -326,9 +563,9 @@ export async function buildServer() {
     });
 
     api.post('/admin/games', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
       const parsed = saveGameSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
@@ -349,7 +586,10 @@ export async function buildServer() {
         resourcesRequired: data.resourcesRequired,
         validationNotes: data.validationNotes,
         puzzles: (data.puzzles ?? []).map((puzzle, index) => ({ ...puzzle, id: puzzle.id ?? '', displayOrder: puzzle.displayOrder ?? index + 1 })),
-        rooms: (data.rooms ?? []).map((room) => ({ ...room, id: room.id ?? '' }))
+        rooms: (data.rooms ?? []).map((room) => ({ ...room, id: room.id ?? '' })),
+        media: data.media,
+        pricing: data.pricing,
+        bookingRules: data.bookingRules
       };
       try {
         const created = createGame(payload);
@@ -361,9 +601,9 @@ export async function buildServer() {
     });
 
     api.put('/admin/games/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
       const { id } = request.params as { id: string };
       const parsed = saveGameSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -385,7 +625,10 @@ export async function buildServer() {
         resourcesRequired: data.resourcesRequired,
         validationNotes: data.validationNotes,
         puzzles: (data.puzzles ?? []).map((puzzle, index) => ({ ...puzzle, id: puzzle.id ?? '', displayOrder: puzzle.displayOrder ?? index + 1 })),
-        rooms: (data.rooms ?? []).map((room) => ({ ...room, id: room.id ?? '' }))
+        rooms: (data.rooms ?? []).map((room) => ({ ...room, id: room.id ?? '' })),
+        media: data.media,
+        pricing: data.pricing,
+        bookingRules: data.bookingRules
       };
       try {
         const updated = updateGame(id, payload);
@@ -396,10 +639,42 @@ export async function buildServer() {
       }
     });
 
+    api.patch('/admin/games/:id/archive', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
+      const { id } = request.params as { id: string };
+      const parsed = archiveGameSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+      try {
+        const archived = archiveGame(id, session.user.id as string, parsed.data.reason ?? null);
+        return archived;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to archive game');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.patch('/admin/games/:id/unarchive', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
+      const { id } = request.params as { id: string };
+      try {
+        const restored = unarchiveGame(id);
+        return restored;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to unarchive game');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
     api.delete('/admin/games/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
       const { id } = request.params as { id: string };
       try {
         deleteGame(id);
@@ -411,16 +686,34 @@ export async function buildServer() {
     });
 
     api.get('/admin/network', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_network')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_network')) return;
       return getNetworkProfile();
     });
 
+    api.post('/admin/network/apply', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_network')) return;
+      const parsed = networkProvisionSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+      try {
+        const result = await applyEscapePlanConfig(parsed.data as ApplyNetworkConfigRequest);
+        emitDashboardUpdate(getDashboard());
+        return result as ApplyNetworkConfigResponse;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to apply network configuration');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
     api.patch('/admin/network', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_network')) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_network')) return;
       const parsed = networkUpdateSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
@@ -436,8 +729,8 @@ export async function buildServer() {
     });
 
     api.get('/bookings', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
 
       const { date, scope = 'all' } = request.query as { date?: string; scope?: 'all' | 'storefront' | 'mobile' };
       if (!date) {
@@ -447,15 +740,34 @@ export async function buildServer() {
       return getBookingsByDate(date, scope);
     });
 
+    api.post('/sessions/quick-start', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_sessions')) return;
+      const parsed = quickStartSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+      try {
+        const result = quickStartSession(parsed.data, session.user.id as string);
+        return result;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to create ad-hoc session');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
     api.get('/sessions/active', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_sessions')) return;
       return listActiveSessions();
     });
 
     api.get('/sessions/:sessionId', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_sessions')) return;
 
       const { sessionId } = request.params as { sessionId: string };
       const sessionRecord = getSessionById(sessionId);
@@ -466,8 +778,9 @@ export async function buildServer() {
     });
 
     api.post('/sessions/:sessionId/commands', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_sessions')) return;
 
       const { sessionId } = request.params as { sessionId: string };
       const command = request.body as CommandRequest;
@@ -493,33 +806,25 @@ export async function buildServer() {
       return toTimerBroadcast(sessionRecord.slug, sessionRecord.session, sessionRecord.narrative);
     });
 
-    api.post('/admin/rotate-credentials', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
-      if (!auth) return;
-      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'rotate_admin_credentials')) return;
-      const credentials = rotateAdminCredentials();
-      emitAuthRotation();
-      return credentials;
-    });
   }, { prefix: '/api' });
 
   const io = new SocketServer(app.server, {
-    cors: { origin: true }
+    cors: { origin: webOrigin, credentials: true }
   });
 
   attachRealtime(io);
 
-  io.use((socket, next) => {
-    const token = (socket.handshake.auth?.token ?? socket.handshake.query?.token) as string | undefined;
-    if (!token) {
-      return next(new Error('Unauthorized'));
+  io.use(async (socket, next) => {
+    try {
+      const session = await requireSession(socket.handshake.headers as Record<string, string | string[] | undefined>);
+      if (!session) {
+        return next(new Error('Unauthorized'));
+      }
+      socket.data.user = session.user;
+      next();
+    } catch (error) {
+      next(new Error('Unauthorized'));
     }
-    const user = validateToken(token);
-    if (!user) {
-      return next(new Error('Unauthorized'));
-    }
-    socket.data.user = user;
-    next();
   });
 
   io.on('connection', (socket) => {

@@ -1,16 +1,17 @@
 /// <reference types="vite-plugin-pwa/client" />
 
-import type { OperatorProfile } from '$lib/api/types';
+import type { AuthSessionInfo, AuthSessionUser } from '$lib/api/types';
 
 declare global {
   namespace App {
     interface Locals {
-      user: OperatorProfile | null;
-      sessionToken: string | null;
+      user: AuthSessionUser | null;
+      session: AuthSessionInfo | null;
     }
 
     interface PageData {
-      user?: OperatorProfile | null;
+      user?: AuthSessionUser | null;
+      session?: AuthSessionInfo | null;
     }
   }
 }

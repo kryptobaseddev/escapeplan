@@ -2,7 +2,7 @@
   import type { PageData } from './$types';
   import { browser } from '$app/environment';
   import { formatDate, formatTime } from '$lib/utils/datetime';
-  import { getContext, onDestroy, onMount } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import { initializeRealtime } from '$lib/realtime';
   import { bookingsStore } from '$lib/realtime/stores';
 
@@ -10,10 +10,8 @@
   let bookings = $state(data.calendar?.bookings ?? []);
   let conflicts = $state(data.calendar?.conflicts ?? []);
 
-  const sessionToken = getContext<string | null>('sessionToken');
-
   onMount(() => {
-    initializeRealtime(sessionToken ?? null, {
+    initializeRealtime({
       bookings: data.calendar ? [data.calendar] : []
     });
 
@@ -39,9 +37,8 @@
 <section class="space-y-8">
   <header class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
     <div>
-      <h1 class="section-heading">Bookings orchestration</h1>
       <p class="mt-2 max-w-2xl text-sm text-base-content/60">
-        Filter by storefront or mobile deployments, confirm deposits, and resolve conflicts before players arrive.
+        Manage bookings, confirm deposits, and start sessions.
       </p>
     </div>
     <div class="badge-pill">

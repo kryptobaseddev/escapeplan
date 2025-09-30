@@ -1,26 +1,23 @@
 import type { Handle } from '@sveltejs/kit';
 import { apiFetch } from '$lib/api/client';
-import type { SessionResponse } from '$lib/api/types';
-import { SESSION_COOKIE } from '$lib/constants';
+import type { AuthSessionEnvelope } from '$lib/api/types';
 
 export const handle: Handle = async ({ event, resolve }) => {
   event.locals.user = null;
-  event.locals.sessionToken = null;
+  event.locals.session = null;
 
-  const token = event.cookies.get(SESSION_COOKIE);
-  if (token) {
-    event.locals.sessionToken = token;
-    try {
-      const session = await apiFetch<SessionResponse>(event.fetch, '/auth/session', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+  try {
+    const cookie = event.request.headers.get('cookie');
+    const session = await apiFetch<AuthSessionEnvelope | null>(event.fetch, '/auth/get-session', {
+      method: 'GET',
+      headers: cookie ? { cookie } : undefined
+    });
+    if (session && session.user && session.session) {
       event.locals.user = session.user;
-    } catch (error) {
-      console.warn('Session validation failed', error);
-      event.cookies.delete(SESSION_COOKIE, { path: '/' });
-      event.locals.user = null;
-      event.locals.sessionToken = null;
+      event.locals.session = session.session;
     }
+  } catch {
+    // unauthenticated is fine
   }
 
   return resolve(event);

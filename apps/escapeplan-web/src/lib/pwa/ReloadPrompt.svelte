@@ -38,7 +38,7 @@
           <button
             class="rounded-lg bg-[#00D5C8] px-3 py-2 text-sm font-semibold text-[#0B0F10] shadow transition hover:bg-[#04b9af] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#00D5C8]"
             type="button"
-            on:click={() => updateServiceWorker(true)}
+            onclick={() => updateServiceWorker(true)}
           >
             Reload
           </button>
@@ -46,7 +46,7 @@
         <button
           class="rounded-lg border border-[#C43131] px-3 py-2 text-sm font-semibold text-[#C43131] transition hover:bg-[#C43131] hover:text-[#0B0F10] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C43131]"
           type="button"
-          on:click={close}
+          onclick={close}
         >
           Dismiss
         </button>

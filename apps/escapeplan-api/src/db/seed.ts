@@ -1,8 +1,9 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import argon2 from 'argon2';
+import { auth } from '../auth.ts';
 import { runMigrations, sqlite } from './client.ts';
+import { permissionsForRole } from '../security.ts';
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 mkdirSync(`${rootDir}/../../data`, { recursive: true });
@@ -10,10 +11,6 @@ mkdirSync(`${rootDir}/../../data`, { recursive: true });
 await runMigrations();
 
 const db = sqlite;
-
-const adminPasswordHash = await argon2.hash('escapeplan', {
-  type: argon2.argon2id
-});
 
 const pirateGame = {
   id: 'game-pirate-mutany',
@@ -119,6 +116,9 @@ const clearAll = db.transaction(() => {
     'game_puzzles',
     'rooms',
     'games',
+    'operator_auth_sessions',
+    'operator_accounts',
+    'operator_verifications',
     'operators',
     'network_profiles',
     'network_health'
@@ -137,70 +137,100 @@ const clearAll = db.transaction(() => {
 
 clearAll();
 
-const seed = db.transaction(() => {
-db.prepare(
-  `INSERT INTO operators (id, username, name, role, avatar_url, bio, permissions, password_hash, email, must_reset_password, created_at, updated_at)
-     VALUES (@id, @username, @name, @role, NULL, @bio, @permissions, @password_hash, @email, @must_reset_password, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-).run({
-  id: 'op-admin',
-  username: 'admin',
+const authContext = await auth.$context;
+const adapter = authContext.internalAdapter;
+
+const adminEmail = 'admin@escapeplan.local';
+const adminPermissions = permissionsForRole('admin');
+const adminBio = 'Primary EscapePlan appliance administrator.';
+const adminPermissionsSerialized = JSON.stringify(adminPermissions);
+const adminBaseProfile = {
   name: 'System Administrator',
+  username: 'admin',
   role: 'admin',
-  bio: 'Primary EscapePlan appliance administrator.',
-  permissions: JSON.stringify([
-    'manage_users',
-    'manage_games',
-      'manage_network',
-      'manage_sessions',
-      'rotate_admin_credentials',
-      'view_network'
-    ]),
-    password_hash: adminPasswordHash,
-    email: null,
-    must_reset_password: 0
+  bio: adminBio,
+  mustResetPassword: false,
+  emailVerified: true
+};
+
+const existingAdmin = await adapter.findUserByEmail(adminEmail, { includeAccounts: true });
+let adminId: string;
+
+const hashedPassword = await authContext.password.hash('escapeplan');
+// Generate default avatar config based on username
+const defaultAvatarConfig = {
+  seed: 'admin',
+  eyes: ['happy'],
+  mouth: ['smile01']
+};
+
+const adminProfileUpdates = {
+  ...adminBaseProfile,
+  permissions: adminPermissionsSerialized,
+  passwordHash: hashedPassword,
+  avatarConfig: JSON.stringify(defaultAvatarConfig)
+};
+
+if (!existingAdmin) {
+  const adminUser = await adapter.createUser({
+    email: adminEmail,
+    ...adminBaseProfile,
+    passwordHash: hashedPassword
   });
+  adminId = adminUser.id;
 
-  db.prepare(
-    `INSERT INTO games (id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories, min_players, max_players, price_per_player_cents, resources_required, validation_notes, created_at, updated_at)
-     VALUES (@id, @slug, @name, @description, @story_intro, @duration_minutes, @difficulty, @pricing_model, @category, @categories, @min_players, @max_players, @price_per_player_cents, @resources_required, @validation_notes, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
-  ).run({
-    ...pirateGame,
-    category: 'Private'
+  await adapter.updateUser(adminId, adminProfileUpdates);
+
+  await adapter.createAccount({
+    userId: adminId,
+    providerId: 'credential',
+    accountId: adminId,
+    password: hashedPassword
   });
+} else {
+  adminId = existingAdmin.user.id;
+  await adapter.updatePassword(adminId, hashedPassword);
+  await adapter.updateUser(adminId, adminProfileUpdates);
+}
 
-  db.prepare(
-    `INSERT INTO rooms (id, game_id, name, is_mobile_capable, theme_token)
-     VALUES (@id, @game_id, @name, @is_mobile_capable, @theme_token)`
-  ).run({
-    id: 'room-harbor-hold',
-    game_id: pirateGame.id,
-    name: 'Harbor Hold',
-    is_mobile_capable: 0,
-    theme_token: 'escapeplan-pirate'
-  });
-
-  const insertPuzzle = db.prepare(
-    `INSERT INTO game_puzzles (id, game_id, title, description, solution, media_asset, operator_actions, display_order)
-     VALUES (@id, @game_id, @title, @description, @solution, NULL, @operator_actions, @display_order)`
-  );
-  for (const puzzle of piratePuzzles) {
-    insertPuzzle.run({
-      id: puzzle.id,
-      game_id: pirateGame.id,
-      title: puzzle.title,
-      description: puzzle.description,
-      solution: puzzle.solution,
-      operator_actions: puzzle.operator_actions,
-      display_order: puzzle.display_order
-    });
-  }
-
-  db.prepare(
-    `INSERT INTO network_profiles (id, name, ssid, description, band, channel, security, broadcast_enabled, status, status_message, details, last_updated)
-     VALUES ('primary', 'EscapePlan Control Network', 'escapeplan_net', 'Primary operator network and broadcast SSID for in-room displays.', '5GHz/2.4GHz', 36, 'WPA2-PSK', 1, 'offline', 'Awaiting first health check from Pi appliance.', NULL, CURRENT_TIMESTAMP)`
-  ).run();
+db.prepare(
+  `INSERT INTO games (id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories, min_players, max_players, price_per_player_cents, resources_required, validation_notes, created_at, updated_at)
+   VALUES (@id, @slug, @name, @description, @story_intro, @duration_minutes, @difficulty, @pricing_model, @category, @categories, @min_players, @max_players, @price_per_player_cents, @resources_required, @validation_notes, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+).run({
+  ...pirateGame,
+  category: 'Private'
 });
 
-seed();
+db.prepare(
+  `INSERT INTO rooms (id, game_id, name, is_mobile_capable, theme_token)
+   VALUES (@id, @game_id, @name, @is_mobile_capable, @theme_token)`
+).run({
+  id: 'room-harbor-hold',
+  game_id: pirateGame.id,
+  name: 'Harbor Hold',
+  is_mobile_capable: 0,
+  theme_token: 'escapeplan-pirate'
+});
+
+const insertPuzzle = db.prepare(
+  `INSERT INTO game_puzzles (id, game_id, title, description, solution, media_asset, operator_actions, display_order)
+   VALUES (@id, @game_id, @title, @description, @solution, NULL, @operator_actions, @display_order)`
+);
+for (const puzzle of piratePuzzles) {
+  insertPuzzle.run({
+    id: puzzle.id,
+    game_id: pirateGame.id,
+    title: puzzle.title,
+    description: puzzle.description,
+    solution: puzzle.solution,
+    operator_actions: puzzle.operator_actions,
+    display_order: puzzle.display_order
+  });
+}
+
+db.prepare(
+  `INSERT INTO network_profiles (id, name, ssid, description, band, channel, security, broadcast_enabled, status, status_message, details, last_updated)
+   VALUES ('primary', 'EscapePlan Control Network', 'escapeplan_net', 'Primary operator network and broadcast SSID for in-room displays.', '5GHz/2.4GHz', 36, 'WPA2-PSK', 1, 'offline', 'Awaiting first health check from Pi appliance.', NULL, CURRENT_TIMESTAMP)`
+).run();
 
 console.log('EscapePlan database initialised with core admin and Pirate Mutany profile.');

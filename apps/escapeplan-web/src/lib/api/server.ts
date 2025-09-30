@@ -1,16 +1,13 @@
-import type { ServerLoadEvent, RequestEvent } from '@sveltejs/kit';
+import type { ServerLoadEvent } from '@sveltejs/kit';
 import { apiFetch } from './client';
 
-export function tokenFromEvent(event: Pick<RequestEvent, 'locals'>): string | null {
-  return event.locals.sessionToken ?? null;
+export function makeServerFetcher(event: Pick<ServerLoadEvent, 'fetch' | 'cookies'>) {
+  return async <T>(path: string, init: RequestInit = {}) => {
+    const headers = new Headers(init.headers ?? {});
+    const sessionToken = event.cookies.get('better-auth.session_token');
+    if (sessionToken && !headers.has('cookie')) {
+      headers.set('cookie', `better-auth.session_token=${sessionToken}`);
+    }
+    return apiFetch<T>(event.fetch, path, { ...init, headers });
+  };
 }
-
-export function makeServerFetcher(event: Pick<ServerLoadEvent, 'fetch' | 'locals'>) {
-  return async <T>(path: string, init: RequestInit = {}) =>
-    apiFetch<T>(event.fetch, path, { ...init, token: tokenFromEvent(event) });
-}
-
-export const withToken = (token?: string | null): RequestInit['headers'] => {
-  if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
-};

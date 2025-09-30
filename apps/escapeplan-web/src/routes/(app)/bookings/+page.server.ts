@@ -12,6 +12,17 @@ export const load: PageServerLoad = async (event) => {
   const requestedScope = event.url.searchParams.get('scope') as Scope | null;
   const scope: Scope = scopes.includes(requestedScope ?? 'all') ? (requestedScope ?? 'all') : 'all';
 
+  const user = event.locals.user;
+  if (!user?.permissions?.includes('view_bookings')) {
+    return {
+      pageTitle: 'Bookings',
+      calendar: null,
+      scope,
+      date,
+      calendarError: user ? 'You do not have permission to view bookings.' : null
+    };
+  }
+
   try {
     const calendar = await fetcher<BookingCalendarResponse>(`/bookings?date=${date}&scope=${scope}`);
     return { pageTitle: 'Bookings', calendar, scope, date };

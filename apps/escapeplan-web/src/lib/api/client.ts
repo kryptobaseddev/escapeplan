@@ -17,23 +17,19 @@ export class ApiError extends Error {
   }
 }
 
-interface ApiFetchOptions extends RequestInit {
-  token?: string | null;
-}
+interface ApiFetchOptions extends RequestInit {}
 
 export async function apiFetch<T>(fetchImpl: FetchLike, path: string, options: ApiFetchOptions = {}): Promise<T> {
-  const { token, headers, ...rest } = options;
+  const { headers, credentials, ...rest } = options;
 
   const mergedHeaders = new Headers(headers ?? {});
   mergedHeaders.set('Accept', 'application/json');
   if (rest.body && !mergedHeaders.has('Content-Type')) {
     mergedHeaders.set('Content-Type', 'application/json');
   }
-  if (token) {
-    mergedHeaders.set('Authorization', `Bearer ${token}`);
-  }
 
   const response = await fetchImpl(`${apiBase}${path}`, {
+    credentials: credentials ?? 'include',
     ...rest,
     headers: mergedHeaders
   });

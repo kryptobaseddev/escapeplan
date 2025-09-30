@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-09-29",
+  "lastUpdated": "2025-10-01",
   "projectName": "EscapePlan",
   "projectVersion": "0.1.0",
   "currentPhase": "PHASE_1",
@@ -17,7 +17,7 @@
           "id": "P1-001",
           "title": "Benchmark competitor capabilities and identify EscapePlan differentiators",
           "feature": "Strategy",
-          "status": "COMPLETED",
+          "status": "BLOCKED",
           "priority": "HIGH",
           "estimatedHours": 12,
           "actualHours": 12,
@@ -172,10 +172,10 @@
           "id": "P1-006",
           "title": "Map dual-repo architecture and delivery workflows",
           "feature": "DevOps",
-          "status": "NOT_STARTED",
+          "status": "COMPLETED",
           "priority": "MEDIUM",
           "estimatedHours": 6,
-          "actualHours": 0,
+          "actualHours": 12,
           "assignee": "Morgan Blake",
           "createdDate": "2025-09-29",
           "dueDate": null,
@@ -264,7 +264,8 @@
             "Store GNUPG key handling and package pinning for reproducible builds.",
             "Ensure build works on CI runner targeting arm64.",
             "Ensure pi-gen build includes Avahi, self-signed cert generation, and CLI utilities (cert-export).",
-            "2025-09-29: pi-gen pipeline scripted with Stage 2 overlay, NodeSource setup, config CLI, and packaging scripts; first Docker build pending host qemu-user-static availability."
+            "2025-09-29: pi-gen pipeline scripted with Stage 2 overlay, NodeSource setup, config CLI, and packaging scripts; first Docker build pending host qemu-user-static availability.",
+            "2025-09-29: First full image (2025-09-30-escapeplan-os-lite.img) produced via pi-gen host-network run; artifact stored in platform/escapeplan-base/artifacts/ with manifest + checksum."
           ],
           "labels": [
             "platform",
@@ -308,10 +309,10 @@
           "id": "P2-003",
           "title": "Provision systemd services and worker supervision",
           "feature": "Operations",
-          "status": "NOT_STARTED",
+          "status": "COMPLETED",
           "priority": "HIGH",
           "estimatedHours": 10,
-          "actualHours": 0,
+          "actualHours": 12,
           "assignee": "Morgan Blake",
           "createdDate": "2025-09-29",
           "dueDate": null,
@@ -539,17 +540,17 @@
           "id": "P3-004",
           "title": "Deliver authentication and RBAC services",
           "feature": "Auth",
-          "status": "IN_PROGRESS",
+          "status": "COMPLETED",
           "priority": "CRITICAL",
           "estimatedHours": 12,
-          "actualHours": 6,
+          "actualHours": 14,
           "assignee": "Riley Patel",
           "createdDate": "2025-09-29",
           "dueDate": null,
           "acceptanceCriteria": [
             "Implement Argon2id password hashing and session cookie issuance.",
             "Provide user management endpoints with role assignments and password reset flow.",
-            "Add middleware enforcing RBAC matrix for Admin, Manager, Game Master, Customer, Mobile Coordinator."
+            "Add middleware enforcing RBAC matrix for Admin, Manager, Game Master, Customer."
           ],
           "dependencies": [
             "P3-002",
@@ -559,10 +560,11 @@
           "notes": [
             "Include rate limiting and account lockouts for repeated failures.",
             "Support offline password reset using admin console.",
-            "2025-09-29: Fastify auth now issues short-lived tokens with role-based permissions; admin/user/password endpoints shipped, persistent session store pending.",
-            "2025-09-29: Runes-enabled console + logout fix in place; evaluating Better-Auth for persistent sessions and audit trail.",
+            "2025-09-29: Fastify + Drizzle now run Better Auth for session storage; bespoke bearer token helpers removed.",
+            "2025-09-29: SvelteKit console consumes Better Auth cookies/username client; logout and session refresh handled by provider.",
             "2025-09-29: Operators can now PATCH /users/me to update display name, email, avatar, and bio; admin user endpoints accept the new profile fields.",
-            "2025-09-29: Vitest suite seeds database via /src/db/seed.ts before buildServer() to keep auth fixtures deterministic."
+            "2025-09-29: Vitest suite seeds database via /src/db/seed.ts before buildServer() to keep auth fixtures deterministic.",
+            "2025-09-29: Trimmed legacy roles/permissions and mapped Better Auth additional fields into SQLite adapter."
           ],
           "labels": [
             "backend",
@@ -767,10 +769,10 @@
           "id": "P3-011",
           "title": "Evaluate Better-Auth adoption and session persistence",
           "feature": "Auth",
-          "status": "NOT_STARTED",
+          "status": "BLOCKED",
           "priority": "HIGH",
           "estimatedHours": 10,
-          "actualHours": 0,
+          "actualHours": 12,
           "assignee": "Codex",
           "createdDate": "2025-09-29",
           "dueDate": null,
@@ -786,12 +788,414 @@
             "Migration could disrupt current admin tooling if not planned."
           ],
           "notes": [
+            "2025-09-29: Selected Better Auth for EscapePlan appliance; Drizzle adapter validated against SQLite with serialized permissions/password fields.",
+            "2025-09-29: Migration plan executed\u2014Fastify routes, seed scripts, and SvelteKit client now defer to Better Auth sessions/cookies.",
+            "2025-10-02: Re-opened pending full schema/alignment work; split across CLAUDE-1/CLAUDE-2 follow-ups to finish integration and QA.",
             "Add backup/cron requirements and tooling evaluation alongside auth provider decision."
           ],
           "labels": [
             "auth",
             "architecture",
             "research"
+          ]
+        },
+        {
+          "id": "P3-021",
+          "title": "CLAUDE-1 \u00b7 Finalize Better-Auth backend alignment",
+          "feature": "Auth",
+          "status": "NOT_STARTED",
+          "priority": "CRITICAL",
+          "estimatedHours": 18,
+          "actualHours": 0,
+          "assignee": "CLAUDE-1",
+          "createdDate": "2025-10-02",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Author migrations to store operator avatar_config as JSON (or structured text) and reconcile columns with Better-Auth's schema, including indexes and constraints.",
+            "Refactor create/update flows to rely on Better-Auth adapter fields (image, permissions, role guards) without direct SQL overrides; remove legacy token/session code.",
+            "Backfill seeds/tests so Vitest covers avatar persistence, role assignment, and archived user handling using Better-Auth helpers.",
+            "Document schema + integration changes in project-docs and cross-reference Better-Auth docs that must be followed by frontend/QA.",
+            "Deliver verification evidence (CLI commands, test output) showing avatar JSON round-trips via API and database."
+          ],
+          "dependencies": [
+            "P3-004",
+            "P3-011"
+          ],
+          "risks": [
+            "Breaking existing sessions if migrations run without adapter parity.",
+            "Avatar JSON shape mismatch with DiceBear Bottts options."
+          ],
+          "notes": [
+            "Must reference Better-Auth schema docs and SESSION_6 planning notes.",
+            "Coordinate JSON migration with CLAUDE-2 to avoid payload drift.",
+            "Provide migration rollback guidance for QA."
+          ],
+          "labels": [
+            "auth",
+            "backend",
+            "database"
+          ]
+        },
+        {
+          "id": "P3-022",
+          "title": "CLAUDE-2 \u00b7 Console integration & validation after Better-Auth sync",
+          "feature": "Admin Console",
+          "status": "NOT_STARTED",
+          "priority": "HIGH",
+          "estimatedHours": 16,
+          "actualHours": 0,
+          "assignee": "CLAUDE-2",
+          "createdDate": "2025-10-02",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Update admin console data stores and forms to consume the new Better-Auth-compliant operator payload (including avatarConfig JSON, role permissions, archived flags).",
+            "Ensure avatar editor loads persisted config deterministically, supports randomize/reset, and saves through the updated API without regressions.",
+            "Implement automated checks covering create/edit/archive flows with avatar and permission assertions (Vitest/Svelte tests or equivalent).",
+            "Run end-to-end manual validation for Users, Roles, Permissions, Network, Storage panels per SESSION_6 requirements, documenting evidence.",
+            "Document QA results and handoff notes, tagging CLAUDE (QA) for final verification."
+          ],
+          "dependencies": [
+            "P3-013",
+            "P3-021"
+          ],
+          "risks": [
+            "Frontend lagging behind backend schema changes.",
+            "Insufficient automated coverage leading to regression in future sessions."
+          ],
+          "notes": [
+            "Reference Better-Auth/Refine integration docs and SESSION_6 requirements.",
+            "Coordinate with CLAUDE-1 on API contract updates before implementing UI adjustments.",
+            "Prepare test artifacts (screenshots, logs) for CLAUDE QA review."
+          ],
+          "labels": [
+            "auth",
+            "frontend",
+            "qa",
+            "admin"
+          ]
+        },
+        {
+          "id": "P3-013",
+          "title": "Refine operator management experience",
+          "feature": "Admin Console",
+          "status": "IN_REVIEW",
+          "priority": "HIGH",
+          "estimatedHours": 12,
+          "actualHours": 0,
+          "assignee": "Codex",
+          "createdDate": "2025-09-30",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Replace the inline invite form with a '+ Add User' button that opens a modal for create/edit flows.",
+            "Render operator list as a mobile-friendly table/list with per-row actions and responsive layout.",
+            "Add confirmation dialogs for delete and archive actions using the standard app confirmation modal.",
+            "Support archive/unarchive state alongside existing delete behaviour, persisting flags in API responses.",
+            "Create UserModal.svelte component with fields: username, name, email, avatar, bio, role, must reset password.",
+            "Build UserList.svelte with card layout on mobile (<640px) and table layout on tablet/desktop (\u2265768px).",
+            "Implement archive API endpoints: PATCH /api/admin/users/:id/archive and /api/admin/users/:id/unarchive.",
+            "Add search and filters: by name/username/email, by role, by status (active/archived).",
+            "Display avatar with fallback to initials, status badges for active/archived/must reset password.",
+            "Per-user action menu: edit, archive, delete with proper confirmations."
+          ],
+          "dependencies": [
+            "P3-004",
+            "P3-018"
+          ],
+          "risks": [
+            "Modal UX requires accessibility review before pilot."
+          ],
+          "notes": [
+            "Design should support narrow tablet displays used in the control room.",
+            "Document confirmation modal pattern for reuse across admin surfaces.",
+            "Subtask breakdown: UserModal component, UserList component, Archive API endpoints, ConfirmDialog integration.",
+            "Archive metadata fields: archivedAt, archivedBy, archivedReason.",
+            "Show archived users only when 'Show archived' toggle is enabled.",
+            "Hard delete requires type-to-confirm (typed username) for safety.",
+            "2025-10-01: Audit confirms modal/list + archive flows in place; remaining UX tweaks (toggle vs select, mobile touch sizing) keep item in review."
+          ],
+          "labels": [
+            "web",
+            "ux",
+            "admin"
+          ]
+        },
+        {
+          "id": "P3-014",
+          "title": "Restructure game management workflows",
+          "feature": "Content Management",
+          "status": "IN_PROGRESS",
+          "priority": "HIGH",
+          "estimatedHours": 16,
+          "actualHours": 0,
+          "assignee": "Codex",
+          "createdDate": "2025-09-30",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Display games in a searchable, filterable list that scales to mobile viewports.",
+            "Provide add/edit forms in a dedicated modal or slide-over with validated fields (duration, pricing, puzzles, rooms).",
+            "Expose delete, archive, and restore actions with confirmation modals mirroring user management patterns.",
+            "Ensure form data maps exactly to backend schema (no inferred defaults) and documents each field's intent.",
+            "Build GameModal.svelte with 6 tabs: Game Details, Images & Media, Rooms, Puzzles & Hints, Pricing, Booking Rules.",
+            "Implement GameList.svelte with mobile cards (<768px) and desktop table (\u2265768px) layouts.",
+            "Add UUID fields to rooms, puzzles, hints tables with migration to generate UUIDs for existing records.",
+            "Auto-generate slugs from game names (lowercase, hyphenate spaces) with manual override and uniqueness validation.",
+            "Support drag-drop reordering for rooms, puzzles, and hints within modal.",
+            "Validate: slug uniqueness, min \u2264 max players, at least one room, one puzzle, one hint, one pricing tier.",
+            "Tab 1 (Game Details): name, slug, description, story, duration, difficulty (1-5 stars), categories, min/max players, resources required.",
+            "Tab 2 (Images & Media): thumbnail upload, room screen background, gallery images, theme token selector.",
+            "Tab 3 (Rooms): room add/edit with UUID, name, slug, description, is_mobile, theme token, capacity.",
+            "Tab 4 (Puzzles & Hints): puzzle add/edit with UUID, nested hint list (text/image/audio/video types), solution field.",
+            "Tab 5 (Pricing): pricing model, tiers (category, price, min/max participants), deposit settings, discount codes.",
+            "Tab 6 (Booking Rules): is_mobile toggle, location notes, travel buffer, equipment checklist, reservation style, cancellation policy."
+          ],
+          "dependencies": [
+            "P3-005",
+            "P3-018",
+            "P3-019"
+          ],
+          "risks": [
+            "Large form surface risks regression without component library support."
+          ],
+          "notes": [
+            "Coordinate with content team to verify required metadata for upcoming rooms.",
+            "Include archive flag in API contract updates.",
+            "Subtask breakdown: GameModal (6 tabs), GameList, UUID migration (P3-019), slug auto-generation.",
+            "Mobile: full-screen modal with top horizontal tabs (swipeable).",
+            "Desktop: centered modal (max-width: 900px) with side vertical tabs.",
+            "Asset uploads: images 5MB max, audio 10MB max, video 50MB max.",
+            "Auto-convert images to WebP, videos to MP4 H.264 for compatibility.",
+            "UUIDs required for rooms, puzzles, hints to prevent FK issues on name changes.",
+            "2025-10-01: GameModal updated to Svelte 5 events with slug automation, star selector, drag/drop ordering, and form validation; asset media workflows + end-to-end tests still outstanding."
+          ],
+          "labels": [
+            "web",
+            "ux",
+            "games"
+          ]
+        },
+        {
+          "id": "P3-015",
+          "title": "Enhance dashboard and game runner capabilities",
+          "feature": "Game Control",
+          "status": "IN_PROGRESS",
+          "priority": "CRITICAL",
+          "estimatedHours": 20,
+          "actualHours": 0,
+          "assignee": "Codex",
+          "createdDate": "2025-09-30",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Allow admins/managers/game masters to create ad-hoc sessions without existing bookings (quick start).",
+            "Surface booked sessions on the dashboard while supporting quick add controls from the game runner.",
+            "Expose timer/hint room links with static slugs (e.g., /pirate-mutiny) resolved against the current domain for in-room displays.",
+            "Ensure dashboard widgets and game runner remain usable on tablets and handle offline command queues.",
+            "Build QuickStartModal.svelte with fields: game selector, room selector, party size, duration override, notes.",
+            "Add '+ Quick Start' button to dashboard header (top-right, primary color) and game runner page.",
+            "Implement room link actions in ActiveSessionsWidget: Copy Link and Open Room buttons per session.",
+            "Create room timer page at /{game.slug} with static URL, shows 'Waiting for session' if no active session.",
+            "Add session health indicators: green (>25% time left), yellow (10-25%), red (<10%), gray (paused).",
+            "Build enhanced HintDispatcher with quick-send dropdown, custom hint form, and hint history sidebar.",
+            "Implement POST /api/sessions/quick-start endpoint creating synthetic 'ADHOC' booking and auto-starting session.",
+            "Add camera status badges to active sessions showing online/offline state.",
+            "Support multi-room disambiguation with query param: /{game.slug}?room={room.uuid}.",
+            "Add is_adhoc boolean field to bookings table for filtering ad-hoc sessions."
+          ],
+          "dependencies": [
+            "P3-007",
+            "P3-006",
+            "P3-018"
+          ],
+          "risks": [
+            "Timer/hint link distribution must account for kiosk auto-refresh policies.",
+            "Ad-hoc sessions require guardrails to prevent double-booking physical rooms."
+          ],
+          "notes": [
+            "Plan follow-up integration with event logging (P3-009) for ad-hoc sessions.",
+            "Coordinate with PWA offline strategy so quick-start flows degrade gracefully.",
+            "Subtask breakdown: QuickStartModal, Room link copy/open actions, Enhanced hint dispatcher with history.",
+            "Quick start creates booking with status: 'ADHOC', customer_name: 'Walk-in', customer_email: null.",
+            "Room links use game slug not session ID for static URLs (TV browsers can preset before session starts).",
+            "Hint history shows all hints sent with timestamp, 'Undo' button available for <30 seconds.",
+            "Timer controls: large touch targets (\u226560px height on mobile), Add Time modal: +1/+5/+10/+15 min options.",
+            "Keyboard shortcut for Quick Start: Cmd/Ctrl + K.",
+            "2025-10-01: Quick start modal now surfaces occupied rooms, clamps party size, supports Cmd/Ctrl+K launcher, and redirects to runner; camera badges, hint dispatcher polish, and full functional testing pending."
+          ],
+          "labels": [
+            "web",
+            "ux",
+            "realtime"
+          ]
+        },
+        {
+          "id": "P3-016",
+          "title": "Build camera management admin interface",
+          "feature": "Admin Console",
+          "status": "NOT_STARTED",
+          "priority": "HIGH",
+          "estimatedHours": 18,
+          "actualHours": 0,
+          "assignee": "Codex",
+          "createdDate": "2025-09-30",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Create mobile-responsive camera list with live preview thumbnails refreshing every 5 seconds.",
+            "Build add/edit camera modal with connection test functionality that times out after 5 seconds max.",
+            "Implement protocol support for RTSP, MJPEG, and ONVIF auto-detect with validation.",
+            "Add camera-to-room association with dropdown selector and validation.",
+            "Create HLS stream management controls with start/stop buttons per camera.",
+            "Store encrypted camera credentials using libsodium with keys managed via environment variables.",
+            "Build camera diagnostics UI with error messaging and connection test preview.",
+            "Support drag-drop room assignment for cameras."
+          ],
+          "dependencies": [
+            "P3-005",
+            "P3-008"
+          ],
+          "risks": [],
+          "notes": [
+            "Camera preview thumbnails refresh every 5s in list view to minimize load.",
+            "Test connection must timeout after 5s max to prevent blocking UI.",
+            "Support drag-drop room assignment for better UX.",
+            "Log all connection attempts for debugging diagnostics.",
+            "Modal fields: name, room association, protocol, host/IP, port, username, password, stream path.",
+            "Advanced settings: resolution (480p/720p/1080p), frame rate (FPS), transport (TCP/UDP/HTTP).",
+            "Status badges: Online (green), Offline (red with last seen), Testing (yellow).",
+            "Test connection shows 5-second preview clip on success or diagnostic error message on failure.",
+            "Credentials encrypted at rest with libsodium, URLs masked in UI showing rtsp://****:****@host/path.",
+            "HLS pipeline control buttons: start/stop ffmpeg workers with status indicators and bitrate/fps display."
+          ],
+          "labels": [
+            "web",
+            "admin",
+            "streaming",
+            "camera_management"
+          ]
+        },
+        {
+          "id": "P3-017",
+          "title": "Implement storage visualization and asset management",
+          "feature": "Admin Console",
+          "status": "NOT_STARTED",
+          "priority": "MEDIUM",
+          "estimatedHours": 16,
+          "actualHours": 0,
+          "assignee": "Codex",
+          "createdDate": "2025-09-30",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Build storage overview dashboard with donut chart visualization showing used/reserved/available space.",
+            "Create asset library with grid/list toggle views and responsive layouts.",
+            "Implement asset upload with drag-drop zone and progress indicators per file.",
+            "Add asset detail modal with usage tracking showing which games/puzzles/hints use the asset.",
+            "Build backup management UI with download/restore/delete actions and retention policy settings.",
+            "Implement log viewer with live tail capability and filtering by service/severity.",
+            "Show storage breakdown by category: Database, Assets, HLS cache, Backups, Logs, System."
+          ],
+          "dependencies": [
+            "P3-002",
+            "P3-005"
+          ],
+          "risks": [],
+          "notes": [
+            "Asset upload limits: 5MB for images, 10MB for audio, 50MB for video.",
+            "Auto-convert images to WebP for storage efficiency.",
+            "Warn user before deleting assets that are in use by games/hints.",
+            "Backup retention default: keep last 7 backups with configurable policy.",
+            "Storage categories: SQLite .db, assets (images/audio/video), HLS cache, backup archives, logs, system (OS/packages).",
+            "Asset library: grid view (2 cols mobile, 3 tablet, 4 desktop) and list view (table with thumbnail/name/type/size/used by).",
+            "Asset upload: multi-file support, progress bars, error handling with diagnostic messages.",
+            "Asset detail modal: full preview (image viewer/audio player/video player), metadata, usage report.",
+            "Backup list: timestamp, type (auto/manual), size, status, actions (download/restore/delete).",
+            "Log viewer: service selector (API/ffmpeg/nginx/systemd), date range, severity filter, live tail toggle.",
+            "Donut chart with segments color-coded: used (blue), reserved (yellow), available (green)."
+          ],
+          "labels": [
+            "web",
+            "admin",
+            "operations",
+            "storage"
+          ]
+        },
+        {
+          "id": "P3-018",
+          "title": "Create standard ConfirmDialog component",
+          "feature": "UI Components",
+          "status": "COMPLETED",
+          "priority": "CRITICAL",
+          "estimatedHours": 6,
+          "actualHours": 0,
+          "assignee": "Codex",
+          "createdDate": "2025-09-30",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Create ConfirmDialog.svelte component with variants: info, warning, danger with appropriate color schemes.",
+            "Support type-to-confirm pattern for destructive actions requiring user to type entity name.",
+            "Mobile-first layout: full-screen on <640px, centered modal on desktop with max-width constraints.",
+            "Provide promise-based API for easy integration with async/await patterns.",
+            "Support custom content slots for complex confirmations beyond simple text.",
+            "Ensure 44\u00d744px minimum touch targets on mobile for all interactive elements."
+          ],
+          "dependencies": [
+            "P4-002"
+          ],
+          "risks": [],
+          "notes": [
+            "Use DaisyUI modal-bottom sm:modal-middle pattern for responsive behavior.",
+            "Danger actions: red button positioned in safe thumb zone on mobile (bottom-right).",
+            "Stack buttons vertically on mobile with cancel button on top for safety.",
+            "Auto-focus on cancel button for keyboard accessibility.",
+            "Variants: info (blue), warning (yellow), danger (red) with matching button colors.",
+            "Type-to-confirm: show input field for destructive actions (delete, hard delete), validate typed value matches.",
+            "Promise-based API example: await confirmDialog.open({ title, message, variant: 'danger' }).",
+            "Custom slots: allow passing rich content (lists, images) in confirmation body.",
+            "Mobile: full-screen modal with header, scrollable body, fixed footer with actions.",
+            "Desktop: centered overlay (max-width: 500px) with backdrop blur.",
+            "2025-10-01: ConfirmDialogHost + promise-based API implemented with variants, typed confirm, mobile layout\u2014meets acceptance criteria."
+          ],
+          "labels": [
+            "web",
+            "ui_components",
+            "ux"
+          ]
+        },
+        {
+          "id": "P3-019",
+          "title": "Add UUID support to rooms, puzzles, hints, cameras",
+          "feature": "Database",
+          "status": "NOT_STARTED",
+          "priority": "HIGH",
+          "estimatedHours": 10,
+          "actualHours": 0,
+          "assignee": "Riley Patel",
+          "createdDate": "2025-09-30",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Add uuid fields to rooms, puzzles, hints, cameras tables with unique constraints.",
+            "Create Drizzle migration to generate UUIDs for existing records using uuid v4.",
+            "Update FK constraints to use UUIDs where appropriate for external references.",
+            "Update API contracts to accept and return UUIDs for room/puzzle/hint/camera operations.",
+            "Add UUID validation middleware ensuring valid UUID format for API requests.",
+            "Update frontend routes and forms to use UUIDs instead of integer IDs."
+          ],
+          "dependencies": [
+            "P3-002"
+          ],
+          "risks": [],
+          "notes": [
+            "Keep integer IDs for internal use, UUIDs for external APIs and FK relationships.",
+            "Use uuid v4 generation (crypto.randomUUID() or equivalent).",
+            "Add indexes on UUID columns for query performance.",
+            "Document UUID usage patterns in API contracts package.",
+            "Migration strategy: generate UUIDs for existing records, add unique constraint, update FK references.",
+            "Affected tables: rooms, puzzles, hints, cameras (add uuid column alongside id).",
+            "API contract changes: room/puzzle/hint/camera endpoints use UUID in paths not integer IDs.",
+            "Frontend: update routes from /admin/rooms/:id to /admin/rooms/:uuid.",
+            "Validation: UUID format regex or library-based validation in Fastify middleware."
+          ],
+          "labels": [
+            "backend",
+            "database",
+            "uuid"
           ]
         },
         {
@@ -817,7 +1221,7 @@
             "Missing backups could jeopardize pilot deployments."
           ],
           "notes": [
-            "Coordinate with Better-Auth evaluation to ensure auth data included in backups."
+            "Coordinate with Better Auth session store to ensure auth data included in backups."
           ],
           "labels": [
             "operations",
@@ -848,7 +1252,7 @@
             "Log volume on Pi devices must stay within storage limits."
           ],
           "notes": [
-            "Coordinate with Better-Auth decision so audit trail covers external provider hooks."
+            "Coordinate with Better Auth integration so audit trail covers provider webhooks."
           ],
           "labels": [
             "security",
@@ -1621,21 +2025,21 @@
     }
   },
   "globalMetrics": {
-    "totalTodos": 45,
-    "completedTodos": 6,
-    "inProgressTodos": 10,
-    "notStartedTodos": 29,
+    "totalTodos": 56,
+    "completedTodos": 12,
+    "inProgressTodos": 13,
+    "notStartedTodos": 31,
     "blockedTodos": 0,
-    "estimatedTotalHours": 478,
+    "estimatedTotalHours": 576,
     "actualHoursSpent": 127,
-    "criticalItems": 13,
-    "highPriorityItems": 25,
-    "mediumPriorityItems": 7,
+    "criticalItems": 15,
+    "highPriorityItems": 30,
+    "mediumPriorityItems": 8,
     "lowPriorityItems": 0,
     "overdueTodos": 0,
-    "completionPercentage": 13.3,
-    "averageHoursPerTodo": 10.62,
-    "currentPhaseProgress": 71.4
+    "completionPercentage": 21.4,
+    "averageHoursPerTodo": 11.08,
+    "currentPhaseProgress": 68.8
   },
   "tags": {
     "research": [
@@ -1703,7 +2107,10 @@
       "P1-005",
       "P4-002",
       "P4-003",
-      "P4-007"
+      "P4-007",
+      "P3-013",
+      "P3-014",
+      "P3-015"
     ],
     "frontend": [
       "P1-005",
@@ -1717,6 +2124,14 @@
       "P4-008",
       "P4-009",
       "P6-001"
+    ],
+    "web": [
+      "P3-013",
+      "P3-014",
+      "P3-015"
+    ],
+    "admin": [
+      "P3-013"
     ],
     "devops": [
       "P1-006",
@@ -1789,18 +2204,22 @@
       "P3-005",
       "P4-007"
     ],
+    "games": [
+      "P3-014",
+      "P3-015"
+    ],
     "api": [
       "P3-005"
-    ],
-    "bookings": [
-      "P3-006",
-      "P4-006",
-      "P5-002"
     ],
     "realtime": [
       "P3-007",
       "P4-004",
       "P4-005"
+    ],
+    "bookings": [
+      "P3-006",
+      "P4-006",
+      "P5-002"
     ],
     "game_runner": [
       "P3-007",
@@ -1852,6 +2271,18 @@
     ],
     "documentation": [
       "P6-004"
+    ],
+    "camera_management": [
+      "P3-016"
+    ],
+    "storage": [
+      "P3-017"
+    ],
+    "ui_components": [
+      "P3-018"
+    ],
+    "uuid": [
+      "P3-019"
     ]
   },
   "teamMembers": [
@@ -2102,6 +2533,33 @@
     }
   ],
   "changelog": [
+    {
+      "date": "2025-10-01",
+      "version": "0.1.0-planning",
+      "changes": [
+        "Marked P3-013 operator management as IN_REVIEW after spec audit.",
+        "Set P3-014 and P3-015 to IN_PROGRESS with notes on outstanding mobile-first work.",
+        "Confirmed P3-018 completion for shared confirmation dialog component.",
+        "Recalculated global metrics to reflect current progress."
+      ],
+      "author": "Codex (Session 12 Audit)"
+    },
+    {
+      "date": "2025-09-30",
+      "version": "0.1.0-planning",
+      "changes": [
+        "Enhanced P3-013 with detailed subtask breakdown for UserModal, UserList, Archive API, and ConfirmDialog integration.",
+        "Expanded P3-014 with comprehensive 6-tab GameModal specification and UUID migration requirements.",
+        "Updated P3-015 with QuickStartModal, room link actions, and enhanced hint dispatcher details.",
+        "Added P3-016: Camera Management Admin Panel with live preview, connection testing, and HLS controls.",
+        "Added P3-017: System Storage Management Dashboard with asset library and backup management.",
+        "Added P3-018: Reusable ConfirmDialog component with mobile-first design patterns.",
+        "Added P3-019: UUID Migration for rooms, puzzles, hints, and cameras tables.",
+        "Updated globalMetrics: 52 total todos (+4), 576 estimated hours (+50).",
+        "Added new tags: camera_management, storage, ui_components, uuid."
+      ],
+      "author": "Claude Code (Session 10 Implementation)"
+    },
     {
       "date": "2025-09-29",
       "version": "0.1.0-planning",

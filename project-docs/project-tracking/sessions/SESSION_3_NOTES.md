@@ -26,6 +26,7 @@
 ### ✅ Secondary Tasks
 - [x] `/api/admin/rotate-credentials` endpoint + UI affordance for general managers with realtime notice broadcast.  
 - [x] Printable controls added to bookings manifest and per-session runner view.
+- [x] Stabilised auth + test harness: SQLite migration guard fixed, `/users/me` seed runs before Vitest, login redirect now routes unauthenticated clients to `/login`, dashboard/bookings/games loaders gate pre-auth fetches, the `/login` form action is explicit, navigation now opts into classic Svelte reactivity (`runes=false`) so headings/profile initials render cleanly without function text leaks, and the /(app) layout restores head metadata plus a corrected `../../app.css` import to keep SSR builds green.
 - [x] Refreshed operator navigation with EscapePlan crest branding, collapsible sidebar, dynamic header titles, and self-service profile management (including new bio/avatar fields and `/users/me` endpoint).
 
 ### 🔄 Partial Completions

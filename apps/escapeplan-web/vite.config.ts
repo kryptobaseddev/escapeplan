@@ -1,13 +1,11 @@
+import type { PluginOption } from 'vite';
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { SvelteKitPWA } from '@vite-pwa/sveltekit';
 import { defineConfig } from 'vite';
 
-export default defineConfig({
-  plugins: [
-    tailwindcss(),
-    sveltekit(),
-    SvelteKitPWA({
+const tailwindPlugin = tailwindcss() as PluginOption;
+const pwaPlugin = SvelteKitPWA({
       registerType: 'autoUpdate',
       includeAssets: [
         'favicon.ico',
@@ -86,6 +84,8 @@ export default defineConfig({
         enabled: true,
         suppressWarnings: true
       }
-    })
-  ]
+    }) as PluginOption;
+
+export default defineConfig({
+  plugins: [tailwindPlugin, sveltekit(), pwaPlugin]
 });

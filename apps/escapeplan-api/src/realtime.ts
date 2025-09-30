@@ -32,7 +32,3 @@ export function emitTimerUpdate(broadcast: TimerBroadcast) {
 export function emitBookingsUpdate(payload: BookingCalendarResponse) {
   io?.emit('bookings:update', payload);
 }
-
-export function emitAuthRotation() {
-  io?.emit('admin:credentials:rotated');
-}

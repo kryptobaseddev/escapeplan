@@ -19,9 +19,11 @@ install -d -o escapeplan -g escapeplan -m 0755 /etc/escapeplan
 install -d -o escapeplan -g escapeplan -m 0755 /etc/escapeplan/certs
 install -d -o escapeplan -g escapeplan -m 0755 /etc/escapeplan/templates
 
-chmod 0755 /usr/local/sbin/escapeplan-platform-init
-chmod 0755 /usr/local/sbin/escapeplan-certgen
-chmod 0755 /usr/local/sbin/escapeplan-config-apply
+for bin in escapeplan-platform-init escapeplan-certgen escapeplan-config-apply; do
+  if [ -f "/usr/local/sbin/${bin}" ]; then
+    chmod 0755 "/usr/local/sbin/${bin}"
+  fi
+done
 
 rm -f /etc/systemd/system/multi-user.target.wants/hostapd.service
 rm -f /etc/systemd/system/multi-user.target.wants/dnsmasq.service

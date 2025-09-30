@@ -25,7 +25,7 @@ interface InitialRealtimeState {
   bookings?: Array<BookingCalendarResponse>;
 }
 
-export function initializeRealtime(token: string | null, initial: InitialRealtimeState = {}) {
+export function initializeRealtime(initial: InitialRealtimeState = {}) {
   dashboardStore.set(initial.dashboard ?? null);
   sessionsStore.set(initial.sessions ?? []);
   if (initial.bookings) {
@@ -36,7 +36,7 @@ export function initializeRealtime(token: string | null, initial: InitialRealtim
 
   if (!browser || registered) return;
 
-  const socket = getSocket(token);
+  const socket = getSocket();
   if (!socket) return;
 
   socket.on('connect_error', (err) => {

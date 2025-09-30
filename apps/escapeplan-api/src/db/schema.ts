@@ -5,11 +5,60 @@ export const operators = sqliteTable('operators', {
   id: text('id').primaryKey(),
   username: text('username').notNull().unique(),
   name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  email_verified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   role: text('role').notNull(),
-  avatarUrl: text('avatar_url'),
+  avatar_config: text('avatar_config'), // JSON: DiceBear Bottts config
   bio: text('bio'),
-  permissions: text('permissions', { mode: 'json' }).$type<string[]>().notNull(),
-  passwordHash: text('password_hash').notNull()
+  permissions: text('permissions').notNull().default(sql`'[]'`),
+  must_reset_password: integer('must_reset_password', { mode: 'boolean' }).notNull().default(false),
+  password_hash: text('password_hash'),
+  last_login_at: text('last_login_at'),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  banned: integer('banned', { mode: 'boolean' }).notNull().default(false),
+  ban_reason: text('ban_reason'),
+  ban_expires: text('ban_expires'),
+  archived_at: text('archived_at'),
+  archived_by: text('archived_by'),
+  archived_reason: text('archived_reason')
+});
+
+export const operatorAuthSessions = sqliteTable('operator_auth_sessions', {
+  id: text('id').primaryKey(),
+  token: text('token').notNull().unique(),
+  user_id: text('user_id').notNull().references(() => operators.id),
+  expires_at: text('expires_at').notNull(),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  ip_address: text('ip_address'),
+  user_agent: text('user_agent'),
+  impersonated_by: text('impersonated_by')
+});
+
+export const operatorAccounts = sqliteTable('operator_accounts', {
+  id: text('id').primaryKey(),
+  account_id: text('account_id').notNull(),
+  provider_id: text('provider_id').notNull(),
+  user_id: text('user_id').notNull().references(() => operators.id),
+  access_token: text('access_token'),
+  refresh_token: text('refresh_token'),
+  id_token: text('id_token'),
+  access_token_expires_at: text('access_token_expires_at'),
+  refresh_token_expires_at: text('refresh_token_expires_at'),
+  scope: text('scope'),
+  password: text('password'),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+export const operatorVerifications = sqliteTable('operator_verifications', {
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  value: text('value').notNull(),
+  expires_at: text('expires_at').notNull(),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 
 export const games = sqliteTable('games', {
@@ -100,14 +149,34 @@ export const networkHealth = sqliteTable('network_health', {
 });
 
 export const upsertOperators = sql`
-insert into operators (id, username, name, role, avatar_url, bio, permissions, password_hash)
-values (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO operators (
+  id,
+  username,
+  name,
+  email,
+  role,
+  avatar_config,
+  bio,
+  permissions,
+  must_reset_password,
+  updated_at
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(id) DO UPDATE SET
   username = excluded.username,
   name = excluded.name,
+  email = excluded.email,
   role = excluded.role,
-  avatar_url = excluded.avatar_url,
+  avatar_config = excluded.avatar_config,
   bio = excluded.bio,
   permissions = excluded.permissions,
-  password_hash = excluded.password_hash;
+  must_reset_password = excluded.must_reset_password,
+  updated_at = CURRENT_TIMESTAMP;
 `;
+
+export const authTables = {
+  operators,
+  operatorAuthSessions,
+  operatorAccounts,
+  operatorVerifications
+};

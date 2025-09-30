@@ -353,7 +353,7 @@ CREATE INDEX idx_sessions_status ON game_sessions(status);
 
 ### 3.3 Seed Data
 
-* Roles: `admin`, `general_manager`, `game_master`, `technician`.
+* Roles: `admin`, `manager`, `game_master`, `customer`.
 * Default credentials: `admin` / `escapeplan` (Argon2id-hashed, rotation endpoint available).
 * Games: Pirate Mutiny only — hydrated from `project-docs/pirate-mutany.txt` with canonical puzzles, narrative, and room metadata.
 * Rooms: `Harbor Hold` storefront bay mapped to Pirate Mutiny; more rooms added via admin console (no mock placeholders).
@@ -379,11 +379,11 @@ CREATE INDEX idx_sessions_status ON game_sessions(status);
 
 * `POST /auth/login` → body `{ username, password }`; returns `{ token, user, mustResetPassword }`.
 * `GET /auth/session` → validates bearer token and returns current operator profile.
-* `POST /admin/rotate-credentials` → general_manager/admin only; rotates default admin password and broadcasts alert.
+* `POST /admin/rotate-credentials` → manager/admin only; rotates default admin password and broadcasts alert.
 
 ### 4.2 Operator & Role Management
 
-* `GET /admin/users` → list operators with metadata (admin/general_manager).
+* `GET /admin/users` → list operators with metadata (admin/manager).
 * `POST /admin/users` → create operator (role, password, mustReset flag).
 * `PATCH /admin/users/:id` → update profile/role/reset flag.
 * `POST /admin/users/:id/reset-password` → set Argon2id password, optional force reset.
@@ -438,13 +438,22 @@ CREATE INDEX idx_sessions_status ON game_sessions(status);
 
 * **Admin**: All endpoints; change system/network/camera pipelines; manage roles/users.
 * **Manager**: CRUD Games/Rooms/Cameras/Bookings; create Employees/Customers; no system/network toggles.
-* **Employee**: Read Games/Rooms/Cameras; operate Sessions; send hints; cannot change definitions.
+* **Game Master**: Read Games/Rooms/Cameras; operate Sessions; send hints; cannot change definitions.
 * **Customer**: Create booking (kiosk); read own booking; no dashboard access.
 
 ### 5.2 Enforcement
 
 * Route guards by role; field-level checks for sensitive attributes (e.g., cannot escalate roles unless Admin).
 * Audit trail in `events` for all mutating endpoints.
+
+### 5.3 Implementation Notes
+
+* Better Auth (v1.3.x) provides the authentication surface for Fastify and SvelteKit via the Drizzle SQLite adapter, username, and admin plugins.
+* Sessions are issued as HttpOnly cookies (`better-auth.session_token`) with per-request validation through `requireSession` and SvelteKit `sveltekitCookies` middleware.
+* Operator records persist additional Better Auth fields (`permissions`, `bio`, `must_reset_password`, `password_hash`, `last_login_at`, ban metadata) with JSON-serialized permission sets aligned to the RBAC matrix above.
+* Seed tooling provisions the initial administrator through Better Auth’s adapter, ensuring hashed credentials and credential accounts stay in sync with the provider.
+* Password resets and change-password flows now call Better Auth endpoints, removing bespoke Argon2 verification helpers while retaining Argon2id hashing under the provider.
+* The SvelteKit shell calls the Fastify Better Auth endpoints directly; the login server action forwards the `Set-Cookie` header to the browser so the API owns session storage. Server-side fetch helpers forward the `better-auth.session_token` cookie on every API call.
 
 ---
 
