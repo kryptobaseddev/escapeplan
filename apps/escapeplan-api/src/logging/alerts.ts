@@ -40,6 +40,9 @@ export function createAlert(options: CreateAlertOptions): string {
     level: options.level
   });
 
+  // TODO: Emit dashboard update when realtime module is integrated
+  // emitDashboardUpdate(getDashboard());
+
   return id;
 }
 
@@ -59,6 +62,9 @@ export function dismissAlert(alertId: string, operatorId: string): void {
     alertId,
     dismissedBy: operatorId
   });
+
+  // TODO: Emit dashboard update when realtime module is integrated
+  // emitDashboardUpdate(getDashboard());
 }
 
 /**
