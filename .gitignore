@@ -12,6 +12,7 @@ apps/escapeplan-web/dist/
 apps/escapeplan-web/.vite/
 apps/escapeplan-api/dist/
 apps/escapeplan-api/data/
+apps/escapeplan-api/logs/
 packages/contracts/dist/
 
 # Environment files

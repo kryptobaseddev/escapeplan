@@ -1692,6 +1692,9 @@
     open={hintModalOpen}
     puzzleName={editingHint?.puzzle.title ?? ''}
     hint={editingHint?.hint ?? null}
+    gameId={workingGame.id}
+    puzzleId={editingHint?.puzzle.id}
+    hintOrder={editingHint?.hint?.order ?? (editingHint?.puzzle.hints?.length ?? 0) + 1}
     onclose={closeHintModal}
     onsave={saveHintFromModal}
   />

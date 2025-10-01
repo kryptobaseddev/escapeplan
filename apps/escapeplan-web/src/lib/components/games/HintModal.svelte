@@ -6,6 +6,9 @@
   export let open = false;
   export let puzzleName = '';
   export let hint: GameHintDefinition | null = null;
+  export let gameId: string | undefined = undefined;
+  export let puzzleId: string | undefined = undefined;
+  export let hintOrder: number | undefined = undefined;
   export let onclose: (() => void) | undefined;
   export let onsave: ((hint: GameHintDefinition) => void) | undefined;
 
@@ -61,40 +64,60 @@
     fileInputElement?.click();
   }
 
+  let uploading = $state(false);
+  let uploadError = $state<string | null>(null);
+
   async function handleFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
     if (!file) return;
 
-    // TODO: Get actual gameId and puzzleId from parent component
-    // For now, this will need to be passed as props to HintModal
-    console.warn('File upload not yet implemented - requires gameId and puzzleId props');
+    // Validate we have required info for upload
+    if (!gameId || !puzzleId) {
+      uploadError = 'Missing game or puzzle information for upload';
+      console.error('Cannot upload: missing gameId or puzzleId');
+      return;
+    }
 
-    // Placeholder: just store filename for now (will fail on save)
-    // This should be replaced with actual upload once props are added
-    workingHint.assetUrl = file.name;
+    // Only upload for media types (not text)
+    if (workingHint.type === 'text') {
+      uploadError = 'Cannot upload files for text hints';
+      return;
+    }
 
-    /* Future implementation:
+    uploading = true;
+    uploadError = null;
+
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      const uploadUrl = `/api/assets/upload?gameId=${gameId}&assetType=hint_media&mediaType=${workingHint.type}&puzzleId=${puzzleId}&order=${workingHint.order || 1}`;
+      const order = hintOrder || workingHint.order || 1;
+      const uploadUrl = `/api/assets/upload?gameId=${encodeURIComponent(gameId)}&assetType=hint_media&mediaType=${workingHint.type}&puzzleId=${encodeURIComponent(puzzleId)}&order=${order}`;
+
       const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData,
         credentials: 'include'
       });
 
-      if (!response.ok) throw new Error('Upload failed');
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Upload failed' }));
+        throw new Error(errorData.message || `Upload failed with status ${response.status}`);
+      }
 
       const result = await response.json();
+
+      // Store the asset URL returned from the server
       workingHint.assetUrl = result.asset.url;
+      uploadError = null;
     } catch (error) {
       console.error('Asset upload failed:', error);
-      alert('Failed to upload file');
+      uploadError = error instanceof Error ? error.message : 'Failed to upload file';
+      workingHint.assetUrl = ''; // Clear on error
+    } finally {
+      uploading = false;
     }
-    */
   }
 
   $: if (!open && initialised) {
@@ -181,8 +204,13 @@
                   </div>
                 </div>
               {/if}
-              <button type="button" class="btn btn-primary btn-sm" onclick={handleFileSelect}>
-                Upload file
+              <button type="button" class="btn btn-primary btn-sm" onclick={handleFileSelect} disabled={uploading}>
+                {#if uploading}
+                  <span class="loading loading-spinner loading-sm"></span>
+                  Uploading...
+                {:else}
+                  Upload file
+                {/if}
               </button>
               <input
                 type="file"
@@ -190,7 +218,13 @@
                 onchange={handleFileChange}
                 accept="image/*"
                 class="hidden"
+                disabled={uploading}
               />
+              {#if uploadError}
+                <p class="mt-2 text-xs text-error">{uploadError}</p>
+              {:else if workingHint.assetUrl}
+                <p class="mt-2 text-xs text-success">✓ File uploaded successfully</p>
+              {/if}
             </div>
           </div>
         {:else if workingHint.type === 'audio' || workingHint.type === 'video'}
@@ -209,11 +243,16 @@
             {/if}
 
             <div class="rounded-lg border-2 border-dashed border-base-content/20 bg-base-200/50 p-6 text-center">
-              {#if workingHint.assetUrl}
+              {#if workingHint.assetUrl && !uploading}
                 <p class="mb-3 text-sm text-base-content/70">{workingHint.assetUrl}</p>
               {/if}
-              <button type="button" class="btn btn-primary btn-sm" onclick={handleFileSelect}>
-                Upload file
+              <button type="button" class="btn btn-primary btn-sm" onclick={handleFileSelect} disabled={uploading}>
+                {#if uploading}
+                  <span class="loading loading-spinner loading-sm"></span>
+                  Uploading...
+                {:else}
+                  Upload file
+                {/if}
               </button>
               <input
                 type="file"
@@ -221,7 +260,13 @@
                 onchange={handleFileChange}
                 accept={workingHint.type === 'audio' ? 'audio/*' : 'video/*'}
                 class="hidden"
+                disabled={uploading}
               />
+              {#if uploadError}
+                <p class="mt-2 text-xs text-error">{uploadError}</p>
+              {:else if workingHint.assetUrl}
+                <p class="mt-2 text-xs text-success">✓ File uploaded successfully</p>
+              {/if}
             </div>
           </div>
         {/if}

@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { goto, invalidate } from '$app/navigation';
+  import { goto, invalidate, invalidateAll } from '$app/navigation';
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import { openConfirmDialog } from '$lib/components/confirm-dialog';
@@ -110,8 +110,13 @@
   }
 
   async function handleEditSuccess() {
+    const wasCurrentUser = editingUser ? isCurrentUser(editingUser) : false;
     editingUser = null;
     await refreshData();
+    // If editing current user, invalidate all to refresh session/layout data
+    if (wasCurrentUser) {
+      await invalidateAll();
+    }
     feedback = { type: 'success', message: 'Operator updated successfully.' };
   }
 

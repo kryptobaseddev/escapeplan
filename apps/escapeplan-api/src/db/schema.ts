@@ -149,6 +149,45 @@ export const networkHealth = sqliteTable('network_health', {
   lastChecked: text('last_checked').notNull()
 });
 
+// Logging & Alerting System Tables
+export const systemLogs = sqliteTable('system_logs', {
+  id: text('id').primaryKey(),
+  level: text('level').notNull(), // 'debug' | 'info' | 'warn' | 'error'
+  category: text('category').notNull(), // 'session' | 'auth' | 'system' | 'network' | 'api'
+  message: text('message').notNull(),
+  context: text('context', { mode: 'json' }), // JSON: { sessionId?, userId?, ip?, requestId?, etc }
+  timestamp: text('timestamp').notNull(),
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+export const alerts = sqliteTable('alerts', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id').references(() => sessions.id, { onDelete: 'cascade' }), // NULL for system alerts
+  level: text('level').notNull(), // 'info' | 'warning' | 'critical'
+  category: text('category').notNull(), // 'timer' | 'network' | 'system' | 'session' | 'hint'
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  context: text('context', { mode: 'json' }), // JSON: { gameName?, roomName?, pausedBy?, etc }
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  dismissedAt: text('dismissed_at'),
+  dismissedBy: text('dismissed_by').references(() => operators.id)
+});
+
+export const alertRules = sqliteTable('alert_rules', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  category: text('category').notNull(),
+  level: text('level').notNull(), // 'info' | 'warning' | 'critical'
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  conditions: text('conditions', { mode: 'json' }).notNull(), // JSON: { event, threshold?, etc }
+  titleTemplate: text('title_template').notNull(),
+  messageTemplate: text('message_template').notNull(),
+  autoDismissOn: text('auto_dismiss_on', { mode: 'json' }), // JSON: array of events
+  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
 export const upsertOperators = sql`
 INSERT INTO operators (
   id,

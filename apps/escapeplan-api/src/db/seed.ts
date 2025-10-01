@@ -238,4 +238,74 @@ db.prepare(
    VALUES ('primary', 'EscapePlan Control Network', 'escapeplan_net', 'escape2024', 'Primary operator network and broadcast SSID for in-room displays.', '5GHz/2.4GHz', 36, 'WPA2-PSK', 1, 'offline', 'Awaiting first health check from Pi appliance.', NULL, CURRENT_TIMESTAMP)`
 ).run();
 
-console.log('EscapePlan database initialised with core admin and Pirate Mutany profile.');
+// Seed default alert rules
+const alertRules = [
+  {
+    id: 'game_paused',
+    name: 'game_paused',
+    description: 'Alert when a game timer is paused',
+    category: 'timer',
+    level: 'warning',
+    enabled: 1,
+    conditions: JSON.stringify({ event: 'timer_paused' }),
+    title_template: '⏸ Game Paused',
+    message_template: '{{gameName}} ({{roomName}}) paused at {{time}}',
+    auto_dismiss_on: JSON.stringify(['timer_resume', 'session_complete'])
+  },
+  {
+    id: 'low_time',
+    name: 'low_time',
+    description: 'Alert when timer drops below 5 minutes',
+    category: 'timer',
+    level: 'warning',
+    enabled: 1,
+    conditions: JSON.stringify({
+      event: 'timer_tick',
+      threshold: { remaining_seconds: { lt: 300 } }
+    }),
+    title_template: '⏱ Low Time Remaining',
+    message_template: '{{gameName}} has less than 5 minutes remaining',
+    auto_dismiss_on: JSON.stringify(['session_complete'])
+  },
+  {
+    id: 'excessive_hints',
+    name: 'excessive_hints',
+    description: 'Alert when 3+ hints sent in 5 minutes',
+    category: 'hint',
+    level: 'warning',
+    enabled: 1,
+    conditions: JSON.stringify({
+      event: 'hint_sent',
+      threshold: { count: 3, window_minutes: 5 }
+    }),
+    title_template: '🔔 Excessive Hints',
+    message_template: '{{gameName}}: {{count}} hints in {{window_minutes}} minutes',
+    auto_dismiss_on: null
+  },
+  {
+    id: 'network_offline',
+    name: 'network_offline',
+    description: 'Alert when network status changes to offline',
+    category: 'network',
+    level: 'critical',
+    enabled: 1,
+    conditions: JSON.stringify({
+      event: 'network_status_change',
+      threshold: { status: 'offline' }
+    }),
+    title_template: '🔴 Network Offline',
+    message_template: 'Network controller offline - check connectivity',
+    auto_dismiss_on: JSON.stringify(['network_online'])
+  }
+];
+
+const insertAlertRule = db.prepare(
+  `INSERT INTO alert_rules (id, name, description, category, level, enabled, conditions, title_template, message_template, auto_dismiss_on, created_at, updated_at)
+   VALUES (@id, @name, @description, @category, @level, @enabled, @conditions, @title_template, @message_template, @auto_dismiss_on, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+);
+
+for (const rule of alertRules) {
+  insertAlertRule.run(rule);
+}
+
+console.log('EscapePlan database initialised with core admin, Pirate Mutany profile, and alert rules.');

@@ -266,6 +266,57 @@ export function runMigrations() {
       last_backup_at TEXT,
       recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    CREATE TABLE IF NOT EXISTS system_logs (
+      id TEXT PRIMARY KEY,
+      level TEXT NOT NULL,
+      category TEXT NOT NULL,
+      message TEXT NOT NULL,
+      context TEXT,
+      timestamp TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON system_logs(timestamp DESC);
+    CREATE INDEX IF NOT EXISTS idx_logs_level ON system_logs(level);
+    CREATE INDEX IF NOT EXISTS idx_logs_category ON system_logs(category);
+    CREATE INDEX IF NOT EXISTS idx_logs_created ON system_logs(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS alerts (
+      id TEXT PRIMARY KEY,
+      session_id TEXT REFERENCES sessions(id) ON DELETE CASCADE,
+      level TEXT NOT NULL,
+      category TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      context TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      dismissed_at TEXT,
+      dismissed_by TEXT REFERENCES operators(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_alerts_active ON alerts(dismissed_at) WHERE dismissed_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_alerts_session ON alerts(session_id);
+    CREATE INDEX IF NOT EXISTS idx_alerts_level ON alerts(level);
+    CREATE INDEX IF NOT EXISTS idx_alerts_created ON alerts(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS alert_rules (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT,
+      category TEXT NOT NULL,
+      level TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      conditions TEXT NOT NULL,
+      title_template TEXT NOT NULL,
+      message_template TEXT NOT NULL,
+      auto_dismiss_on TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_alert_rules_enabled ON alert_rules(enabled);
+    CREATE INDEX IF NOT EXISTS idx_alert_rules_category ON alert_rules(category);
   `);
 
   // Ensure new columns exist for legacy databases

@@ -2,6 +2,7 @@
 
 <script lang="ts">
   import { enhance } from '$app/forms';
+  import { invalidateAll } from '$app/navigation';
   import { ROLE_LABELS } from '@escapeplan/contracts';
   import type { OperatorRole, BotttsAvatarConfig } from '@escapeplan/contracts';
   import type { ActionData, PageData } from './$types';
@@ -65,7 +66,19 @@
       </div>
     {/if}
 
-    <form method="POST" action="?/update" use:enhance class="mt-6 grid gap-4 md:grid-cols-2">
+    <form
+      method="POST"
+      action="?/update"
+      use:enhance={() => {
+        return async ({ result, update }) => {
+          await update();
+          if (result.type === 'success') {
+            await invalidateAll();
+          }
+        };
+      }}
+      class="mt-6 grid gap-4 md:grid-cols-2"
+    >
       <input type="hidden" name="avatarConfig" value={JSON.stringify(avatarConfig)} />
 
       <label class="form-control md:col-span-2">

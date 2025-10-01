@@ -25,18 +25,18 @@
   ];
 
   const baseColors = [
-    '0a5b83', '1c799f', '69d2e7', '4a90e2', '2980b9',
-    'f38fa9', 'feca57', 'ff6b6b', 'ee5a6f', 'e67e22',
-    '4ecdc4', '95e1d3', '45b7d1', '1abc9c',
-    '2c3e50', '34495e', '2c2c2c'
+    'ffb300', '1e88e5', '546e7a', '6d4c41', '00acc1',
+    'f4511e', '5e35b1', '43a047', '757575', '3949ab',
+    '039be5', '7cb342', 'c0ca33', 'fb8c00', 'd81b60',
+    '8e24aa', 'e53935', '00897b', 'fdd835'
   ];
 
   const eyesOptions = ['bulging', 'dizzy', 'eva', 'frame1', 'frame2', 'glow', 'happy', 'hearts', 'robocop', 'round', 'roundFrame01', 'roundFrame02', 'sensor', 'shade01'];
   const faceOptions = ['round01', 'round02', 'square01', 'square02', 'square03', 'square04'];
   const mouthOptions = ['bite', 'diagram', 'grill01', 'grill02', 'grill03', 'smile01', 'smile02', 'square01', 'square02'];
   const sidesOptions = ['antenna01', 'antenna02', 'cables01', 'cables02', 'round', 'square', 'squareAssymetric'];
-  const textureOptions = ['camo01', 'camo02', 'circuits', 'dirty01', 'dirty02', 'grunge01', 'grunge02', 'rust01', 'rust02'];
-  const topOptions = ['antenna', 'antennaCrooked', 'antennaDouble', 'bulb01', 'bulb02', 'glowingSides', 'lights', 'radar', 'square'];
+  const textureOptions = ['camo01', 'camo02', 'circuits', 'dirty01', 'dirty02', 'dots', 'grunge01', 'grunge02'];
+  const topOptions = ['antenna', 'antennaCrooked', 'bulb01', 'glowingBulb01', 'glowingBulb02', 'horns', 'lights', 'pyramid', 'radar'];
 
   // Custom color states
   let customBackgroundColor = $state('#ffffff');
