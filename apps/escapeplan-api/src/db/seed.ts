@@ -234,8 +234,8 @@ for (const puzzle of piratePuzzles) {
 }
 
 db.prepare(
-  `INSERT INTO network_profiles (id, name, ssid, description, band, channel, security, broadcast_enabled, status, status_message, details, last_updated)
-   VALUES ('primary', 'EscapePlan Control Network', 'escapeplan_net', 'Primary operator network and broadcast SSID for in-room displays.', '5GHz/2.4GHz', 36, 'WPA2-PSK', 1, 'offline', 'Awaiting first health check from Pi appliance.', NULL, CURRENT_TIMESTAMP)`
+  `INSERT INTO network_profiles (id, name, ssid, password, description, band, channel, security, broadcast_enabled, status, status_message, details, last_updated)
+   VALUES ('primary', 'EscapePlan Control Network', 'escapeplan_net', 'escape2024', 'Primary operator network and broadcast SSID for in-room displays.', '5GHz/2.4GHz', 36, 'WPA2-PSK', 1, 'offline', 'Awaiting first health check from Pi appliance.', NULL, CURRENT_TIMESTAMP)`
 ).run();
 
 console.log('EscapePlan database initialised with core admin and Pirate Mutany profile.');

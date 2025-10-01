@@ -21,6 +21,7 @@
   let games = $state(data.games ?? []);
   let quickStartOpen = $state(false);
   let toast = $state<{ type: 'success' | 'error'; message: string } | null>(null);
+  let alertsModalOpen = $state(false);
 
   let canManageSessions = $derived($page.data.user?.permissions?.includes('manage_sessions') ?? false);
   let canViewNetwork = $derived($page.data.user?.permissions?.includes('view_network') ?? false);
@@ -175,72 +176,49 @@
       <span>{data.dashboardError}</span>
     </div>
   {:else if dashboard}
-    <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <article class="metric-card">
-        <div class="flex items-center justify-between text-xs uppercase tracking-[0.35em] text-base-content/50">
-          <span>Network</span>
-          <span>{formatTime(dashboard.network.lastChecked)}</span>
-        </div>
-        <div class="mt-4 flex items-center justify-between gap-3">
-          <div>
-            <p class="text-lg font-semibold text-base-content">{dashboard.network.ssid ?? 'escapeplan_net'}</p>
-            <p class="mt-1 text-xs text-base-content/60">{dashboard.network.message}</p>
+    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <article class="metric-card p-4">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.4em] text-base-content/40">Network</p>
+        <div class="mt-2 space-y-1">
+          <div class="flex items-center justify-between">
+            <p class="text-base font-semibold text-base-content">{dashboard.network.ssid ?? 'escapeplan_net'}</p>
+            <span
+              class={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${dashboard.network.status === 'online' ? 'bg-success/15 text-success' : dashboard.network.status === 'degraded' ? 'bg-warning/15 text-warning' : 'bg-error/15 text-error'}`}
+            >
+              <span class="inline-flex size-1.5 rounded-full bg-current"></span>
+              {dashboard.network.status}
+            </span>
           </div>
-          <span
-            class={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-medium ${dashboard.network.status === 'online' ? 'bg-success/15 text-success' : dashboard.network.status === 'degraded' ? 'bg-warning/15 text-warning' : 'bg-error/15 text-error'}`}
-          >
-            <span class="inline-flex size-2 rounded-full bg-current"></span>
-            {dashboard.network.status}
-          </span>
+          {#if dashboard.network.password && dashboard.network.broadcastEnabled}
+            <p class="text-xs text-base-content/60">Password: <span class="font-mono font-medium text-base-content">{dashboard.network.password}</span></p>
+          {/if}
+          <p class="text-[10px] text-base-content/40">Broadcast {dashboard.network.broadcastEnabled ? 'enabled' : 'disabled'}</p>
         </div>
-        {#if networkLink}
-          <a class="mt-4 inline-flex items-center gap-2 text-sm font-medium text-primary" href={networkLink}>
-            Review network panel
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4 fill-current">
-              <path d="M5 12h12.586l-3.293-3.293 1.414-1.414L21.414 12l-5.707 5.707-1.414-1.414L17.586 13H5z" />
-            </svg>
-          </a>
-        {/if}
       </article>
 
-      <article class="metric-card">
-        <p class="text-xs font-semibold uppercase tracking-[0.35em] text-base-content/50">Active Sessions</p>
-        <p class="mt-3 text-4xl font-display text-primary">{sessions.length.toString().padStart(2, '0')}</p>
-        <p class="mt-2 text-sm text-base-content/60">Live rooms on deck</p>
+      <article class="metric-card p-4">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.4em] text-base-content/40">Active Sessions</p>
+        <p class="mt-2 text-3xl font-display text-primary">{sessions.length.toString().padStart(2, '0')}</p>
+        <p class="mt-1 text-[10px] text-base-content/40">Live rooms</p>
       </article>
 
-      <article class="metric-card">
-        <p class="text-xs font-semibold uppercase tracking-[0.35em] text-base-content/50">Upcoming bookings</p>
-        <p class="mt-3 text-4xl font-display text-secondary">{bookings.length.toString().padStart(2, '0')}</p>
-        <p class="mt-2 text-sm text-base-content/60">In the next four hours</p>
+      <article class="metric-card p-4">
+        <p class="text-[10px] font-semibold uppercase tracking-[0.4em] text-base-content/40">Upcoming</p>
+        <p class="mt-2 text-3xl font-display text-secondary">{bookings.length.toString().padStart(2, '0')}</p>
+        <p class="mt-1 text-[10px] text-base-content/40">Next 4 hours</p>
       </article>
 
-      <article class="metric-card">
-        <p class="text-xs font-semibold uppercase tracking-[0.35em] text-base-content/50">Alerts</p>
-        <p class="mt-3 text-4xl font-display text-accent">{dashboard.alerts.length.toString().padStart(2, '0')}</p>
-        <p class="mt-2 text-sm text-base-content/60">Action items awaiting review</p>
-      </article>
+      <button
+        type="button"
+        class="metric-card p-4 text-left transition-all hover:border-accent/30 hover:shadow-accent/10 {dashboard.alerts.length > 0 ? 'cursor-pointer' : 'cursor-default'}"
+        onclick={() => { if (dashboard.alerts.length > 0) alertsModalOpen = true; }}
+        disabled={dashboard.alerts.length === 0}
+      >
+        <p class="text-[10px] font-semibold uppercase tracking-[0.4em] text-base-content/40">Alerts</p>
+        <p class="mt-2 text-3xl font-display text-accent">{dashboard.alerts.length.toString().padStart(2, '0')}</p>
+        <p class="mt-1 text-[10px] text-base-content/40">{dashboard.alerts.length > 0 ? 'Click to view' : 'No alerts'}</p>
+      </button>
     </div>
-
-    {#if dashboard.alerts.length}
-      <div class="glass-panel border-white/10 bg-secondary/10 p-5">
-        <header class="flex items-start justify-between gap-4">
-          <div>
-            <p class="text-xs font-semibold uppercase tracking-[0.35em] text-secondary">Alerts</p>
-            <h2 class="mt-1 text-lg font-semibold text-base-content">Immediate attention required</h2>
-          </div>
-          <span class="badge badge-secondary badge-lg">{dashboard.alerts.length}</span>
-        </header>
-        <ul class="mt-4 space-y-2 text-sm text-secondary-content/90">
-          {#each dashboard.alerts as alert}
-            <li class="flex items-baseline gap-2 rounded-lg border border-secondary/20 bg-secondary/10 px-3 py-2">
-              <span class="inline-flex size-1.5 rounded-full bg-secondary"></span>
-              <span>{alert.message}</span>
-            </li>
-          {/each}
-        </ul>
-      </div>
-    {/if}
 
     {#if toast}
       <div
@@ -460,3 +438,38 @@
   onclose={() => (quickStartOpen = false)}
   onsuccess={handleQuickStartSuccess}
 />
+
+{#if alertsModalOpen && dashboard}
+  <dialog class="modal modal-open">
+    <div class="modal-box max-w-2xl">
+      <header class="flex items-start justify-between gap-4">
+        <div>
+          <h3 class="text-lg font-semibold text-base-content">Active Alerts</h3>
+          <p class="mt-1 text-sm text-base-content/60">{dashboard.alerts.length} {dashboard.alerts.length === 1 ? 'alert' : 'alerts'} requiring attention</p>
+        </div>
+        <button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={() => (alertsModalOpen = false)}>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </header>
+      <ul class="mt-4 space-y-2">
+        {#each dashboard.alerts as alert}
+          <li class="rounded-lg border border-base-300 bg-base-200/60 p-3">
+            <div class="flex items-start gap-3">
+              <span class={`mt-1 inline-flex size-2 rounded-full ${alert.level === 'critical' ? 'bg-error' : alert.level === 'warning' ? 'bg-warning' : 'bg-info'}`}></span>
+              <div class="flex-1">
+                <p class="text-sm text-base-content">{alert.message}</p>
+                <p class="mt-1 text-xs text-base-content/40">{new Date(alert.createdAt).toLocaleTimeString()}</p>
+              </div>
+            </div>
+          </li>
+        {/each}
+      </ul>
+      <div class="modal-action">
+        <button type="button" class="btn btn-primary" onclick={() => (alertsModalOpen = false)}>Close</button>
+      </div>
+    </div>
+    <div class="modal-backdrop" onclick={() => (alertsModalOpen = false)}></div>
+  </dialog>
+{/if}

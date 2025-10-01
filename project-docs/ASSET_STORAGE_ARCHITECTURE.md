@@ -420,71 +420,124 @@ MAX_VIDEO_SIZE_MB=50
 ## API Endpoints Summary
 
 ```typescript
-POST   /api/assets/upload              # Upload new asset
-GET    /api/assets/:id                 # Get asset details
-DELETE /api/assets/:id                 # Delete asset
-GET    /api/assets/list                # List assets (with filters)
-POST   /api/assets/link                # Link reusable asset to game
-GET    /api/admin/storage/metrics      # Get storage metrics
-POST   /api/admin/storage/backup       # Trigger manual backup
+✅ POST   /api/assets/upload              # Upload new asset
+✅ DELETE /api/assets/:id                 # Delete asset and file
+✅ GET    /api/assets/list                # List assets (with filters)
+✅ POST   /api/assets/link                # Link reusable asset to game
+✅ GET    /api/admin/storage/metrics      # Get storage metrics
+🚧 POST   /api/admin/storage/backup       # Trigger manual backup (not implemented)
 ```
+
+### Implementation Details
+
+**POST /api/assets/upload**
+- Query params: gameId, assetType, puzzleId?, mediaType?, order?, isReusable?
+- Requires `manage_games` permission
+- Validates MIME type and file size
+- Processes images (compression), extracts video/audio metadata
+- Returns: `{ success, asset: { id, filename, url, size, mimeType, metadata } }`
+
+**GET /api/assets/list**
+- Query params: gameId?, assetType?, mediaType?, isReusable?, search?
+- Requires authentication
+- Returns array of assets with URLs and metadata
+
+**DELETE /api/assets/:id**
+- Requires `manage_games` permission
+- Deletes file from filesystem and database record
+- Updates storage metrics
+- Returns: `{ success: true }`
+
+**POST /api/assets/link**
+- Body: `{ assetId, gameId, usageType, puzzleId? }`
+- Requires `manage_games` permission
+- Creates asset_usage record
+- Returns: `{ success, usage: { id, assetId, gameId, puzzleId, usageType } }`
+
+**GET /api/admin/storage/metrics**
+- Requires authentication
+- Returns: `{ total: { size, files, sizeFormatted }, byType: {...}, byGame: [...], lastBackup, recordedAt }`
 
 ## Implementation Status
 
-### ✅ Completed (Session 26)
+### ✅ Completed (Sessions 26 & 27)
 
+#### Session 26: Foundation
 1. **Database Schema** - `apps/escapeplan-api/src/db/client.ts`
    - ✅ Added `slug` field to `game_puzzles` table (line 273)
-   - ✅ Created `assets` table with full metadata (lines 225-245)
-   - ✅ Created `asset_usage` table for reusable assets (lines 247-257)
-   - ✅ Created `storage_metrics` table for monitoring (lines 259-267)
+   - ✅ Created `assets` table with full metadata (lines 226-242)
+   - ✅ Created `asset_usage` table for reusable assets (lines 248-257)
+   - ✅ Created `storage_metrics` table for monitoring (lines 260-267)
    - ✅ Added indexes for performance
 
 2. **Dependencies Installed**
    - ✅ `@fastify/multipart@^9.2.1` - File upload handling
+   - ✅ `@fastify/static@^8.2.0` - Static file serving
    - ✅ `sharp@^0.34.4` - Image compression
    - ✅ `fluent-ffmpeg@^2.1.3` - Audio/video metadata extraction
    - ✅ `@types/fluent-ffmpeg@^2.1.27` - TypeScript types
 
 3. **Asset Utility Modules**
-   - ✅ `apps/escapeplan-api/src/assets/paths.ts` (147 lines)
+   - ✅ `apps/escapeplan-api/src/assets/paths.ts` (157 lines)
      - Dynamic path resolution for dev/production
      - Filename generation with slug support
      - MIME type validation
      - File size limits
      - Directory management
-   - ✅ `apps/escapeplan-api/src/assets/processing.ts` (147 lines)
+   - ✅ `apps/escapeplan-api/src/assets/processing.ts` (151 lines)
      - Image compression with Sharp
      - FFmpeg metadata extraction
      - Multi-format support
      - Error handling
 
+#### Session 27: Backend Complete
+4. **Upload Handler & API** - `apps/escapeplan-api/src/assets/upload.ts` (484 lines)
+   - ✅ `handleAssetUpload()` - Full upload pipeline with auth, validation, processing
+   - ✅ `getStorageMetrics()` - Formatted metrics retrieval
+   - ✅ `listAssets()` - Filtered asset listing
+   - ✅ `deleteAsset()` - Asset deletion with filesystem cleanup
+   - ✅ `linkReusableAsset()` - Reusable asset linking with usage tracking
+   - ✅ Internal `updateStorageMetrics()` - Automatic metrics updates
+
+5. **API Routes** - `apps/escapeplan-api/src/index.ts`
+   - ✅ Registered @fastify/multipart (lines 325-334)
+   - ✅ Registered @fastify/static (lines 337-345)
+   - ✅ POST /api/assets/upload (lines 780-782)
+   - ✅ GET /api/assets/list (lines 784-806)
+   - ✅ DELETE /api/assets/:id (lines 808-819)
+   - ✅ POST /api/assets/link (lines 821-837)
+   - ✅ GET /api/admin/storage/metrics (lines 839-848)
+
+### ✅ Backend Complete (Session 27)
+
+#### Core Infrastructure
+1. **Upload Endpoint** - `POST /api/assets/upload` ✅
+   - Multipart handler with @fastify/multipart
+   - File type and size validation
+   - Image compression (Sharp) and video/audio metadata (FFmpeg)
+   - Database record creation with slug-based filenames
+   - Automatic storage metrics updates
+
+2. **File Serving** - `GET /api/assets/*` ✅
+   - @fastify/static plugin registered
+   - Dynamic path resolution (dev/prod)
+   - Serves from `/assets/` prefix
+
+3. **Asset Management APIs** ✅
+   - `GET /api/assets/list` - List assets with filters (gameId, assetType, mediaType, isReusable, search)
+   - `DELETE /api/assets/:id` - Delete asset and file from filesystem
+   - `POST /api/assets/link` - Link reusable asset to game with usage tracking
+
+4. **Storage Metrics API** ✅
+   - `GET /api/admin/storage/metrics` - Returns formatted metrics (total, by type, by game)
+   - Automatic metrics collection after uploads/deletes
+   - Human-readable size formatting
+
 ### 🚧 Remaining Work (Next Session)
 
-#### Backend
-1. **Upload Endpoint** - `POST /api/assets/upload`
-   - Implement multipart handler
-   - Validate file types and sizes
-   - Process and save files
-   - Create database records
-   - Update storage metrics
-
-2. **File Serving** - `GET /api/assets/*`
-   - Register @fastify/static plugin
-   - Serve from dynamic path
-   - Add cache headers
-   - Access control
-
-3. **Asset Management APIs**
-   - `GET /api/assets/list` - List assets with filters
-   - `GET /api/assets/:id` - Get asset details
-   - `DELETE /api/assets/:id` - Delete asset
-   - `POST /api/assets/link` - Link reusable asset
-
-4. **Storage Metrics API**
-   - `GET /api/admin/storage/metrics` - Dashboard data
-   - `POST /api/admin/storage/backup` - Manual backup trigger
-   - Implement metrics collection system
+#### Backend (Optional)
+1. **Manual Backup Trigger**
+   - `POST /api/admin/storage/backup` - Trigger manual backup job
 
 #### Frontend
 5. **Asset Upload Component** - `apps/escapeplan-web/src/lib/components/assets/AssetUpload.svelte`

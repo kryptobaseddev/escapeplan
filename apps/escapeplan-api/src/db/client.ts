@@ -204,6 +204,7 @@ export function runMigrations() {
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       ssid TEXT NOT NULL,
+      password TEXT,
       description TEXT,
       band TEXT,
       channel INTEGER,
@@ -288,6 +289,8 @@ export function runMigrations() {
     UPDATE operators SET role = 'manager' WHERE role = 'general_manager';
     UPDATE operators SET role = 'game_master' WHERE role = 'technician';
   `);
+
+  ensureColumn('network_profiles', 'password', 'TEXT');
 
   ensureColumn('games', 'story_intro', 'TEXT');
   ensureColumn('games', 'categories', 'TEXT');

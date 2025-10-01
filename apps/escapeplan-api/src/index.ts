@@ -1,5 +1,8 @@
+import path from 'node:path';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import { Server as SocketServer } from 'socket.io';
 import { z } from 'zod';
 import type {
@@ -46,6 +49,7 @@ import { operators } from './db/schema.js';
 import { eq } from 'drizzle-orm';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
+import { handleAssetUpload, getStorageMetrics, deleteAsset, listAssets, linkReusableAsset } from './assets/upload.js';
 
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
 
@@ -317,6 +321,29 @@ export async function buildServer() {
     origin: webOrigin,
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
+  });
+
+  // Register multipart for file uploads
+  await app.register(multipart, {
+    limits: {
+      fieldNameSize: 100,
+      fieldSize: 1024 * 1024,  // 1MB
+      fields: 10,
+      fileSize: 50 * 1024 * 1024,  // 50MB max file size
+      files: 1,
+      headerPairs: 2000
+    }
+  });
+
+  // Register static file serving for assets
+  const assetBasePath = process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production'
+    ? path.join(process.cwd(), 'data', 'assets')
+    : '/var/lib/escapeplan/assets';
+
+  await app.register(fastifyStatic, {
+    root: assetBasePath,
+    prefix: '/assets/',
+    decorateReply: false
   });
 
   app.get('/health', async () => ({ status: 'ok' }));
@@ -746,6 +773,77 @@ export async function buildServer() {
       } catch (error) {
         request.log.error({ err: error }, 'Failed to update network profile');
         return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    // Asset management routes
+    api.post('/assets/upload', async (request, reply) => {
+      return handleAssetUpload(request, reply);
+    });
+
+    api.get('/assets/list', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      try {
+        const { gameId, assetType, mediaType, isReusable, search } = request.query as {
+          gameId?: string;
+          assetType?: string;
+          mediaType?: string;
+          isReusable?: string;
+          search?: string;
+        };
+        return await listAssets({
+          gameId,
+          assetType,
+          mediaType,
+          isReusable: isReusable === 'true',
+          search
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to list assets');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.delete('/assets/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
+      try {
+        const { id } = request.params as { id: string };
+        return await deleteAsset(id, session.user.id as string, session.user.role);
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to delete asset');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.post('/assets/link', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_games')) return;
+      try {
+        const { assetId, gameId, usageType, puzzleId } = request.body as {
+          assetId: string;
+          gameId: string;
+          usageType: 'thumbnail' | 'room_bg' | 'gallery' | 'puzzle' | 'hint';
+          puzzleId?: string;
+        };
+        return await linkReusableAsset({ assetId, gameId, usageType, puzzleId });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to link asset');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/storage/metrics', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      try {
+        return await getStorageMetrics();
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to get storage metrics');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
       }
     });
 

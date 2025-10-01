@@ -180,6 +180,7 @@ type NetworkProfileRow = {
   id: string;
   name: string;
   ssid: string;
+  password: string | null;
   description: string | null;
   band: string | null;
   channel: number | null;
@@ -261,7 +262,7 @@ function mapOperatorSummary(row: OperatorRow): OperatorSummary {
 }
 
 const networkProfileStmt = sqlite.prepare(
-  `SELECT id, name, ssid, description, band, channel, security, broadcast_enabled, status, status_message, details, last_updated
+  `SELECT id, name, ssid, password, description, band, channel, security, broadcast_enabled, status, status_message, details, last_updated
    FROM network_profiles WHERE id = ? LIMIT 1`
 );
 
@@ -312,6 +313,7 @@ function mapNetworkProfile(row: NetworkProfileRow | undefined): NetworkProfile {
     id: row.id,
     name: row.name,
     ssid: row.ssid,
+    password: row.password ?? undefined,
     description: row.description ?? undefined,
     band: row.band ?? undefined,
     channel: row.channel ?? undefined,
@@ -336,6 +338,7 @@ export function updateNetworkProfile(input: UpdateNetworkProfileRequest): Networ
     id: 'primary',
     name: input.name ?? existing.name,
     ssid: input.ssid ?? existing.ssid,
+    password: input.password ?? existing.password ?? null,
     description: input.description ?? existing.description ?? null,
     band: input.band ?? existing.band ?? null,
     channel: input.channel ?? existing.channel ?? null,
@@ -349,11 +352,12 @@ export function updateNetworkProfile(input: UpdateNetworkProfileRequest): Networ
 
   sqlite
     .prepare(
-      `INSERT INTO network_profiles (id, name, ssid, description, band, channel, security, broadcast_enabled, status, status_message, details, last_updated)
-       VALUES (@id, @name, @ssid, @description, @band, @channel, @security, @broadcast_enabled, @status, @status_message, @details, @last_updated)
+      `INSERT INTO network_profiles (id, name, ssid, password, description, band, channel, security, broadcast_enabled, status, status_message, details, last_updated)
+       VALUES (@id, @name, @ssid, @password, @description, @band, @channel, @security, @broadcast_enabled, @status, @status_message, @details, @last_updated)
        ON CONFLICT(id) DO UPDATE SET
          name = excluded.name,
          ssid = excluded.ssid,
+         password = excluded.password,
          description = excluded.description,
          band = excluded.band,
          channel = excluded.channel,
@@ -1419,6 +1423,8 @@ export function getDashboard(): DashboardResponse {
           : 'Network status available'),
       lastChecked: networkProfile.lastUpdated,
       ssid: networkProfile.ssid,
+      password: networkProfile.password,
+      broadcastEnabled: networkProfile.broadcastEnabled,
       detailsUrl: '/admin/network'
     },
     activeSessions: active.sessions,
@@ -1620,6 +1626,7 @@ export function getBookingsByDate(date: string, scope: 'all' | 'storefront' | 'm
 export function toTimerBroadcast(slug: string, details: GameSessionDetails, narrative?: string): TimerBroadcast {
   return {
     slug,
+    sessionId: details.id,
     gameName: details.gameName,
     roomName: details.roomName,
     narrative,
@@ -1657,10 +1664,10 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
       sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running', recent_alert = NULL WHERE id = ?`).run(sessionId);
       break;
     case 'pause_timer':
-      sqlite.prepare(`UPDATE sessions SET timer_status = 'paused', status = 'paused', recent_alert = 'Timer paused by operator' WHERE id = ?`).run(sessionId);
+      sqlite.prepare(`UPDATE sessions SET timer_status = 'paused', status = 'paused', recent_alert = ? WHERE id = ?`).run(`⏸ Game paused - ${session.gameName}`, sessionId);
       break;
     case 'resume_timer':
-      sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running', recent_alert = 'Timer resumed' WHERE id = ?`).run(sessionId);
+      sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running', recent_alert = NULL WHERE id = ?`).run(sessionId);
       break;
     case 'reset_timer': {
       // Calculate elapsed time before reset
@@ -1677,7 +1684,7 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
            SET timer_status = 'idle',
                timer_remaining_seconds = timer_total_seconds,
                timer_total_elapsed_seconds = ?,
-               recent_alert = 'Timer reset'
+               recent_alert = NULL
            WHERE id = ?`
         ).run(newTotalElapsed, sessionId);
       }
@@ -1693,7 +1700,7 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
         .prepare(`INSERT INTO session_hints (id, session_id, type, message, asset_url, delivered_by, delivered_at) VALUES (?, ?, ?, ?, ?, ?, ?)`)
         .run(`hint-${Date.now()}`, sessionId, medium, message, null, 'Console Operator', nowIso);
       sqlite
-        .prepare(`UPDATE sessions SET hints_used = hints_used + 1, recent_alert = 'New hint delivered' WHERE id = ?`)
+        .prepare(`UPDATE sessions SET hints_used = hints_used + 1 WHERE id = ?`)
         .run(sessionId);
       break;
     }
@@ -1704,7 +1711,6 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
         throw new Error('Puzzle and status required');
       }
       sqlite.prepare(`UPDATE session_puzzles SET status = ? WHERE id = ? AND session_id = ?`).run(status, puzzleId, sessionId);
-      sqlite.prepare(`UPDATE sessions SET recent_alert = 'Puzzle status updated' WHERE id = ?`).run(sessionId);
       break;
     }
     default:
@@ -1782,13 +1788,7 @@ function tickTimers() {
       const updated = getSessionById(session.id);
       if (updated) {
         emitSessionUpdate(updated);
-        emitTimerUpdate({
-          slug: updated.gameSlug ?? "",
-          gameName: updated.gameName,
-          roomName: updated.roomName,
-          timer: updated.timer,
-          background: { type: "image", url: "" }
-        });
+        broadcastTimerSessions(session.id, updated);
       }
     }
 

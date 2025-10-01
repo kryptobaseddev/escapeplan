@@ -161,6 +161,8 @@ export interface DashboardResponse {
     message: string;
     lastChecked: string;
     ssid?: string;
+    password?: string;
+    broadcastEnabled?: boolean;
     detailsUrl?: string;
   };
   activeSessions: ActiveSessionSummary[];
@@ -221,6 +223,7 @@ export interface GameSessionDetails extends ActiveSessionSummary {
 
 export interface TimerBroadcast {
   slug: string;
+  sessionId: string;
   gameName: string;
   roomName: string;
   narrative?: string;
@@ -418,6 +421,7 @@ export interface NetworkProfile {
   id: string;
   name: string;
   ssid: string;
+  password?: string;
   description?: string;
   band?: string;
   channel?: number;
@@ -480,6 +484,7 @@ export interface ApplyNetworkConfigResponse {
 export interface UpdateNetworkProfileRequest {
   name?: string;
   ssid?: string;
+  password?: string;
   description?: string;
   band?: string;
   channel?: number;
