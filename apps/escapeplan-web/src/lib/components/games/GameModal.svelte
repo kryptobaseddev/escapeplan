@@ -61,7 +61,6 @@
   let draggingRoomId = $state<string | null>(null);
   let draggingPuzzleId = $state<string | null>(null);
   let draggingHint = $state<{ puzzleId: string; hintId: string } | null>(null);
-  let bookingCustomFields = $state<BookingCustomField[]>([]);
 
   // Hint modal state
   let hintModalOpen = $state(false);
@@ -87,7 +86,20 @@
 
   type DifficultyOption = (typeof difficultyOptions)[number];
   type BookingCustomField = { label: string; required: boolean };
-  let selectedDifficulty = $state<DifficultyOption>(difficultyOptions[2]);
+
+  // Derived: compute selectedDifficulty from workingGame.difficulty
+  const selectedDifficulty = $derived(
+    difficultyOptions.find((option) => option.value === workingGame.difficulty) ?? difficultyOptions[2]
+  );
+
+  // Derived: compute bookingCustomFields from workingGame.bookingRules
+  const bookingCustomFields = $derived.by(() => {
+    const current = workingGame.bookingRules.customFields;
+    if (!current) {
+      return [];
+    }
+    return current as BookingCustomField[];
+  });
 
   const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -295,26 +307,6 @@
       draggingRoomId = null;
       draggingPuzzleId = null;
       draggingHint = null;
-    }
-  });
-
-  // Effect to sync selectedDifficulty with workingGame.difficulty
-  $effect(() => {
-    const match =
-      difficultyOptions.find((option) => option.value === workingGame.difficulty) ?? difficultyOptions[2];
-    if (selectedDifficulty !== match) {
-      selectedDifficulty = match;
-    }
-  });
-
-  // Effect to sync bookingCustomFields
-  $effect(() => {
-    const current = workingGame.bookingRules.customFields;
-    if (!current) {
-      workingGame.bookingRules.customFields = [];
-      bookingCustomFields = workingGame.bookingRules.customFields;
-    } else {
-      bookingCustomFields = current as BookingCustomField[];
     }
   });
 
