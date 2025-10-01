@@ -61,14 +61,40 @@
     fileInputElement?.click();
   }
 
-  function handleFileChange(event: Event) {
+  async function handleFileChange(event: Event) {
     const target = event.target as HTMLInputElement;
     const file = target.files?.[0];
-    if (file) {
-      // In a real implementation, this would upload to your asset storage
-      // For now, just store the filename as a placeholder
-      workingHint.assetUrl = file.name;
+    if (!file) return;
+
+    // TODO: Get actual gameId and puzzleId from parent component
+    // For now, this will need to be passed as props to HintModal
+    console.warn('File upload not yet implemented - requires gameId and puzzleId props');
+
+    // Placeholder: just store filename for now (will fail on save)
+    // This should be replaced with actual upload once props are added
+    workingHint.assetUrl = file.name;
+
+    /* Future implementation:
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadUrl = `/api/assets/upload?gameId=${gameId}&assetType=hint_media&mediaType=${workingHint.type}&puzzleId=${puzzleId}&order=${workingHint.order || 1}`;
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+
+      if (!response.ok) throw new Error('Upload failed');
+
+      const result = await response.json();
+      workingHint.assetUrl = result.asset.url;
+    } catch (error) {
+      console.error('Asset upload failed:', error);
+      alert('Failed to upload file');
     }
+    */
   }
 
   $: if (!open && initialised) {

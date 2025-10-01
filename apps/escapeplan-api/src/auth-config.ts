@@ -174,6 +174,7 @@ function buildBaseOptions(): BetterAuthOptions {
           role?: string;
           permissions?: unknown;
           archivedAt?: unknown;
+          image?: unknown;
         };
 
         const rawRole = typeof enrichedUser.role === 'string' ? enrichedUser.role : String(enrichedUser.role ?? '');
@@ -186,11 +187,26 @@ function buildBaseOptions(): BetterAuthOptions {
           throw new Error('Account is archived');
         }
 
+        // Transform Better Auth's 'image' field to 'avatarConfig' for frontend compatibility
+        let avatarConfig;
+        if (enrichedUser.image) {
+          try {
+            avatarConfig = typeof enrichedUser.image === 'string'
+              ? JSON.parse(enrichedUser.image)
+              : enrichedUser.image;
+          } catch {
+            avatarConfig = undefined;
+          }
+        }
+
+        const { image, ...userWithoutImage } = enrichedUser;
+
         return {
           user: {
-            ...enrichedUser,
+            ...userWithoutImage,
             role,
-            permissions: mergedPermissions
+            permissions: mergedPermissions,
+            avatarConfig
           },
           session
         };

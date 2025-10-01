@@ -101,8 +101,12 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       });
     }
 
-    // Get game details for slug
-    const game = sqlite.prepare('SELECT id, slug, name FROM games WHERE id = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
+    // Get game details for slug (try by ID first, then by slug)
+    let game = sqlite.prepare('SELECT id, slug, name FROM games WHERE id = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
+    if (!game) {
+      // Try by slug as fallback
+      game = sqlite.prepare('SELECT id, slug, name FROM games WHERE slug = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
+    }
     if (!game) {
       return reply.status(404).send({ statusCode: 404, message: 'Game not found' });
     }

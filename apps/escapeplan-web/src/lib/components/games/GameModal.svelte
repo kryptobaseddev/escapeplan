@@ -781,7 +781,7 @@
                     placeholder="game-url-slug"
                     bind:value={workingGame.slug}
                     required
-                    pattern="^[a-z0-9-]+$"
+                    pattern="^[a-z0-9\-]+$"
                     oninput={handleSlugInput}
                   />
                   <label class="label">
