@@ -169,25 +169,24 @@ if (threshold.count && threshold.window_minutes) {
 
 - [x] Create SESSION_31_NOTES.md tracking file
 - [x] Set up todo list for Phase 2 tasks
-- [ ] Review state.ts lines 1158, 1430-1438
-- [ ] Review applyCommand() function structure
-- [ ] Review realtime.ts emit functions
-- [ ] Import logging utilities in state.ts
-- [ ] Add logging to timer commands (pause, resume, start, stop)
-- [ ] Add logging to hint commands
-- [ ] Add logging to session commands (complete, reset)
-- [ ] Implement alert rule evaluation for timer events
-- [ ] Implement hint count tracking in meetsThreshold()
-- [ ] Update getDashboard() to query alerts table
-- [ ] Uncomment real-time update TODOs in alerts.ts
-- [ ] Test pause/resume flow with alert creation/dismissal
-- [ ] Test low time alert (< 5 min)
-- [ ] Test excessive hints alert (3+ in 5 min)
-- [ ] Test session completion auto-dismiss
-- [ ] Verify system_logs table populated
-- [ ] Verify alerts table records
-- [ ] Update HANDOFF.md to reference SESSION_31
-- [ ] Commit Phase 2 changes
+- [x] Review state.ts lines 1158, 1430-1438
+- [x] Review applyCommand() function structure
+- [x] Review realtime.ts emit functions
+- [x] Import logging utilities in state.ts
+- [x] Add logging to timer commands (pause, resume, start, stop)
+- [x] Add logging to hint commands
+- [x] Add logging to session commands (complete, reset)
+- [x] Implement alert rule evaluation for timer events
+- [x] Implement hint count tracking in meetsThreshold()
+- [x] Update getDashboard() to query alerts table
+- [x] Real-time updates (via state.ts emitDashboardUpdate)
+- [x] Commit Phase 2 changes
+- [ ] Manual testing: pause/resume flow with alert creation/dismissal
+- [ ] Manual testing: low time alert (< 5 min)
+- [ ] Manual testing: excessive hints alert (3+ in 5 min)
+- [ ] Manual testing: session completion auto-dismiss
+- [ ] Manual testing: verify system_logs table populated
+- [ ] Manual testing: verify alerts table records
 
 ## Implementation Summary
 
@@ -322,4 +321,18 @@ Command → logToDatabase() → evaluateAlertRules() → createAlert()
 
 ---
 
-**Session 31 Complete** - Logging & Alerting System Phase 2 (Integration)
+**Session 31 Status:** ✅ COMPLETE (Code) - ⚠️ PENDING (Manual Testing)
+**Commit:** `3031f7c` - feat: Phase 2 of logging & alerting system (Session 31)
+
+**What's Complete:**
+- ✅ All command handlers log and evaluate alert rules
+- ✅ Dashboard queries alerts from database
+- ✅ Hint count tracking implemented
+- ✅ Auto-dismiss on resume/complete
+- ✅ TypeScript compiles without errors
+
+**What's Pending:**
+- ⚠️ Manual testing with running server (see checklist above)
+- ⚠️ User story validation (Phase 5)
+
+**Next Session:** Phase 3 - API Routes (Session 33 - COMPLETED)
