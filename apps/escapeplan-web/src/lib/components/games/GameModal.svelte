@@ -1,5 +1,3 @@
-<svelte:options runes={false} />
-
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type {
@@ -19,19 +17,28 @@
 
   type Mode = 'create' | 'edit';
 
-  export let open = false;
-  export let mode: Mode = 'create';
-  export let action = '';
-  export let game: GameDetails | null = null;
-  export let onclose: (() => void) | undefined;
-  export let onsuccess: (() => void) | undefined;
+  let {
+    open = $bindable(false),
+    mode = 'create',
+    action = '',
+    game = null,
+    onclose = undefined,
+    onsuccess = undefined
+  }: {
+    open?: boolean;
+    mode?: Mode;
+    action?: string;
+    game?: GameDetails | null;
+    onclose?: (() => void) | undefined;
+    onsuccess?: (() => void) | undefined;
+  } = $props();
 
-  let dialogElement: HTMLDialogElement | null = null;
-  let errorMessage: string | null = null;
-  let initialised = false;
+  let dialogElement = $state<HTMLDialogElement | null>(null);
+  let errorMessage = $state<string | null>(null);
+  let initialised = $state(false);
   type TabId = 'details' | 'media' | 'rooms' | 'puzzles' | 'pricing' | 'booking';
 
-  let activeTab: TabId = 'details';
+  let activeTab = $state<TabId>('details');
 
   interface EditableHint extends GameHintDefinition {}
   interface EditablePuzzle extends GamePuzzleDefinition {
@@ -48,18 +55,18 @@
 
   const defaultPricingModel: GamePricingConfig['model'] = 'per_person';
 
-  let workingGame: EditableGame = createEmptyGame();
-  let payloadJson = '';
-  let slugTouched = false;
-  let draggingRoomId: string | null = null;
-  let draggingPuzzleId: string | null = null;
-  let draggingHint: { puzzleId: string; hintId: string } | null = null;
-  let bookingCustomFields: BookingCustomField[] = [];
+  let workingGame = $state<EditableGame>(createEmptyGame());
+  let payloadJson = $state('');
+  let slugTouched = $state(false);
+  let draggingRoomId = $state<string | null>(null);
+  let draggingPuzzleId = $state<string | null>(null);
+  let draggingHint = $state<{ puzzleId: string; hintId: string } | null>(null);
+  let bookingCustomFields = $state<BookingCustomField[]>([]);
 
   // Hint modal state
-  let hintModalOpen = false;
-  let editingHint: { puzzle: EditablePuzzle; hint: EditableHint | null } | null = null;
-  let activeHintTab: Record<string, 'text' | 'image' | 'audio' | 'video'> = {};
+  let hintModalOpen = $state(false);
+  let editingHint = $state<{ puzzle: EditablePuzzle; hint: EditableHint | null } | null>(null);
+  let activeHintTab = $state<Record<string, 'text' | 'image' | 'audio' | 'video'>>({});
 
   const tabItems: Array<{ id: TabId; label: string }> = [
     { id: 'details', label: 'Game Details' },
@@ -80,7 +87,7 @@
 
   type DifficultyOption = (typeof difficultyOptions)[number];
   type BookingCustomField = { label: string; required: boolean };
-  let selectedDifficulty: DifficultyOption = difficultyOptions[2];
+  let selectedDifficulty = $state<DifficultyOption>(difficultyOptions[2]);
 
   const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -268,32 +275,40 @@
     onclose?.();
   }
 
-  $: if (!open && initialised) {
-    initialised = false;
-    resetState();
-  }
+  // Effect to handle modal close
+  $effect(() => {
+    if (!open && initialised) {
+      initialised = false;
+      resetState();
+    }
+  });
 
-  $: if (open && !initialised) {
-    workingGame = game ? cloneGameDetails(game) : createEmptyGame();
-    errorMessage = null;
-    activeTab = 'details';
-    initialised = true;
-    payloadJson = JSON.stringify(buildPayload());
-    slugTouched = mode === 'edit';
-    draggingRoomId = null;
-    draggingPuzzleId = null;
-    draggingHint = null;
-  }
+  // Effect to handle modal open
+  $effect(() => {
+    if (open && !initialised) {
+      workingGame = game ? cloneGameDetails(game) : createEmptyGame();
+      errorMessage = null;
+      activeTab = 'details';
+      initialised = true;
+      payloadJson = JSON.stringify(buildPayload());
+      slugTouched = mode === 'edit';
+      draggingRoomId = null;
+      draggingPuzzleId = null;
+      draggingHint = null;
+    }
+  });
 
-  $: {
+  // Effect to sync selectedDifficulty with workingGame.difficulty
+  $effect(() => {
     const match =
       difficultyOptions.find((option) => option.value === workingGame.difficulty) ?? difficultyOptions[2];
     if (selectedDifficulty !== match) {
       selectedDifficulty = match;
     }
-  }
+  });
 
-  $: {
+  // Effect to sync bookingCustomFields
+  $effect(() => {
     const current = workingGame.bookingRules.customFields;
     if (!current) {
       workingGame.bookingRules.customFields = [];
@@ -301,7 +316,7 @@
     } else {
       bookingCustomFields = current as BookingCustomField[];
     }
-  }
+  });
 
   function addCategory(category: string) {
     const trimmed = category.trim();
@@ -697,9 +712,12 @@
     };
   };
 
-  $: if (open && initialised) {
-    updatePayload();
-  }
+  // Effect to update payload when open and initialised
+  $effect(() => {
+    if (open && initialised) {
+      updatePayload();
+    }
+  });
 </script>
 
 {#if open}
@@ -929,7 +947,7 @@
                     <button
                       type="button"
                       class="btn btn-xs btn-ghost text-error"
-                      on:click={() => {
+                      onclick={() => {
                         workingGame.media.thumbnailAssetId = undefined;
                         updatePayload();
                       }}
@@ -986,7 +1004,7 @@
                     <button
                       type="button"
                       class="btn btn-xs btn-ghost text-error"
-                      on:click={() => {
+                      onclick={() => {
                         workingGame.media.roomScreenAssetId = undefined;
                         updatePayload();
                       }}
@@ -1053,7 +1071,7 @@
                         <button
                           type="button"
                           class="btn btn-circle btn-xs btn-error absolute -right-2 -top-2"
-                          on:click={() => {
+                          onclick={() => {
                             workingGame.media.galleryAssetIds = workingGame.media.galleryAssetIds.filter(id => id !== assetId);
                             updatePayload();
                           }}
