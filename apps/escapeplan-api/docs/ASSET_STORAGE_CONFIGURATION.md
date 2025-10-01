@@ -1,6 +1,18 @@
 # Asset Storage Configuration
 
-This document describes the environment variables and configuration options for the EscapePlan asset storage system.
+**Operational guide** for configuring and using the EscapePlan asset storage system.
+
+For the **architecture and design specification**, see: `project-docs/ASSET_STORAGE_ARCHITECTURE.md`
+
+## Quick Start
+
+**Status:** Backend complete, hint uploads working, game media uploads pending frontend UI.
+
+**Current Configuration:**
+- File size limits: Hardcoded (10MB images, 25MB audio, 50MB video)
+- Storage path (dev): `apps/escapeplan-api/data/assets/`
+- Storage path (prod): `/var/lib/escapeplan/assets/`
+- Backup automation: Not yet implemented
 
 ## Environment Variables
 
@@ -29,26 +41,31 @@ This document describes the environment variables and configuration options for 
 
 ### File Size Limits
 
-#### `MAX_IMAGE_SIZE_MB`
+⚠️ **Note:** Environment variables not yet implemented. Current limits are hardcoded in `apps/escapeplan-api/src/assets/paths.ts`
+
+#### `MAX_IMAGE_SIZE_MB` (Planned)
 - **Type:** Integer
-- **Default:** `10`
+- **Current Default:** `10` (hardcoded)
 - **Description:** Maximum size for image uploads in megabytes
 - **Valid Range:** 1-100
 - **Affected Types:** `image/jpeg`, `image/png`, `image/webp`, `image/gif`
+- **Implementation:** `getMaxFileSize()` in paths.ts
 
-#### `MAX_AUDIO_SIZE_MB`
+#### `MAX_AUDIO_SIZE_MB` (Planned)
 - **Type:** Integer
-- **Default:** `25`
+- **Current Default:** `25` (hardcoded)
 - **Description:** Maximum size for audio uploads in megabytes
 - **Valid Range:** 1-200
 - **Affected Types:** `audio/mpeg`, `audio/wav`, `audio/ogg`, `audio/mp3`
+- **Implementation:** `getMaxFileSize()` in paths.ts
 
-#### `MAX_VIDEO_SIZE_MB`
+#### `MAX_VIDEO_SIZE_MB` (Planned)
 - **Type:** Integer
-- **Default:** `50`
+- **Current Default:** `50` (hardcoded)
 - **Description:** Maximum size for video uploads in megabytes
 - **Valid Range:** 1-500
 - **Affected Types:** `video/mp4`, `video/webm`, `video/quicktime`
+- **Implementation:** `getMaxFileSize()` in paths.ts
 
 ### Backup Configuration
 
@@ -287,8 +304,31 @@ If upgrading from a version that used text-based asset IDs:
 2. New uploads will generate UUIDs as asset IDs
 3. Manual migration script available: `scripts/migrate-asset-ids.sh` (planned)
 
-## Future Enhancements
+## Implementation Status
 
+### ✅ Completed
+- [x] Backend upload API with multipart handling
+- [x] Image compression (Sharp: JPEG 85%, PNG level 8)
+- [x] Video/audio metadata extraction (FFmpeg)
+- [x] Slug-based filename generation
+- [x] Static file serving at `/assets/*`
+- [x] Storage metrics collection
+- [x] Asset listing with filters
+- [x] Asset deletion with cleanup
+- [x] Reusable asset linking
+- [x] Hint file upload UI integration
+- [x] Game/puzzle lookup by ID or slug
+
+### 🚧 In Progress
+- [ ] GameModal media tab upload UI (thumbnails, backgrounds, gallery)
+- [ ] Reusable asset selection interface
+- [ ] Storage dashboard admin page
+
+### 📋 Planned
+- [ ] Environment variable configuration for file size limits
+- [ ] Backup automation scripts
+- [ ] Cron job configuration
+- [ ] Manual backup API endpoint
 - [ ] Automatic image optimization and responsive variants
 - [ ] Video thumbnail extraction
 - [ ] Bulk upload UI
@@ -296,3 +336,25 @@ If upgrading from a version that used text-based asset IDs:
 - [ ] S3-compatible storage backend option
 - [ ] Asset tagging and advanced search
 - [ ] Asset versioning and history
+
+## Changelog
+
+### 2025-09-30 (Session 27+)
+- **Added:** Hint file upload integration in HintModal component
+- **Added:** Upload progress and error state UI
+- **Fixed:** Game lookup now supports both ID and slug parameters
+- **Fixed:** Regex pattern validation for game slugs
+- **Status:** Hint uploads fully functional, game media uploads pending
+
+### 2025-09-30 (Session 27)
+- **Added:** Complete backend API implementation
+- **Added:** All 5 asset management endpoints
+- **Added:** @fastify/multipart and @fastify/static registration
+- **Added:** Image compression and video/audio metadata extraction
+- **Status:** Backend complete, frontend integration started
+
+### 2025-09-29 (Session 26)
+- **Added:** Database schema (assets, asset_usage, storage_metrics tables)
+- **Added:** Utility modules (paths.ts, processing.ts)
+- **Added:** Dependencies (sharp, fluent-ffmpeg, @fastify/multipart)
+- **Status:** Foundation complete

@@ -533,54 +533,93 @@ MAX_VIDEO_SIZE_MB=50
    - Automatic metrics collection after uploads/deletes
    - Human-readable size formatting
 
+#### Session 27+: Frontend Integration (Hint Upload)
+6. **HintModal File Upload** - `apps/escapeplan-web/src/lib/components/games/HintModal.svelte` ✅
+   - ✅ Added props: gameId, puzzleId, hintOrder
+   - ✅ Immediate upload on file selection
+   - ✅ Upload progress indicator (spinner)
+   - ✅ Success/error state display
+   - ✅ Proper URL storage from backend
+   - ✅ Integration with GameModal component
+
 ### 🚧 Remaining Work (Next Session)
 
-#### Backend (Optional)
-1. **Manual Backup Trigger**
-   - `POST /api/admin/storage/backup` - Trigger manual backup job
+#### Frontend (Priority)
+1. **GameModal Media Tab** - Upload for thumbnails, room backgrounds, gallery
+   - Replace text inputs with upload components
+   - Show uploaded asset previews
+   - Add delete/replace buttons
+   - Support reusable asset selection
 
-#### Frontend
-5. **Asset Upload Component** - `apps/escapeplan-web/src/lib/components/assets/AssetUpload.svelte`
+2. **Asset Upload Component** - Reusable drag & drop component
    - Drag & drop zone
    - File picker
    - Upload progress
    - Preview on success
    - Error handling
 
-6. **GameModal Media Tab**
-   - Replace text inputs with upload components
-   - Show uploaded asset previews
-   - Add delete/replace buttons
-   - Support reusable asset selection
-
-7. **Asset Selection UI**
+3. **Asset Selection UI** - Browse and link existing assets
    - Tab: Current Game Assets
    - Tab: Reusable Assets
    - Preview grid
    - Select/link functionality
 
-8. **Storage Dashboard**
+4. **Storage Dashboard** - Admin metrics page
    - Display metrics (total size, file count)
    - Breakdown by type
    - Breakdown by game
    - Last backup status
 
+#### Backend (Optional)
+5. **Manual Backup Trigger**
+   - `POST /api/admin/storage/backup` - Trigger manual backup job
+
 #### DevOps
-9. **Backup Automation**
+6. **Backup Automation**
    - Create `/var/lib/escapeplan/scripts/backup-assets.sh`
    - Configure cron job (daily at 2 AM)
    - Retention policy (7 days)
    - Logging
 
-10. **Environment Configuration**
-    - Add `.env` variables for file size limits
-    - Document configuration options
-    - Production deployment notes
+7. **Environment Configuration**
+   - Add `.env` variables for file size limits (currently hardcoded)
+   - Document configuration options
+   - Production deployment notes
 
-## Next Steps
+## Document Purpose
 
-For the next development session, continue with:
-1. Review this architecture document
-2. Reference SESSION_26_NOTES.md for foundation work completed
-3. Start with upload endpoint implementation
-4. Use Context7 for @fastify/static best practices if needed
+This is the **high-level architecture specification** covering:
+- Database schema design
+- File naming conventions
+- Upload workflow and processing pipeline
+- Storage monitoring approach
+- Security and access control patterns
+
+For **operational configuration and usage**, see: `apps/escapeplan-api/docs/ASSET_STORAGE_CONFIGURATION.md`
+
+## Current Status
+
+**Backend:** ✅ Complete
+**Frontend:** 🟡 Partial (hint upload works, game media uploads pending)
+**DevOps:** 🚧 Pending (backup automation not yet implemented)
+
+## Recent Updates
+
+**Session 27 (2025-09-30):**
+- Completed all backend APIs (upload, list, delete, link, metrics)
+- Registered @fastify/multipart and @fastify/static
+- Implemented image compression and video/audio metadata extraction
+- Added game lookup by both ID and slug
+
+**Session 27+ (2025-09-30):**
+- Integrated hint file upload in HintModal component
+- Upload happens immediately on file selection
+- Proper filename generation per architecture spec
+- Success/error UI states
+- Fixed regex pattern bug in slug validation
+
+## Known Issues
+
+1. **Game editing may show stale data** - Some users report issues editing games with hints. Clear browser cache if experiencing issues.
+2. **No environment variables yet** - File size limits are hardcoded (10MB images, 25MB audio, 50MB video)
+3. **No backup automation** - Manual backups must be performed via filesystem tools
