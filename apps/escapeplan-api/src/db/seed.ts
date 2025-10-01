@@ -300,7 +300,7 @@ const alertRules = [
 ];
 
 const insertAlertRule = db.prepare(
-  `INSERT INTO alert_rules (id, name, description, category, level, enabled, conditions, title_template, message_template, auto_dismiss_on, created_at, updated_at)
+  `INSERT OR REPLACE INTO alert_rules (id, name, description, category, level, enabled, conditions, title_template, message_template, auto_dismiss_on, created_at, updated_at)
    VALUES (@id, @name, @description, @category, @level, @enabled, @conditions, @title_template, @message_template, @auto_dismiss_on, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 );
 

@@ -40,8 +40,7 @@ export function createAlert(options: CreateAlertOptions): string {
     level: options.level
   });
 
-  // TODO: Emit dashboard update when realtime module is integrated
-  // emitDashboardUpdate(getDashboard());
+  // Note: Dashboard updates are emitted by the caller (state.ts) to avoid circular dependencies
 
   return id;
 }
@@ -63,8 +62,7 @@ export function dismissAlert(alertId: string, operatorId: string): void {
     dismissedBy: operatorId
   });
 
-  // TODO: Emit dashboard update when realtime module is integrated
-  // emitDashboardUpdate(getDashboard());
+  // Note: Dashboard updates are emitted by the caller to avoid circular dependencies
 }
 
 /**
@@ -157,7 +155,21 @@ export function evaluateAlertRules(event: string, context: any): void {
 function meetsThreshold(threshold: any, context: any): boolean {
   // Handle count-based thresholds (e.g., excessive hints)
   if (threshold.count !== undefined && threshold.window_minutes !== undefined) {
-    // This requires historical data - for now, we'll check if count is in context
+    // Query session_hints table for hint count in time window
+    if (context.sessionId) {
+      const cutoffTime = new Date(Date.now() - threshold.window_minutes * 60000).toISOString();
+      const result = sqlite.prepare(
+        `SELECT COUNT(*) as count FROM session_hints
+         WHERE session_id = ? AND delivered_at > ?`
+      ).get(context.sessionId, cutoffTime) as { count: number };
+
+      // Update context with actual count for use in alert message
+      context.count = result.count;
+      context.window_minutes = threshold.window_minutes;
+
+      return result.count >= threshold.count;
+    }
+    // Fallback: check if count is provided in context
     if (context.count !== undefined) {
       return context.count >= threshold.count;
     }
@@ -206,13 +218,26 @@ function interpolateTemplate(template: string, context: any): string {
   });
 }
 
+export interface AlertRow {
+  id: string;
+  session_id: string | null;
+  level: string;
+  category: string;
+  title: string;
+  message: string;
+  context: string | null;
+  created_at: string;
+  dismissed_at: string | null;
+  dismissed_by: string | null;
+}
+
 /**
  * Get all active alerts
  */
-export function getActiveAlerts() {
+export function getActiveAlerts(): AlertRow[] {
   return sqlite.prepare(
     `SELECT * FROM alerts WHERE dismissed_at IS NULL ORDER BY created_at DESC`
-  ).all();
+  ).all() as AlertRow[];
 }
 
 /**

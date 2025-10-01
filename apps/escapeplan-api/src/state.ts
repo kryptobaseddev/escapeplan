@@ -7,6 +7,13 @@ import {
   emitSessionUpdate,
   emitTimerUpdate
 } from './realtime.js';
+import {
+  logToDatabase,
+  evaluateAlertRules,
+  dismissAlertsBySession,
+  autoDismissAlerts,
+  getActiveAlerts
+} from './logging/index.js';
 import type {
   ActiveSessionsResponse,
   BookingCalendarResponse,
@@ -1428,14 +1435,15 @@ export function getDashboard(): DashboardResponse {
       detailsUrl: '/admin/network'
     },
     activeSessions: active.sessions,
-    alerts: active.sessions
-      .filter((s) => s.recentAlert)
-      .map((s) => ({
-        id: `${s.id}-alert`,
-        level: 'warning',
-        message: s.recentAlert!,
-        createdAt: new Date().toISOString()
-      })),
+    alerts: getActiveAlerts().map((alert) => ({
+      id: alert.id,
+      sessionId: alert.session_id ?? undefined,
+      level: alert.level as any,
+      category: alert.category as any,
+      title: alert.title,
+      message: alert.message,
+      createdAt: alert.created_at
+    })),
     upcomingBookings: upcoming
   };
 }
@@ -1662,12 +1670,34 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
   switch (command.command) {
     case 'start_timer':
       sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running', recent_alert = NULL WHERE id = ?`).run(sessionId);
+      logToDatabase('info', 'session', 'Timer started', {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName
+      });
       break;
     case 'pause_timer':
       sqlite.prepare(`UPDATE sessions SET timer_status = 'paused', status = 'paused', recent_alert = ? WHERE id = ?`).run(`⏸ Game paused - ${session.gameName}`, sessionId);
+      logToDatabase('info', 'session', 'Timer paused by operator', {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName
+      });
+      evaluateAlertRules('timer_paused', {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName,
+        time: new Date().toLocaleTimeString()
+      });
       break;
     case 'resume_timer':
       sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running', recent_alert = NULL WHERE id = ?`).run(sessionId);
+      logToDatabase('info', 'session', 'Timer resumed by operator', {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName
+      });
+      autoDismissAlerts('timer_resume', { sessionId });
       break;
     case 'reset_timer': {
       // Calculate elapsed time before reset
@@ -1688,6 +1718,11 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
            WHERE id = ?`
         ).run(newTotalElapsed, sessionId);
       }
+      logToDatabase('info', 'session', 'Timer reset by operator', {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName
+      });
       break;
     }
     case 'send_hint': {
@@ -1702,6 +1737,17 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
       sqlite
         .prepare(`UPDATE sessions SET hints_used = hints_used + 1 WHERE id = ?`)
         .run(sessionId);
+      logToDatabase('info', 'session', `Hint sent: ${message.substring(0, 50)}`, {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName,
+        medium
+      });
+      evaluateAlertRules('hint_sent', {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName
+      });
       break;
     }
     case 'mark_puzzle': {
@@ -1787,6 +1833,26 @@ function tickTimers() {
     for (const session of runningSessions) {
       const updated = getSessionById(session.id);
       if (updated) {
+        // Evaluate low time alert
+        if (updated.timer.remainingSeconds > 0 && updated.timer.remainingSeconds < 300) {
+          evaluateAlertRules('timer_tick', {
+            sessionId: updated.id,
+            gameName: updated.gameName,
+            roomName: updated.roomName,
+            remaining_seconds: updated.timer.remainingSeconds
+          });
+        }
+
+        // If timer completed, dismiss all session alerts
+        if (updated.timer.status === 'completed') {
+          dismissAlertsBySession(updated.id, 'Session completed');
+          logToDatabase('info', 'session', 'Session completed - timer expired', {
+            sessionId: updated.id,
+            gameName: updated.gameName,
+            roomName: updated.roomName
+          });
+        }
+
         emitSessionUpdate(updated);
         broadcastTimerSessions(session.id, updated);
       }
