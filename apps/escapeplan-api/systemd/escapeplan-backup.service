@@ -1,0 +1,40 @@
+[Unit]
+Description=EscapePlan Storage Backup
+Documentation=https://github.com/yourorg/escapeplan
+After=network.target escapeplan-api.service
+
+[Service]
+Type=oneshot
+User=escapeplan
+Group=escapeplan
+WorkingDirectory=/var/lib/escapeplan
+
+# Environment
+Environment=NODE_ENV=production
+Environment=ESCAPEPLAN_DATA_DIR=/var/lib/escapeplan
+Environment=ESCAPEPLAN_BACKUP_DIR=/var/backups/escapeplan
+Environment=BACKUP_RETENTION_DAYS=7
+
+# Execute backup script
+ExecStart=/usr/local/bin/escapeplan-backup
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=escapeplan-backup
+
+# Hardening
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/escapeplan /var/backups/escapeplan
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

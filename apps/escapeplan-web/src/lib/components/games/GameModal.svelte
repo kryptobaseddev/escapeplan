@@ -14,6 +14,8 @@
   } from '@escapeplan/contracts';
   import type { SubmitFunction } from '@sveltejs/kit';
   import HintModal from './HintModal.svelte';
+  import AssetUpload from '../assets/AssetUpload.svelte';
+  import AssetBrowser from '../assets/AssetBrowser.svelte';
 
   type Mode = 'create' | 'edit';
 
@@ -918,42 +920,179 @@
               </label>
             </div>
           {:else if activeTab === 'media'}
-            <div class="grid gap-5 md:grid-cols-2">
-              <label class="form-control">
-                <span class="label-text">Thumbnail asset ID</span>
-                <input
-                  class="input input-bordered"
-                  bind:value={workingGame.media.thumbnailAssetId}
-                  placeholder="e.g. asset-thumb-01"
-                  oninput={markDirty}
-                />
-              </label>
-              <label class="form-control">
-                <span class="label-text">Room display background asset ID</span>
-                <input
-                  class="input input-bordered"
-                  bind:value={workingGame.media.roomScreenAssetId}
-                  placeholder="e.g. asset-room-bg"
-                  oninput={markDirty}
-                />
-              </label>
-              <label class="form-control md:col-span-2">
-                <span class="label-text">Gallery asset IDs</span>
-                <textarea
-                  class="textarea textarea-bordered"
-                  rows={3}
-                  placeholder="Enter one asset ID per line"
-                  value={workingGame.media.galleryAssetIds.join('\n')}
-                  oninput={(event) => {
-                    const value = (event.currentTarget as HTMLTextAreaElement).value;
-                    workingGame.media.galleryAssetIds = value
-                      .split(/\r?\n/)
-                      .map((entry) => entry.trim())
-                      .filter(Boolean);
+            <div class="space-y-6">
+              <!-- Thumbnail -->
+              <section class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-base font-semibold text-base-content">Game Thumbnail</h3>
+                  {#if workingGame.media.thumbnailAssetId}
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-ghost text-error"
+                      on:click={() => {
+                        workingGame.media.thumbnailAssetId = undefined;
+                        updatePayload();
+                      }}
+                    >
+                      Remove
+                    </button>
+                  {/if}
+                </div>
+                {#if workingGame.media.thumbnailAssetId}
+                  <div class="rounded-xl border border-white/10 bg-base-100/70 p-3">
+                    <div class="flex items-center gap-3">
+                      <div class="h-16 w-16 rounded-lg bg-base-200 flex items-center justify-center overflow-hidden">
+                        <img src={`/api/assets/${workingGame.media.thumbnailAssetId}`} alt="Thumbnail" class="h-full w-full object-cover" />
+                      </div>
+                      <div class="flex-1">
+                        <p class="text-sm font-medium text-base-content">{workingGame.media.thumbnailAssetId}</p>
+                        <p class="text-xs text-base-content/60">Thumbnail image</p>
+                      </div>
+                    </div>
+                  </div>
+                {:else}
+                  <AssetUpload
+                    gameId={workingGame.slug || 'temp'}
+                    assetType="thumbnail"
+                    accept="image/*"
+                    maxSizeMB={5}
+                    onSuccess={(asset) => {
+                      workingGame.media.thumbnailAssetId = asset.id;
+                      updatePayload();
+                    }}
+                  />
+                {/if}
+                <details class="collapse collapse-arrow bg-base-200/50">
+                  <summary class="collapse-title text-sm font-medium">Or browse existing assets</summary>
+                  <div class="collapse-content">
+                    <AssetBrowser
+                      gameId={workingGame.slug}
+                      assetType="thumbnail"
+                      selectedAssetId={workingGame.media.thumbnailAssetId}
+                      onSelect={(asset) => {
+                        workingGame.media.thumbnailAssetId = asset.id;
+                        updatePayload();
+                      }}
+                    />
+                  </div>
+                </details>
+              </section>
+
+              <!-- Room Background -->
+              <section class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-base font-semibold text-base-content">Room Display Background</h3>
+                  {#if workingGame.media.roomScreenAssetId}
+                    <button
+                      type="button"
+                      class="btn btn-xs btn-ghost text-error"
+                      on:click={() => {
+                        workingGame.media.roomScreenAssetId = undefined;
+                        updatePayload();
+                      }}
+                    >
+                      Remove
+                    </button>
+                  {/if}
+                </div>
+                {#if workingGame.media.roomScreenAssetId}
+                  <div class="rounded-xl border border-white/10 bg-base-100/70 p-3">
+                    <div class="flex items-center gap-3">
+                      <div class="h-16 w-24 rounded-lg bg-base-200 flex items-center justify-center overflow-hidden">
+                        <img src={`/api/assets/${workingGame.media.roomScreenAssetId}`} alt="Room background" class="h-full w-full object-cover" />
+                      </div>
+                      <div class="flex-1">
+                        <p class="text-sm font-medium text-base-content">{workingGame.media.roomScreenAssetId}</p>
+                        <p class="text-xs text-base-content/60">Room background</p>
+                      </div>
+                    </div>
+                  </div>
+                {:else}
+                  <AssetUpload
+                    gameId={workingGame.slug || 'temp'}
+                    assetType="room_background"
+                    accept="image/*,video/*"
+                    maxSizeMB={25}
+                    onSuccess={(asset) => {
+                      workingGame.media.roomScreenAssetId = asset.id;
+                      updatePayload();
+                    }}
+                  />
+                {/if}
+                <details class="collapse collapse-arrow bg-base-200/50">
+                  <summary class="collapse-title text-sm font-medium">Or browse existing assets</summary>
+                  <div class="collapse-content">
+                    <AssetBrowser
+                      gameId={workingGame.slug}
+                      assetType="room_background"
+                      selectedAssetId={workingGame.media.roomScreenAssetId}
+                      onSelect={(asset) => {
+                        workingGame.media.roomScreenAssetId = asset.id;
+                        updatePayload();
+                      }}
+                    />
+                  </div>
+                </details>
+              </section>
+
+              <!-- Gallery -->
+              <section class="space-y-3">
+                <div class="flex items-center justify-between">
+                  <h3 class="text-base font-semibold text-base-content">Gallery Images</h3>
+                  <span class="text-xs text-base-content/60">
+                    {workingGame.media.galleryAssetIds?.length || 0} images
+                  </span>
+                </div>
+                {#if workingGame.media.galleryAssetIds && workingGame.media.galleryAssetIds.length > 0}
+                  <div class="grid gap-3 sm:grid-cols-3">
+                    {#each workingGame.media.galleryAssetIds as assetId, index (assetId)}
+                      <div class="relative rounded-lg border border-white/10 bg-base-100/70 p-2">
+                        <div class="aspect-video rounded bg-base-200 overflow-hidden">
+                          <img src={`/api/assets/${assetId}`} alt="Gallery {index + 1}" class="h-full w-full object-cover" />
+                        </div>
+                        <button
+                          type="button"
+                          class="btn btn-circle btn-xs btn-error absolute -right-2 -top-2"
+                          on:click={() => {
+                            workingGame.media.galleryAssetIds = workingGame.media.galleryAssetIds.filter(id => id !== assetId);
+                            updatePayload();
+                          }}
+                        >
+                          <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
+                <AssetUpload
+                  gameId={workingGame.slug || 'temp'}
+                  assetType="gallery"
+                  accept="image/*"
+                  maxSizeMB={5}
+                  onSuccess={(asset) => {
+                    workingGame.media.galleryAssetIds = [...(workingGame.media.galleryAssetIds || []), asset.id];
                     updatePayload();
                   }}
-                ></textarea>
-              </label>
+                />
+                <details class="collapse collapse-arrow bg-base-200/50">
+                  <summary class="collapse-title text-sm font-medium">Or browse existing assets</summary>
+                  <div class="collapse-content">
+                    <AssetBrowser
+                      gameId={workingGame.slug}
+                      assetType="gallery"
+                      onSelect={(asset) => {
+                        const currentIds = workingGame.media.galleryAssetIds || [];
+                        if (!currentIds.includes(asset.id)) {
+                          workingGame.media.galleryAssetIds = [...currentIds, asset.id];
+                          updatePayload();
+                        }
+                      }}
+                    />
+                  </div>
+                </details>
+              </section>
             </div>
           {:else if activeTab === 'rooms'}
             <div class="space-y-4">
