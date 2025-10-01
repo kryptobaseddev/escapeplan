@@ -9,7 +9,8 @@
     "build": "tsup src/index.ts --format esm --out-dir dist",
     "lint": "tsc --noEmit",
     "test": "vitest",
-    "db:seed": "tsx src/db/seed.ts"
+    "db:seed": "tsx src/db/seed.ts",
+    "db:seed:fresh": "tsx src/db/seed.ts --clear"
   },
   "dependencies": {
     "@dicebear/bottts": "^9.2.4",

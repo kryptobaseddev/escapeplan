@@ -92,12 +92,15 @@ async function processImage(buffer: Buffer, mimeType: string): Promise<{buffer: 
 
 /**
  * Extract metadata from audio/video file using ffmpeg
+ * Returns empty object if ffprobe is not available
  */
 function extractMediaMetadata(filePath: string): Promise<Record<string, any>> {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) {
-        reject(err);
+        // If ffprobe not found, return empty metadata instead of failing
+        console.warn('ffprobe not available, skipping media metadata extraction:', err.message);
+        resolve({});
         return;
       }
 

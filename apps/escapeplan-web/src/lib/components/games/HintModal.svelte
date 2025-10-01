@@ -64,8 +64,8 @@
     fileInputElement?.click();
   }
 
-  let uploading = $state(false);
-  let uploadError = $state<string | null>(null);
+  let uploading = false;
+  let uploadError: string | null = null;
 
   async function handleFileChange(event: Event) {
     const target = event.target as HTMLInputElement;

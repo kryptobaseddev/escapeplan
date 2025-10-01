@@ -11,6 +11,7 @@
     SaveGameRequest
   } from '@escapeplan/contracts';
   import type { SubmitFunction } from '@sveltejs/kit';
+  import { apiFetch } from '$lib/api/client';
   import HintModal from './HintModal.svelte';
   import AssetUpload from '../assets/AssetUpload.svelte';
   import AssetBrowser from '../assets/AssetBrowser.svelte';
@@ -66,6 +67,9 @@
   let hintModalOpen = $state(false);
   let editingHint = $state<{ puzzle: EditablePuzzle; hint: EditableHint | null } | null>(null);
   let activeHintTab = $state<Record<string, 'text' | 'image' | 'audio' | 'video'>>({});
+
+  // Asset preview cache - maps asset IDs to asset objects for immediate preview
+  let assetCache = $state<Record<string, { url: string; filename: string }>>({});
 
   const tabItems: Array<{ id: TabId; label: string }> = [
     { id: 'details', label: 'Game Details' },
@@ -167,7 +171,7 @@
       categories: [...(details.categories ?? [])],
       minPlayers: details.minPlayers,
       maxPlayers: details.maxPlayers,
-      pricePerPlayerCents: details.pricePerPlayerCents,
+      pricePerPlayerCents: details.pricePerPlayerCents / 100,
       resourcesRequired: details.resourcesRequired,
       validationNotes: details.validationNotes ?? '',
       rooms: details.rooms.map((room) => ({ ...room })),
@@ -179,9 +183,9 @@
       pricing: details.pricing
         ? {
             model: details.pricing.model,
-            tiers: details.pricing.tiers ? details.pricing.tiers.map((tier) => ({ ...tier })) : [],
-            deposit: details.pricing.deposit ? { ...details.pricing.deposit } : undefined,
-            discounts: details.pricing.discounts ? details.pricing.discounts.map((discount) => ({ ...discount })) : []
+            tiers: details.pricing.tiers ? details.pricing.tiers.map((tier) => ({ ...tier, priceCents: tier.priceCents / 100 })) : [],
+            deposit: details.pricing.deposit ? { ...details.pricing.deposit, amountCents: details.pricing.deposit.amountCents ? details.pricing.deposit.amountCents / 100 : null } : undefined,
+            discounts: details.pricing.discounts ? details.pricing.discounts.map((discount) => ({ ...discount, amountOffCents: discount.amountOffCents ? discount.amountOffCents / 100 : null })) : []
           }
         : {
             model: defaultPricingModel,
@@ -214,7 +218,6 @@
   function createEmptyRoom(): EditableRoom {
     return {
       id: uid('room'),
-      uuid: uid('room'),
       name: '',
       description: '',
       slug: '',
@@ -236,7 +239,6 @@
   function createEmptyPuzzle(): EditablePuzzle {
     return {
       id: uid('puzzle'),
-      uuid: uid('puzzle'),
       title: '',
       description: '',
       solution: '',
@@ -287,6 +289,34 @@
     onclose?.();
   }
 
+  // Fetch asset details by ID
+  async function fetchAsset(assetId: string) {
+    if (assetCache[assetId]) return; // Already cached
+    try {
+      const response = await apiFetch<{ asset: { id: string; url: string; filename: string } }>(
+        fetch,
+        `/assets/${assetId}`,
+        { credentials: 'include' }
+      );
+      assetCache[assetId] = { url: response.asset.url, filename: response.asset.filename };
+    } catch (err) {
+      console.error(`Failed to fetch asset ${assetId}:`, err);
+    }
+  }
+
+  // Fetch all assets referenced in the game
+  async function fetchGameAssets() {
+    const assetIds: string[] = [];
+
+    // Collect all asset IDs from media config
+    if (workingGame.media.thumbnailAssetId) assetIds.push(workingGame.media.thumbnailAssetId);
+    if (workingGame.media.roomScreenAssetId) assetIds.push(workingGame.media.roomScreenAssetId);
+    if (workingGame.media.galleryAssetIds) assetIds.push(...workingGame.media.galleryAssetIds);
+
+    // Fetch all assets in parallel
+    await Promise.all(assetIds.map(fetchAsset));
+  }
+
   // Effect to handle modal close
   $effect(() => {
     if (!open && initialised) {
@@ -307,6 +337,11 @@
       draggingRoomId = null;
       draggingPuzzleId = null;
       draggingHint = null;
+
+      // Fetch assets if editing existing game
+      if (mode === 'edit' && game) {
+        fetchGameAssets();
+      }
     }
   });
 
@@ -550,7 +585,6 @@
   function buildPayload(): SaveGameRequest {
     const cleanRooms = workingGame.rooms.map((room, index) => ({
       id: room.id || uid('room'),
-      uuid: room.uuid || uid('room'),
       name: room.name,
       description: room.description || undefined,
       slug: room.slug ? room.slug : undefined,
@@ -561,7 +595,6 @@
 
     const cleanPuzzles = workingGame.puzzles.map((puzzle, index) => ({
       id: puzzle.id || uid('puzzle'),
-      uuid: puzzle.uuid || uid('puzzle'),
       title: puzzle.title,
       description: puzzle.description || undefined,
       solution: puzzle.solution || undefined,
@@ -591,7 +624,7 @@
           tiers: workingGame.pricing.tiers?.map((tier) => ({
             id: tier.id || uid('tier'),
             label: tier.label,
-            priceCents: tier.priceCents ?? 0,
+            priceCents: Math.round((tier.priceCents ?? 0) * 100),
             minPlayers: tier.minPlayers ?? null,
             maxPlayers: tier.maxPlayers ?? null
           })) ?? [],
@@ -599,13 +632,13 @@
             ? {
                 required: Boolean(workingGame.pricing.deposit.required),
                 type: workingGame.pricing.deposit.type,
-                amountCents: workingGame.pricing.deposit.amountCents ?? null
+                amountCents: workingGame.pricing.deposit.amountCents ? Math.round(workingGame.pricing.deposit.amountCents * 100) : null
               }
             : undefined,
           discounts: workingGame.pricing.discounts?.map((discount) => ({
             code: discount.code,
             percentOff: discount.percentOff ?? null,
-            amountOffCents: discount.amountOffCents ?? null,
+            amountOffCents: discount.amountOffCents ? Math.round(discount.amountOffCents * 100) : null,
             expiresAt: discount.expiresAt ?? null,
             notes: discount.notes ?? null
           })) ?? []
@@ -639,7 +672,7 @@
       categories: workingGame.categories.map((category) => category.trim()).filter(Boolean),
       minPlayers: Number(workingGame.minPlayers) || 1,
       maxPlayers: Number(workingGame.maxPlayers) || 1,
-      pricePerPlayerCents: Number(workingGame.pricePerPlayerCents) || 0,
+      pricePerPlayerCents: Math.round((Number(workingGame.pricePerPlayerCents) || 0) * 100),
       resourcesRequired: Number(workingGame.resourcesRequired) || 1,
       validationNotes: workingGame.validationNotes?.trim() || undefined,
       rooms: cleanRooms,
@@ -667,10 +700,6 @@
     }
     if (workingGame.puzzles.length === 0) {
       return 'Add at least one puzzle before saving.';
-    }
-    const puzzleMissingHint = workingGame.puzzles.find((puzzle) => (puzzle.hints?.length ?? 0) === 0);
-    if (puzzleMissingHint) {
-      return `Puzzle "${puzzleMissingHint.title || 'Untitled'}" needs at least one hint.`;
     }
     if ((workingGame.pricing.tiers?.length ?? 0) === 0) {
       return 'Add at least one pricing tier.';
@@ -878,8 +907,8 @@
               </div>
               <div class="grid gap-4 md:grid-cols-2">
                 <label class="form-control">
-                  <span class="label-text">Base price per player (cents)</span>
-                  <input class="input input-bordered" type="number" min="0" step="50" bind:value={workingGame.pricePerPlayerCents} oninput={markDirty} />
+                  <span class="label-text">Base price per player ($)</span>
+                  <input class="input input-bordered" type="number" min="0" step="0.01" bind:value={workingGame.pricePerPlayerCents} oninput={markDirty} />
                 </label>
                 <label class="form-control">
                   <span class="label-text">Resources required (staff)</span>
@@ -949,13 +978,20 @@
                   {/if}
                 </div>
                 {#if workingGame.media.thumbnailAssetId}
+                  {@const cachedAsset = assetCache[workingGame.media.thumbnailAssetId]}
                   <div class="rounded-xl border border-white/10 bg-base-100/70 p-3">
                     <div class="flex items-center gap-3">
                       <div class="h-16 w-16 rounded-lg bg-base-200 flex items-center justify-center overflow-hidden">
-                        <img src={`/api/assets/${workingGame.media.thumbnailAssetId}`} alt="Thumbnail" class="h-full w-full object-cover" />
+                        {#if cachedAsset?.url}
+                          <img src={cachedAsset.url} alt="Thumbnail" class="h-full w-full object-cover" />
+                        {:else}
+                          <svg class="h-8 w-8 text-base-content/30" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        {/if}
                       </div>
                       <div class="flex-1">
-                        <p class="text-sm font-medium text-base-content">{workingGame.media.thumbnailAssetId}</p>
+                        <p class="text-sm font-medium text-base-content">{cachedAsset?.filename || workingGame.media.thumbnailAssetId}</p>
                         <p class="text-xs text-base-content/60">Thumbnail image</p>
                       </div>
                     </div>
@@ -968,6 +1004,7 @@
                     maxSizeMB={5}
                     onSuccess={(asset) => {
                       workingGame.media.thumbnailAssetId = asset.id;
+                      assetCache[asset.id] = { url: asset.url, filename: asset.filename };
                       updatePayload();
                     }}
                   />
@@ -978,9 +1015,10 @@
                     <AssetBrowser
                       gameId={workingGame.slug}
                       assetType="thumbnail"
-                      selectedAssetId={workingGame.media.thumbnailAssetId}
+                      selectedAssetId={workingGame.media.thumbnailAssetId ?? undefined}
                       onSelect={(asset) => {
                         workingGame.media.thumbnailAssetId = asset.id;
+                        assetCache[asset.id] = { url: asset.url, filename: asset.filename };
                         updatePayload();
                       }}
                     />
@@ -1006,13 +1044,20 @@
                   {/if}
                 </div>
                 {#if workingGame.media.roomScreenAssetId}
+                  {@const cachedAsset = assetCache[workingGame.media.roomScreenAssetId]}
                   <div class="rounded-xl border border-white/10 bg-base-100/70 p-3">
                     <div class="flex items-center gap-3">
                       <div class="h-16 w-24 rounded-lg bg-base-200 flex items-center justify-center overflow-hidden">
-                        <img src={`/api/assets/${workingGame.media.roomScreenAssetId}`} alt="Room background" class="h-full w-full object-cover" />
+                        {#if cachedAsset?.url}
+                          <img src={cachedAsset.url} alt="Room background" class="h-full w-full object-cover" />
+                        {:else}
+                          <svg class="h-8 w-8 text-base-content/30" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                        {/if}
                       </div>
                       <div class="flex-1">
-                        <p class="text-sm font-medium text-base-content">{workingGame.media.roomScreenAssetId}</p>
+                        <p class="text-sm font-medium text-base-content">{cachedAsset?.filename || workingGame.media.roomScreenAssetId}</p>
                         <p class="text-xs text-base-content/60">Room background</p>
                       </div>
                     </div>
@@ -1025,6 +1070,7 @@
                     maxSizeMB={25}
                     onSuccess={(asset) => {
                       workingGame.media.roomScreenAssetId = asset.id;
+                      assetCache[asset.id] = { url: asset.url, filename: asset.filename };
                       updatePayload();
                     }}
                   />
@@ -1035,9 +1081,10 @@
                     <AssetBrowser
                       gameId={workingGame.slug}
                       assetType="room_background"
-                      selectedAssetId={workingGame.media.roomScreenAssetId}
+                      selectedAssetId={workingGame.media.roomScreenAssetId ?? undefined}
                       onSelect={(asset) => {
                         workingGame.media.roomScreenAssetId = asset.id;
+                        assetCache[asset.id] = { url: asset.url, filename: asset.filename };
                         updatePayload();
                       }}
                     />
@@ -1056,9 +1103,16 @@
                 {#if workingGame.media.galleryAssetIds && workingGame.media.galleryAssetIds.length > 0}
                   <div class="grid gap-3 sm:grid-cols-3">
                     {#each workingGame.media.galleryAssetIds as assetId, index (assetId)}
+                      {@const cachedAsset = assetCache[assetId]}
                       <div class="relative rounded-lg border border-white/10 bg-base-100/70 p-2">
-                        <div class="aspect-video rounded bg-base-200 overflow-hidden">
-                          <img src={`/api/assets/${assetId}`} alt="Gallery {index + 1}" class="h-full w-full object-cover" />
+                        <div class="aspect-video rounded bg-base-200 overflow-hidden flex items-center justify-center">
+                          {#if cachedAsset?.url}
+                            <img src={cachedAsset.url} alt="Gallery {index + 1}" class="h-full w-full object-cover" />
+                          {:else}
+                            <svg class="h-8 w-8 text-base-content/30" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                          {/if}
                         </div>
                         <button
                           type="button"
@@ -1083,6 +1137,7 @@
                   maxSizeMB={5}
                   onSuccess={(asset) => {
                     workingGame.media.galleryAssetIds = [...(workingGame.media.galleryAssetIds || []), asset.id];
+                    assetCache[asset.id] = { url: asset.url, filename: asset.filename };
                     updatePayload();
                   }}
                 />
@@ -1096,6 +1151,7 @@
                         const currentIds = workingGame.media.galleryAssetIds || [];
                         if (!currentIds.includes(asset.id)) {
                           workingGame.media.galleryAssetIds = [...currentIds, asset.id];
+                          assetCache[asset.id] = { url: asset.url, filename: asset.filename };
                           updatePayload();
                         }
                       }}
@@ -1120,7 +1176,6 @@
                   <header class="mb-3 flex items-start justify-between gap-3">
                     <div>
                       <h3 class="text-base font-semibold text-base-content">Room {index + 1}</h3>
-                      <p class="text-xs text-base-content/60">UUID: {room.uuid}</p>
                     </div>
                     <div class="flex items-center gap-2">
                       <button
@@ -1203,7 +1258,6 @@
                   <header class="mb-3 flex items-start justify-between gap-3">
                     <div>
                       <h3 class="text-base font-semibold text-base-content">Puzzle {index + 1}</h3>
-                      <p class="text-xs text-base-content/60">UUID: {puzzle.uuid}</p>
                     </div>
                     <div class="flex items-center gap-2">
                       <button
@@ -1424,11 +1478,12 @@
                     </select>
                   </label>
                   <label class="form-control">
-                    <span class="label-text">Deposit amount</span>
+                    <span class="label-text">Deposit amount ($)</span>
                     <input
                       class="input input-bordered"
                       type="number"
                       min="0"
+                      step="0.01"
                       value={workingGame.pricing.deposit?.amountCents ?? 0}
                       oninput={(event) => {
                         const amount = Number((event.currentTarget as HTMLInputElement).value) || 0;
@@ -1485,8 +1540,8 @@
                       </div>
                       <div class="mt-2 grid gap-2 md:grid-cols-3">
                         <label class="form-control">
-                          <span class="label-text">Price (cents)</span>
-                          <input class="input input-bordered input-sm" type="number" min="0" bind:value={tier.priceCents} oninput={markDirty} />
+                          <span class="label-text">Price ($)</span>
+                          <input class="input input-bordered input-sm" type="number" min="0" step="0.01" bind:value={tier.priceCents} oninput={markDirty} />
                         </label>
                         <label class="form-control">
                           <span class="label-text">Min players</span>
@@ -1535,8 +1590,8 @@
                           <input class="input input-bordered input-sm" type="number" min="0" max="100" bind:value={discount.percentOff} oninput={markDirty} />
                         </label>
                         <label class="form-control">
-                          <span class="label-text">Amount off (cents)</span>
-                          <input class="input input-bordered input-sm" type="number" min="0" bind:value={discount.amountOffCents} oninput={markDirty} />
+                          <span class="label-text">Amount off ($)</span>
+                          <input class="input input-bordered input-sm" type="number" min="0" step="0.01" bind:value={discount.amountOffCents} oninput={markDirty} />
                         </label>
                         <label class="form-control">
                           <span class="label-text">Expires at</span>
@@ -1692,7 +1747,7 @@
     open={hintModalOpen}
     puzzleName={editingHint?.puzzle.title ?? ''}
     hint={editingHint?.hint ?? null}
-    gameId={workingGame.id}
+    gameId={game?.id}
     puzzleId={editingHint?.puzzle.id}
     hintOrder={editingHint?.hint?.order ?? (editingHint?.puzzle.hints?.length ?? 0) + 1}
     onclose={closeHintModal}

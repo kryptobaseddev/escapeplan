@@ -36,7 +36,7 @@
 
   const occupancyForRoom = (room: GameRoomDefinition | undefined | null) => {
     if (!room) return undefined;
-    return occupiedRoomMap.get(room.id) ?? (room.uuid ? occupiedRoomMap.get(room.uuid) : undefined);
+    return occupiedRoomMap.get(room.id);
   };
 
   const firstAvailableRoomId = (game: GameDetails | null | undefined) => {
@@ -75,7 +75,6 @@
     const activeSessions = props.activeSessions ?? [];
     for (const session of activeSessions) {
       if (session.roomId) map.set(session.roomId, session);
-      if (session.roomUuid) map.set(session.roomUuid, session);
     }
     occupiedRoomMap = map;
   });

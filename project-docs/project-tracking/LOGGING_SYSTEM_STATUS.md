@@ -1,8 +1,8 @@
 # Logging & Alerting System - Implementation Status
 
-**Last Updated:** 2025-10-01
+**Last Updated:** 2025-10-01 (Session 40)
 **Project Phase:** 3 of 5 Complete
-**Overall Status:** 60% Complete (Backend Done, Frontend Pending)
+**Overall Status:** 93% Backend Complete (All TypeScript errors fixed, ready for UI)
 
 ---
 
@@ -13,8 +13,9 @@
 | Phase 1: Foundation | ✅ COMPLETE | 29 | `b54a6ba` | Database, Winston, Alert Engine |
 | Phase 2: Integration | ✅ COMPLETE | 31 | `3031f7c` | State management, Command logging |
 | Phase 3: API Routes | ✅ COMPLETE | 33 | `74f2425` | REST API, RBAC permissions |
-| Phase 4: Admin UI | 🚧 PENDING | 34 | - | Frontend pages needed |
-| Phase 5: Testing | 🚧 PENDING | 35 | - | Manual testing, User stories |
+| **Phase 3.5: Cleanup** | ✅ COMPLETE | 40 | - | Removed recent_alert, fixed all TS errors |
+| Phase 4: Admin UI | 🚧 PENDING | 41+ | - | Frontend tabs integration |
+| Phase 5: Testing | 🚧 PENDING | 42+ | - | Manual testing, User stories |
 
 ---
 
@@ -51,6 +52,26 @@
   - `view_system_logs` - Assigned to Admin, Manager
   - `manage_system_settings` - Admin only
 - ✅ Test script: `apps/escapeplan-api/src/test-logging-endpoints.sh`
+
+### Session 40 Cleanup (Phase 3.5) ✅ NEW
+- ✅ Removed `recent_alert` field completely (8 files updated):
+  - `db/schema.ts` - Removed from sessions table
+  - `db/init.ts` - Removed from CREATE TABLE
+  - `state.ts` - Removed from interface, 4 SELECT queries, 1 INSERT, 4 UPDATE statements (11 changes)
+  - `contracts/index.ts` - Removed from GameSessionDetails interface
+  - `test/server.test.ts` - Updated test fixture
+- ✅ Fixed all TypeScript errors (10 errors resolved):
+  - `auth-config.ts` - Removed invalid `sendVerificationEmail` config
+  - `db/seed.ts` - Fixed avatar_config type (JSON.stringify for Better Auth)
+  - `index.ts` - Removed duplicate import, fixed role/status type assertions
+  - `state.ts` - Fixed PricingModel type, OperatorRole import, email/avatar handling
+  - `test-integration.ts` - Fixed quickStartSession argument count
+- ✅ Verified Winston (not Pino) is logging framework
+- ✅ Confirmed permission checks are correct (`view_system_logs` on GET alert-rules)
+- ✅ Documented real-time dashboard update strategy (caller-responsibility pattern)
+- ✅ Validated dismissed_by NULL pattern for system dismissals
+- ✅ TypeScript compilation: **0 errors** ✅
+- ✅ Contracts package: **builds successfully** ✅
 
 ---
 

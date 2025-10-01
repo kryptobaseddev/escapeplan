@@ -11,7 +11,7 @@
   } from '@escapeplan/contracts';
   import { PERMISSION_LABELS, ROLE_LABELS, ROLE_PERMISSIONS } from '@escapeplan/contracts';
   import Avatar from '$lib/avatar/Avatar.svelte';
-  import AvatarEditor from '$lib/avatar/AvatarEditor.svelte';
+  import { randomSeed, randomizeAvatarConfig } from '$lib/avatar/avatar-utils';
 
   type Mode = 'create' | 'edit';
 
@@ -129,12 +129,6 @@
     return JSON.parse(JSON.stringify(config)) as BotttsAvatarConfig;
   }
 
-  function randomSeed(): string {
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-      return crypto.randomUUID().replace(/-/g, '').slice(0, 12);
-    }
-    return Math.random().toString(36).slice(2, 14);
-  }
 
   function hashSeed(source: string): string {
     const normalized = source.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -162,9 +156,7 @@
   }
 
   function randomizeAvatar() {
-    const copy = copyAvatarConfig(avatarConfig);
-    copy.seed = randomSeed();
-    avatarConfig = copy;
+    avatarConfig = randomizeAvatarConfig();
     avatarCustomized = true;
   }
 
@@ -179,10 +171,6 @@
     }
   }
 
-  function handleAvatarEditorUpdate(config: BotttsAvatarConfig) {
-    avatarConfig = copyAvatarConfig(config);
-    avatarCustomized = true;
-  }
 </script>
 
 {#if openFlag}
@@ -281,7 +269,7 @@
           <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div class="text-xs text-base-content/60">
               {isCreate
-                ? 'Use “Use username seed” to return to the deterministic avatar for the current username.'
+                ? 'Use "Use username seed" to return to the deterministic avatar for the current username.'
                 : 'Save changes to persist any avatar updates.'}
             </div>
             <div class="flex flex-wrap gap-2">
@@ -309,12 +297,6 @@
               {/if}
             </div>
           </div>
-
-          {#if isEdit}
-            <div class="mt-4">
-              <AvatarEditor bind:config={avatarConfig} onUpdate={handleAvatarEditorUpdate} />
-            </div>
-          {/if}
         </section>
 
         <input type="hidden" name="avatarConfig" value={avatarPayload} />

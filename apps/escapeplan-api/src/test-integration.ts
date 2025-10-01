@@ -41,12 +41,21 @@ try {
 
   console.log(`   ✅ Created test booking for ${game.name} in ${room.name}\n`);
 
+  // Get test operator (use admin from seed)
+  const operator = sqlite.prepare(`SELECT id FROM operators WHERE username = 'admin' LIMIT 1`).get() as any;
+  if (!operator) {
+    console.log('   ⚠️  No operator found. Run `pnpm db:seed` first.');
+    process.exit(1);
+  }
+
   // Start a test session
   console.log('3. Starting quick start session...');
   const sessionResponse = quickStartSession({
-    bookingId,
-    startImmediately: true
-  });
+    gameId: game.id,
+    roomId: room.id,
+    partySize: 4,
+    durationMinutes: game.duration_minutes
+  }, operator.id);
 
   const sessionId = sessionResponse.session.id;
   console.log(`   ✅ Session started: ${sessionId}\n`);

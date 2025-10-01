@@ -1,5 +1,9 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+
+// ============================================================================
+// AUTH & OPERATORS
+// ============================================================================
 
 export const operators = sqliteTable('operators', {
   id: text('id').primaryKey(),
@@ -61,95 +65,207 @@ export const operatorVerifications = sqliteTable('operator_verifications', {
   updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 
+// ============================================================================
+// GAMES & ROOMS
+// ============================================================================
+
 export const games = sqliteTable('games', {
   id: text('id').primaryKey(),
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
   description: text('description'),
-  durationMinutes: integer('duration_minutes').notNull().default(60),
+  story_intro: text('story_intro'),
+  duration_minutes: integer('duration_minutes').notNull().default(60),
   difficulty: text('difficulty'),
-  pricingModel: text('pricing_model'),
-  category: text('category')
+  pricing_model: text('pricing_model'),
+  category: text('category'),
+  categories: text('categories', { mode: 'json' }), // JSON array
+  min_players: integer('min_players').notNull().default(1),
+  max_players: integer('max_players').notNull().default(1),
+  price_per_player_cents: integer('price_per_player_cents').notNull().default(0),
+  resources_required: integer('resources_required').notNull().default(1),
+  validation_notes: text('validation_notes'),
+  media_config: text('media_config', { mode: 'json' }),
+  pricing_config: text('pricing_config', { mode: 'json' }),
+  booking_rules_config: text('booking_rules_config', { mode: 'json' }),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  archived_at: text('archived_at'),
+  archived_by: text('archived_by'),
+  archived_reason: text('archived_reason')
 });
 
 export const rooms = sqliteTable('rooms', {
   id: text('id').primaryKey(),
-  gameId: text('game_id').notNull().references(() => games.id),
+  game_id: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
-  isMobileCapable: integer('is_mobile_capable', { mode: 'boolean' }).notNull().default(false),
-  themeToken: text('theme_token')
+  is_mobile_capable: integer('is_mobile_capable', { mode: 'boolean' }).notNull().default(false),
+  theme_token: text('theme_token'),
+  description: text('description'),
+  slug: text('slug'),
+  capacity: integer('capacity')
 });
+
+export const gamePuzzles = sqliteTable('game_puzzles', {
+  id: text('id').primaryKey(),
+  game_id: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  description: text('description'),
+  solution: text('solution'),
+  media_asset: text('media_asset'),
+  operator_actions: text('operator_actions'),
+  display_order: integer('display_order').notNull().default(0),
+  hints: text('hints', { mode: 'json' }), // JSON array
+  media_asset_meta: text('media_asset_meta', { mode: 'json' }),
+  slug: text('slug')
+});
+
+// ============================================================================
+// BOOKINGS & SESSIONS
+// ============================================================================
 
 export const bookings = sqliteTable('bookings', {
   id: text('id').primaryKey(),
-  bookingCode: text('booking_code').notNull().unique(),
-  gameId: text('game_id').notNull().references(() => games.id),
-  roomId: text('room_id').notNull().references(() => rooms.id),
-  startTime: text('start_time').notNull(),
-  endTime: text('end_time').notNull(),
+  booking_code: text('booking_code').notNull().unique(),
+  game_id: text('game_id').notNull().references(() => games.id),
+  room_id: text('room_id').notNull().references(() => rooms.id),
+  start_time: text('start_time').notNull(),
+  end_time: text('end_time').notNull(),
   status: text('status').notNull(),
-  partySize: integer('party_size').notNull(),
-  depositDueCents: integer('deposit_due_cents').notNull().default(0),
-  totalDueCents: integer('total_due_cents').notNull().default(0),
-  priceTier: text('price_tier').notNull(),
-  discountCode: text('discount_code'),
-  isMobile: integer('is_mobile', { mode: 'boolean' }).notNull().default(false),
-  locationNote: text('location_note'),
-  contactName: text('contact_name').notNull(),
-  contactPhone: text('contact_phone').notNull()
+  party_size: integer('party_size').notNull(),
+  deposit_due_cents: integer('deposit_due_cents').notNull().default(0),
+  total_due_cents: integer('total_due_cents').notNull().default(0),
+  price_tier: text('price_tier').notNull(),
+  discount_code: text('discount_code'),
+  is_mobile: integer('is_mobile', { mode: 'boolean' }).notNull().default(false),
+  is_adhoc: integer('is_adhoc', { mode: 'boolean' }).notNull().default(false),
+  location_note: text('location_note'),
+  contact_name: text('contact_name').notNull(),
+  contact_phone: text('contact_phone').notNull(),
+  notes: text('notes')
 });
 
 export const sessions = sqliteTable('sessions', {
   id: text('id').primaryKey(),
-  bookingId: text('booking_id').notNull().references(() => bookings.id),
+  booking_id: text('booking_id').notNull().references(() => bookings.id),
   status: text('status').notNull(),
-  timerTotalSeconds: integer('timer_total_seconds').notNull(),
-  timerRemainingSeconds: integer('timer_remaining_seconds').notNull(),
-  timerTotalElapsedSeconds: integer('timer_total_elapsed_seconds').notNull().default(0),
-  timerStatus: text('timer_status').notNull(),
-  startedAt: text('started_at').notNull(),
-  scheduledEnd: text('scheduled_end').notNull(),
-  hintsUsed: integer('hints_used').notNull().default(0),
-  streamThumbnailUrl: text('stream_thumbnail_url'),
-  backgroundAudioTrack: text('background_audio_track'),
-  backgroundAudioIsPlaying: integer('background_audio_is_playing', { mode: 'boolean' }).notNull().default(false),
-  crewPrimary: text('crew_primary').notNull(),
-  crewSupport: text('crew_support'),
-  recentAlert: text('recent_alert')
+  timer_total_seconds: integer('timer_total_seconds').notNull(),
+  timer_remaining_seconds: integer('timer_remaining_seconds').notNull(),
+  timer_total_elapsed_seconds: integer('timer_total_elapsed_seconds').notNull().default(0),
+  timer_status: text('timer_status').notNull(),
+  started_at: text('started_at').notNull(),
+  scheduled_end: text('scheduled_end').notNull(),
+  hints_used: integer('hints_used').notNull().default(0),
+  stream_thumbnail_url: text('stream_thumbnail_url'),
+  background_audio_track: text('background_audio_track'),
+  background_audio_is_playing: integer('background_audio_is_playing', { mode: 'boolean' }).notNull().default(false),
+  crew_primary: text('crew_primary').notNull(),
+  crew_support: text('crew_support')
 });
 
 export const sessionPuzzles = sqliteTable('session_puzzles', {
   id: text('id').primaryKey(),
-  sessionId: text('session_id').notNull().references(() => sessions.id),
+  session_id: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   status: text('status').notNull(),
-  displayOrder: integer('display_order').notNull()
+  display_order: integer('display_order').notNull()
 });
 
 export const sessionHints = sqliteTable('session_hints', {
   id: text('id').primaryKey(),
-  sessionId: text('session_id').notNull().references(() => sessions.id),
+  session_id: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   type: text('type').notNull(),
   message: text('message').notNull(),
-  assetUrl: text('asset_url'),
-  deliveredBy: text('delivered_by').notNull(),
-  deliveredAt: text('delivered_at').notNull()
+  asset_url: text('asset_url'),
+  delivered_by: text('delivered_by').notNull(),
+  delivered_at: text('delivered_at').notNull()
 });
 
 export const timerSlugs = sqliteTable('timer_slugs', {
   slug: text('slug').primaryKey(),
-  sessionId: text('session_id').notNull().references(() => sessions.id),
+  session_id: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
   narrative: text('narrative')
+});
+
+// ============================================================================
+// ASSETS & STORAGE
+// ============================================================================
+
+export const assets = sqliteTable('assets', {
+  id: text('id').primaryKey(),
+  filename: text('filename').notNull(),
+  original_filename: text('original_filename').notNull(),
+  mime_type: text('mime_type').notNull(),
+  size_bytes: integer('size_bytes').notNull(),
+  asset_type: text('asset_type').notNull(), // 'image' | 'audio' | 'video' | 'document'
+  media_type: text('media_type'), // More specific MIME category
+  file_path: text('file_path').notNull(),
+  game_id: text('game_id').references(() => games.id, { onDelete: 'cascade' }),
+  puzzle_id: text('puzzle_id'),
+  hint_order: integer('hint_order'),
+  is_reusable: integer('is_reusable', { mode: 'boolean' }).notNull().default(false),
+  uploaded_by: text('uploaded_by').notNull().references(() => operators.id),
+  uploaded_at: text('uploaded_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  metadata: text('metadata', { mode: 'json' })
+}, (table) => ({
+  gameIdIdx: index('idx_assets_game_id').on(table.game_id),
+  typeIdx: index('idx_assets_type').on(table.asset_type),
+  reusableIdx: index('idx_assets_reusable').on(table.is_reusable)
+}));
+
+export const assetUsage = sqliteTable('asset_usage', {
+  id: text('id').primaryKey(),
+  asset_id: text('asset_id').notNull().references(() => assets.id, { onDelete: 'cascade' }),
+  used_in_game_id: text('used_in_game_id').references(() => games.id, { onDelete: 'cascade' }),
+  used_in_puzzle_id: text('used_in_puzzle_id'),
+  usage_type: text('usage_type').notNull(), // 'hint' | 'puzzle' | 'intro' | 'background'
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  assetIdIdx: index('idx_asset_usage_asset').on(table.asset_id),
+  gameIdIdx: index('idx_asset_usage_game').on(table.used_in_game_id)
+}));
+
+export const storageMetrics = sqliteTable('storage_metrics', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  total_size_bytes: integer('total_size_bytes').notNull(),
+  total_files: integer('total_files').notNull(),
+  by_type: text('by_type', { mode: 'json' }).notNull(), // JSON: { image: 123, audio: 456, ... }
+  by_game: text('by_game', { mode: 'json' }).notNull(), // JSON: { gameId: size }
+  last_backup_at: text('last_backup_at'),
+  recorded_at: text('recorded_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+});
+
+// ============================================================================
+// NETWORK
+// ============================================================================
+
+export const networkProfiles = sqliteTable('network_profiles', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  ssid: text('ssid').notNull(),
+  password: text('password'),
+  description: text('description'),
+  band: text('band'), // '2.4GHz' | '5GHz' | '5GHz/2.4GHz'
+  channel: integer('channel'),
+  security: text('security'), // 'WPA2-PSK' | 'WPA3' | 'OPEN'
+  broadcast_enabled: integer('broadcast_enabled', { mode: 'boolean' }).notNull().default(true),
+  status: text('status').notNull().default('offline'), // 'online' | 'offline' | 'error'
+  status_message: text('status_message'),
+  details: text('details', { mode: 'json' }),
+  last_updated: text('last_updated').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 
 export const networkHealth = sqliteTable('network_health', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   status: text('status').notNull(),
   message: text('message').notNull(),
-  lastChecked: text('last_checked').notNull()
+  last_checked: text('last_checked').notNull()
 });
 
-// Logging & Alerting System Tables
+// ============================================================================
+// LOGGING & ALERTING
+// ============================================================================
+
 export const systemLogs = sqliteTable('system_logs', {
   id: text('id').primaryKey(),
   level: text('level').notNull(), // 'debug' | 'info' | 'warn' | 'error'
@@ -157,21 +273,31 @@ export const systemLogs = sqliteTable('system_logs', {
   message: text('message').notNull(),
   context: text('context', { mode: 'json' }), // JSON: { sessionId?, userId?, ip?, requestId?, etc }
   timestamp: text('timestamp').notNull(),
-  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
-});
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  timestampIdx: index('idx_logs_timestamp').on(table.timestamp),
+  levelIdx: index('idx_logs_level').on(table.level),
+  categoryIdx: index('idx_logs_category').on(table.category),
+  createdIdx: index('idx_logs_created').on(table.created_at)
+}));
 
 export const alerts = sqliteTable('alerts', {
   id: text('id').primaryKey(),
-  sessionId: text('session_id').references(() => sessions.id, { onDelete: 'cascade' }), // NULL for system alerts
+  session_id: text('session_id').references(() => sessions.id, { onDelete: 'cascade' }), // NULL for system alerts
   level: text('level').notNull(), // 'info' | 'warning' | 'critical'
   category: text('category').notNull(), // 'timer' | 'network' | 'system' | 'session' | 'hint'
   title: text('title').notNull(),
   message: text('message').notNull(),
   context: text('context', { mode: 'json' }), // JSON: { gameName?, roomName?, pausedBy?, etc }
-  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  dismissedAt: text('dismissed_at'),
-  dismissedBy: text('dismissed_by').references(() => operators.id)
-});
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  dismissed_at: text('dismissed_at'),
+  dismissed_by: text('dismissed_by').references(() => operators.id)
+}, (table) => ({
+  sessionIdIdx: index('idx_alerts_session').on(table.session_id),
+  levelIdx: index('idx_alerts_level').on(table.level),
+  createdIdx: index('idx_alerts_created').on(table.created_at),
+  activeIdx: index('idx_alerts_active').on(table.dismissed_at)
+}));
 
 export const alertRules = sqliteTable('alert_rules', {
   id: text('id').primaryKey(),
@@ -181,39 +307,50 @@ export const alertRules = sqliteTable('alert_rules', {
   level: text('level').notNull(), // 'info' | 'warning' | 'critical'
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
   conditions: text('conditions', { mode: 'json' }).notNull(), // JSON: { event, threshold?, etc }
-  titleTemplate: text('title_template').notNull(),
-  messageTemplate: text('message_template').notNull(),
-  autoDismissOn: text('auto_dismiss_on', { mode: 'json' }), // JSON: array of events
-  createdAt: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  updatedAt: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
-});
+  title_template: text('title_template').notNull(),
+  message_template: text('message_template').notNull(),
+  auto_dismiss_on: text('auto_dismiss_on', { mode: 'json' }), // JSON: array of events
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  enabledIdx: index('idx_alert_rules_enabled').on(table.enabled),
+  categoryIdx: index('idx_alert_rules_category').on(table.category)
+}));
 
-export const upsertOperators = sql`
-INSERT INTO operators (
-  id,
-  username,
-  name,
-  email,
-  role,
-  avatar_config,
-  bio,
-  permissions,
-  must_reset_password,
-  updated_at
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-ON CONFLICT(id) DO UPDATE SET
-  username = excluded.username,
-  name = excluded.name,
-  email = excluded.email,
-  role = excluded.role,
-  avatar_config = excluded.avatar_config,
-  bio = excluded.bio,
-  permissions = excluded.permissions,
-  must_reset_password = excluded.must_reset_password,
-  updated_at = CURRENT_TIMESTAMP;
-`;
+// ============================================================================
+// SCHEMA EXPORTS
+// ============================================================================
 
+export const schema = {
+  // Auth & Operators
+  operators,
+  operatorAuthSessions,
+  operatorAccounts,
+  operatorVerifications,
+  // Games & Rooms
+  games,
+  rooms,
+  gamePuzzles,
+  // Bookings & Sessions
+  bookings,
+  sessions,
+  sessionPuzzles,
+  sessionHints,
+  timerSlugs,
+  // Assets & Storage
+  assets,
+  assetUsage,
+  storageMetrics,
+  // Network
+  networkProfiles,
+  networkHealth,
+  // Logging & Alerting
+  systemLogs,
+  alerts,
+  alertRules
+};
+
+// Legacy export for Better Auth compatibility
 export const authTables = {
   operators,
   operatorAuthSessions,

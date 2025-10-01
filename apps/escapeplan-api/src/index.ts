@@ -40,16 +40,15 @@ import {
   updateOwnProfile,
   resetOperatorPassword,
   archiveOperatorAccount,
-  unarchiveOperatorAccount,
-  listOperatorSummaries
+  unarchiveOperatorAccount
 } from './state.js';
 import { auth, requireSession } from './auth.js';
-import { db, runMigrations, sqlite } from './db/client.js';
-import { operators } from './db/schema.js';
-import { eq } from 'drizzle-orm';
+import { db, sqlite } from './db/client.js';
+import { operators, alertRules, systemLogs } from './db/schema.js';
+import { eq, and, like, count, desc } from 'drizzle-orm';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
-import { handleAssetUpload, getStorageMetrics, deleteAsset, listAssets, linkReusableAsset } from './assets/upload.js';
+import { handleAssetUpload, getStorageMetrics, deleteAsset, listAssets, linkReusableAsset, getAssetById } from './assets/upload.js';
 import { logToDatabase, dismissAlert } from './logging/index.js';
 
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
@@ -118,27 +117,28 @@ const updateOwnProfileSchema = z.object({
 });
 
 const hintSchema = z.object({
-  uuid: z.string().min(1).optional(),
+  uuid: z.string().min(1),
   type: z.enum(['text', 'image', 'audio', 'video']),
-  content: z.string().min(1),
-  assetUrl: z.string().url().optional(),
-  order: z.number().int().nonnegative().optional()
+  content: z.string(),  // Allow empty strings for media hints (content is in assetUrl)
+  assetUrl: z.string().optional(),
+  order: z.number().int().nonnegative(),
+  countAsHint: z.boolean().optional()
 });
 
 const puzzleSchema = z.object({
-  id: z.string().min(1).optional(),
+  id: z.string().optional(),
   title: z.string().min(1),
   description: z.string().optional(),
   solution: z.string().optional(),
   mediaAsset: z.string().optional(),
   operatorActions: z.string().optional(),
   displayOrder: z.number().int().nonnegative().optional(),
-  hints: z.array(hintSchema).optional(),
+  hints: z.array(hintSchema).optional().default([]),
   mediaMeta: z.record(z.unknown()).optional()
 });
 
 const roomSchema = z.object({
-  id: z.string().min(1).optional(),
+  id: z.string().optional(),
   name: z.string().min(1),
   description: z.string().optional(),
   slug: z.string().regex(/^[a-z0-9-]+$/).optional(),
@@ -147,12 +147,12 @@ const roomSchema = z.object({
   capacity: z.number().int().positive().optional()
 });
 
-const pricingModelValues = ['per_person', 'flat_rate'] as const;
+const pricingModelValues = ['per_person', 'per_session', 'per_hour'] as const;
 
 const mediaConfigSchema = z.object({
-  thumbnailAssetId: z.string().min(1).optional().nullable(),
-  roomScreenAssetId: z.string().min(1).optional().nullable(),
-  galleryAssetIds: z.array(z.string().min(1)).default([])
+  thumbnailAssetId: z.string().optional().nullable(),
+  roomScreenAssetId: z.string().optional().nullable(),
+  galleryAssetIds: z.array(z.string()).default([])
 });
 
 const pricingTierSchema = z.object({
@@ -311,7 +311,6 @@ function ensurePermission(reply: FastifyReply, userRole: OperatorRole, userPermi
 }
 
 export async function buildServer() {
-  runMigrations();
   const app = Fastify({ logger: true });
 
   const webOrigin = process.env.WEB_APP_ORIGIN ?? 'http://localhost:5173';
@@ -434,10 +433,10 @@ export async function buildServer() {
       const filters = parsed.success
         ? {
             search: parsed.data.search,
-            role: parsed.data.role ?? 'all',
-            status: parsed.data.status ?? 'active'
+            role: parsed.data.role ?? ('all' as const),
+            status: parsed.data.status ?? ('active' as const)
           }
-        : { role: 'all', status: 'active' };
+        : { role: 'all' as const, status: 'active' as const };
       return listOperatorSummaries(filters);
     });
 
@@ -654,6 +653,7 @@ export async function buildServer() {
       const { id } = request.params as { id: string };
       const parsed = saveGameSchema.safeParse(request.body);
       if (!parsed.success) {
+        console.log('❌ Game validation failed:', JSON.stringify(parsed.error.flatten(), null, 2));
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
       const data = parsed.data;
@@ -785,7 +785,10 @@ export async function buildServer() {
       if (!session) return;
       if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_system_logs')) return;
 
-      const rules = sqlite.prepare('SELECT * FROM alert_rules ORDER BY category, name').all();
+      const rules = db.select()
+        .from(alertRules)
+        .orderBy(alertRules.category, alertRules.name)
+        .all();
       return { rules };
     });
 
@@ -806,44 +809,37 @@ export async function buildServer() {
       };
 
       try {
-        const updates: string[] = [];
-        const params: any[] = [];
+        const updates: Partial<typeof alertRules.$inferInsert> = {};
 
         if (enabled !== undefined) {
-          updates.push('enabled = ?');
-          params.push(enabled ? 1 : 0);
+          updates.enabled = enabled;
         }
         if (level !== undefined) {
-          updates.push('level = ?');
-          params.push(level);
+          updates.level = level;
         }
         if (conditions !== undefined) {
-          updates.push('conditions = ?');
-          params.push(JSON.stringify(conditions));
+          updates.conditions = conditions;
         }
         if (title_template !== undefined) {
-          updates.push('title_template = ?');
-          params.push(title_template);
+          updates.title_template = title_template;
         }
         if (message_template !== undefined) {
-          updates.push('message_template = ?');
-          params.push(message_template);
+          updates.message_template = message_template;
         }
         if (auto_dismiss_on !== undefined) {
-          updates.push('auto_dismiss_on = ?');
-          params.push(auto_dismiss_on ? JSON.stringify(auto_dismiss_on) : null);
+          updates.auto_dismiss_on = auto_dismiss_on ?? null;
         }
 
-        if (updates.length === 0) {
+        if (Object.keys(updates).length === 0) {
           return reply.status(400).send({ statusCode: 400, message: 'No fields to update' });
         }
 
-        updates.push('updated_at = CURRENT_TIMESTAMP');
-        params.push(id);
+        updates.updated_at = new Date().toISOString();
 
-        sqlite.prepare(
-          `UPDATE alert_rules SET ${updates.join(', ')} WHERE id = ?`
-        ).run(...params);
+        db.update(alertRules)
+          .set(updates)
+          .where(eq(alertRules.id, id))
+          .run();
 
         logToDatabase('info', 'system', `Alert rule updated: ${id}`, {
           ruleId: id,
@@ -872,29 +868,34 @@ export async function buildServer() {
           search?: string;
         };
 
-        let query = 'SELECT * FROM system_logs WHERE 1=1';
-        const queryParams: any[] = [];
-
+        // Build where conditions using Drizzle operators
+        const conditions = [];
         if (level) {
-          query += ' AND level = ?';
-          queryParams.push(level);
+          conditions.push(eq(systemLogs.level, level));
         }
         if (category) {
-          query += ' AND category = ?';
-          queryParams.push(category);
+          conditions.push(eq(systemLogs.category, category));
         }
         if (search) {
-          query += ' AND message LIKE ?';
-          queryParams.push(`%${search}%`);
+          conditions.push(like(systemLogs.message, `%${search}%`));
         }
 
-        query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
-        queryParams.push(parseInt(limit, 10), parseInt(offset, 10));
+        // Query logs using Drizzle ORM
+        const logs = db.select()
+          .from(systemLogs)
+          .where(conditions.length > 0 ? and(...conditions) : undefined)
+          .orderBy(desc(systemLogs.timestamp))
+          .limit(parseInt(limit, 10))
+          .offset(parseInt(offset, 10))
+          .all();
 
-        const logs = sqlite.prepare(query).all(...queryParams);
-        const total = sqlite.prepare('SELECT COUNT(*) as count FROM system_logs').get() as { count: number };
+        // Get total count
+        const [totalResult] = db.select({ count: count() })
+          .from(systemLogs)
+          .where(conditions.length > 0 ? and(...conditions) : undefined)
+          .all();
 
-        return { logs, total: total.count };
+        return { logs, total: totalResult.count };
       } catch (error) {
         request.log.error({ err: error }, 'Failed to query system logs');
         return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
@@ -921,6 +922,17 @@ export async function buildServer() {
     // Asset management routes
     api.post('/assets/upload', async (request, reply) => {
       return handleAssetUpload(request, reply);
+    });
+
+    api.get('/assets/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      const { id } = request.params as { id: string };
+      const asset = await getAssetById(id);
+      if (!asset) {
+        return reply.code(404).send({ error: 'Asset not found' });
+      }
+      return { asset };
     });
 
     api.get('/assets/list', async (request, reply) => {

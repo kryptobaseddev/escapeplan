@@ -1,5 +1,7 @@
 import { nanoid } from 'nanoid';
-import { sqlite } from '../db/client.js';
+import { eq, and, count, desc } from 'drizzle-orm';
+import { db } from '../db/client.js';
+import { systemLogs } from '../db/schema.js';
 import logger from '../logger.js';
 import type { LogLevel, LogCategory, LogContext } from './categories.js';
 
@@ -16,18 +18,16 @@ export function logToDatabase(
     const id = `log-${nanoid(12)}`;
     const timestamp = new Date().toISOString();
 
-    sqlite.prepare(
-      `INSERT INTO system_logs (id, level, category, message, context, timestamp, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
+    // Insert using Drizzle ORM (JSON mode handles stringify automatically)
+    db.insert(systemLogs).values({
       id,
       level,
       category,
       message,
-      context ? JSON.stringify(context) : null,
+      context: context ?? null,
       timestamp,
-      timestamp
-    );
+      created_at: timestamp
+    }).run();
 
     // Also log to Winston
     logger.log(level, message, { category, ...context });
@@ -50,25 +50,31 @@ export function queryLogs(options: {
   limit?: number;
   offset?: number;
 }) {
-  const { level, category, limit = 100, offset = 0 } = options;
+  const { level, category, limit: limitParam = 100, offset: offsetParam = 0 } = options;
 
-  let query = 'SELECT * FROM system_logs WHERE 1=1';
-  const params: any[] = [];
-
+  // Build where conditions using Drizzle operators
+  const conditions = [];
   if (level) {
-    query += ' AND level = ?';
-    params.push(level);
+    conditions.push(eq(systemLogs.level, level));
   }
   if (category) {
-    query += ' AND category = ?';
-    params.push(category);
+    conditions.push(eq(systemLogs.category, category));
   }
 
-  query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
-  params.push(limit, offset);
+  // Query logs using Drizzle ORM
+  const logs = db.select()
+    .from(systemLogs)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(systemLogs.timestamp))
+    .limit(limitParam)
+    .offset(offsetParam)
+    .all();
 
-  const logs = sqlite.prepare(query).all(...params);
-  const total = sqlite.prepare('SELECT COUNT(*) as count FROM system_logs').get() as { count: number };
+  // Get total count using Drizzle count aggregation
+  const [totalResult] = db.select({ count: count() })
+    .from(systemLogs)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .all();
 
-  return { logs, total: total.count };
+  return { logs, total: totalResult.count };
 }

@@ -13,14 +13,17 @@ current_phase: PHASE_3
 stack:
   - Raspberry Pi OS Bookworm (64-bit)
   - Custom pi-gen image (EscapePlan Base)
-  - Node.js 22 LTS + TypeScript 5
-  - Fastify 5 API with Pino logging
-  - Argon2id password hashing + bearer token auth
+  - Node.js 24 LTS + TypeScript v5.9+
+  - Fastify v5.6.1+ API with Winston v3.18.2 logging and Alerts
+  - Argon2id password hashing + bearer token auth as custom hasher with Better-Auth
   - Socket.IO 5 for real-time control
   - SQLite WAL mode with runtime schema bootstrap
+  - Drizzle v0.44.5+
+  - Drizzle-kit v0.31.5+
   - ffmpeg 7 for RTSP->HLS pipelines
-  - Nginx 1.26 reverse proxy
+  - Nginx v1.29.1+ reverse proxy
   - SvelteKit 2 + Svelte 5
+  - Better-Auth v1.3.24+
   - Tailwind CSS 4 + DaisyUI 5.1.25+ theme components
   - "@vite-pwa/sveltekit PWA integration"
   - pnpm 9 workspace tooling

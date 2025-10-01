@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-09-30",
+  "lastUpdated": "2025-10-01",
   "projectName": "EscapePlan",
   "projectVersion": "0.1.0",
   "currentPhase": "PHASE_1",
@@ -34,7 +34,7 @@
           "notes": [
             "Focus on booking workflows, game runner capabilities, hardware requirements, and pricing models.",
             "Capture gaps those products leave for offline/mobile operations.",
-            "Update recorded 2025-09-29: Competitive landscape table added to project-docs/project-overview.md \u00a71.1.1 with differentiators."
+            "Update recorded 2025-09-29: Competitive landscape table added to project-docs/project-overview.md §1.1.1 with differentiators."
           ],
           "labels": [
             "research",
@@ -65,8 +65,8 @@
           "notes": [
             "Include KPIs such as max setup time for mobile events, targeted session stability, and operator efficiency goals.",
             "Update PRD sections 1.4 and 17 accordingly.",
-            "Scope segmentation initiated; see project-docs/project-overview.md \u00a71.4 and roadmap \u00a717.",
-            "Scope + metrics finalized in project-docs/project-overview.md \u00a7\u00a71.4\u20131.7 and roadmap \u00a717. Future features parked under deferred backlog."
+            "Scope segmentation initiated; see project-docs/project-overview.md §1.4 and roadmap §17.",
+            "Scope + metrics finalized in project-docs/project-overview.md §§1.4–1.7 and roadmap §17. Future features parked under deferred backlog."
           ],
           "labels": [
             "strategy",
@@ -97,7 +97,7 @@
           "notes": [
             "Capture power requirements and expected battery options for mobile rig.",
             "Align with hostapd/dnsmasq capabilities planned in Phase 2.",
-            "Hardware baseline captured in \u00a72.5 with Pi 5, storage, Wi-Fi, power guidance."
+            "Hardware baseline captured in §2.5 with Pi 5, storage, Wi-Fi, power guidance."
           ],
           "labels": [
             "hardware",
@@ -129,7 +129,7 @@
           "notes": [
             "Include event flow from booking creation to session completion.",
             "Call out integrations between platform base services and Fastify API.",
-            "Domain/service breakdown documented in \u00a73.4 covering contexts and interactions."
+            "Domain/service breakdown documented in §3.4 covering contexts and interactions."
           ],
           "labels": [
             "architecture",
@@ -160,7 +160,7 @@
           "notes": [
             "Reference DaisyUI v5.1.25 configuration and Tailwind 4 setup requirements.",
             "Address accessibility targets (WCAG AA).",
-            "DaisyUI theme tokens + layout guidance added in \u00a78.6; typography clarified."
+            "DaisyUI theme tokens + layout guidance added in §8.6; typography clarified."
           ],
           "labels": [
             "design",
@@ -789,7 +789,7 @@
           ],
           "notes": [
             "2025-09-29: Selected Better Auth for EscapePlan appliance; Drizzle adapter validated against SQLite with serialized permissions/password fields.",
-            "2025-09-29: Migration plan executed\u2014Fastify routes, seed scripts, and SvelteKit client now defer to Better Auth sessions/cookies.",
+            "2025-09-29: Migration plan executed—Fastify routes, seed scripts, and SvelteKit client now defer to Better Auth sessions/cookies.",
             "2025-10-02: Re-opened pending full schema/alignment work; split across CLAUDE-1/CLAUDE-2 follow-ups to finish integration and QA.",
             "Add backup/cron requirements and tooling evaluation alongside auth provider decision."
           ],
@@ -801,7 +801,7 @@
         },
         {
           "id": "P3-021",
-          "title": "CLAUDE-1 \u00b7 Finalize Better-Auth backend alignment",
+          "title": "CLAUDE-1 · Finalize Better-Auth backend alignment",
           "feature": "Auth",
           "status": "IN_REVIEW",
           "priority": "CRITICAL",
@@ -841,7 +841,7 @@
         },
         {
           "id": "P3-022",
-          "title": "CLAUDE-2 \u00b7 Console integration & validation after Better-Auth sync",
+          "title": "CLAUDE-2 · Console integration & validation after Better-Auth sync",
           "feature": "Admin Console",
           "status": "IN_REVIEW",
           "priority": "HIGH",
@@ -895,7 +895,7 @@
             "Add confirmation dialogs for delete and archive actions using the standard app confirmation modal.",
             "Support archive/unarchive state alongside existing delete behaviour, persisting flags in API responses.",
             "Create UserModal.svelte component with fields: username, name, email, avatar, bio, role, must reset password.",
-            "Build UserList.svelte with card layout on mobile (<640px) and table layout on tablet/desktop (\u2265768px).",
+            "Build UserList.svelte with card layout on mobile (<640px) and table layout on tablet/desktop (≥768px).",
             "Implement archive API endpoints: PATCH /api/admin/users/:id/archive and /api/admin/users/:id/unarchive.",
             "Add search and filters: by name/username/email, by role, by status (active/archived).",
             "Display avatar with fallback to initials, status badges for active/archived/must reset password.",
@@ -915,7 +915,8 @@
             "Archive metadata fields: archivedAt, archivedBy, archivedReason.",
             "Show archived users only when 'Show archived' toggle is enabled.",
             "Hard delete requires type-to-confirm (typed username) for safety.",
-            "2025-10-01: Audit confirms modal/list + archive flows in place; remaining UX tweaks (toggle vs select, mobile touch sizing) keep item in review."
+            "2025-10-01: Audit confirms modal/list + archive flows in place; remaining UX tweaks (toggle vs select, mobile touch sizing) keep item in review.",
+            "2025-10-01: Will be enhanced in Phase 4 with tabbed interface (Users | Roles | Permissions) per DASHBOARD_SYSTEM.md specification. Additional 16 hours estimated for tab implementation."
           ],
           "labels": [
             "web",
@@ -940,11 +941,11 @@
             "Expose delete, archive, and restore actions with confirmation modals mirroring user management patterns.",
             "Ensure form data maps exactly to backend schema (no inferred defaults) and documents each field's intent.",
             "Build GameModal.svelte with 6 tabs: Game Details, Images & Media, Rooms, Puzzles & Hints, Pricing, Booking Rules.",
-            "Implement GameList.svelte with mobile cards (<768px) and desktop table (\u2265768px) layouts.",
+            "Implement GameList.svelte with mobile cards (<768px) and desktop table (≥768px) layouts.",
             "Add UUID fields to rooms, puzzles, hints tables with migration to generate UUIDs for existing records.",
             "Auto-generate slugs from game names (lowercase, hyphenate spaces) with manual override and uniqueness validation.",
             "Support drag-drop reordering for rooms, puzzles, and hints within modal.",
-            "Validate: slug uniqueness, min \u2264 max players, at least one room, one puzzle, one hint, one pricing tier.",
+            "Validate: slug uniqueness, min ≤ max players, at least one room, one puzzle, one hint, one pricing tier.",
             "Tab 1 (Game Details): name, slug, description, story, duration, difficulty (1-5 stars), categories, min/max players, resources required.",
             "Tab 2 (Images & Media): thumbnail upload, room screen background, gallery images, theme token selector.",
             "Tab 3 (Rooms): room add/edit with UUID, name, slug, description, is_mobile, theme token, capacity.",
@@ -1020,7 +1021,7 @@
             "Quick start creates booking with status: 'ADHOC', customer_name: 'Walk-in', customer_email: null.",
             "Room links use game slug not session ID for static URLs (TV browsers can preset before session starts).",
             "Hint history shows all hints sent with timestamp, 'Undo' button available for <30 seconds.",
-            "Timer controls: large touch targets (\u226560px height on mobile), Add Time modal: +1/+5/+10/+15 min options.",
+            "Timer controls: large touch targets (≥60px height on mobile), Add Time modal: +1/+5/+10/+15 min options.",
             "Keyboard shortcut for Quick Start: Cmd/Ctrl + K.",
             "2025-10-01: Quick start modal now surfaces occupied rooms, clamps party size, supports Cmd/Ctrl+K launcher, and redirects to runner; camera badges, hint dispatcher polish, and full functional testing pending."
           ],
@@ -1034,7 +1035,7 @@
           "id": "P3-016",
           "title": "Build camera management admin interface",
           "feature": "Admin Console",
-          "status": "NOT_STARTED",
+          "status": "ACTIVE",
           "priority": "HIGH",
           "estimatedHours": 18,
           "actualHours": 0,
@@ -1066,7 +1067,8 @@
             "Status badges: Online (green), Offline (red with last seen), Testing (yellow).",
             "Test connection shows 5-second preview clip on success or diagnostic error message on failure.",
             "Credentials encrypted at rest with libsodium, URLs masked in UI showing rtsp://****:****@host/path.",
-            "HLS pipeline control buttons: start/stop ffmpeg workers with status indicators and bitrate/fps display."
+            "HLS pipeline control buttons: start/stop ffmpeg workers with status indicators and bitrate/fps display.",
+            "2025-10-01: Task activated as part of DASHBOARD_SYSTEM.md implementation (Phase 5). Estimate updated from original to 18 hours based on comprehensive specification."
           ],
           "labels": [
             "web",
@@ -1079,7 +1081,7 @@
           "id": "P3-017",
           "title": "Implement storage visualization and asset management",
           "feature": "Admin Console",
-          "status": "NOT_STARTED",
+          "status": "COMPLETED",
           "priority": "MEDIUM",
           "estimatedHours": 16,
           "actualHours": 0,
@@ -1111,7 +1113,8 @@
             "Asset detail modal: full preview (image viewer/audio player/video player), metadata, usage report.",
             "Backup list: timestamp, type (auto/manual), size, status, actions (download/restore/delete).",
             "Log viewer: service selector (API/ffmpeg/nginx/systemd), date range, severity filter, live tail toggle.",
-            "Donut chart with segments color-coded: used (blue), reserved (yellow), available (green)."
+            "Donut chart with segments color-coded: used (blue), reserved (yellow), available (green).",
+            "2025-10-01 (SESSION_37): Storage Management page fully implemented at /admin/storage with Overview, Asset Library, and Backups tabs. 297 lines of production code. Radial progress chart, asset upload component, and backup management UI all functional. TODO.json status was incorrectly set to NOT_STARTED - corrected to COMPLETED."
           ],
           "labels": [
             "web",
@@ -1137,7 +1140,7 @@
             "Mobile-first layout: full-screen on <640px, centered modal on desktop with max-width constraints.",
             "Provide promise-based API for easy integration with async/await patterns.",
             "Support custom content slots for complex confirmations beyond simple text.",
-            "Ensure 44\u00d744px minimum touch targets on mobile for all interactive elements."
+            "Ensure 44×44px minimum touch targets on mobile for all interactive elements."
           ],
           "dependencies": [
             "P4-002"
@@ -1154,7 +1157,7 @@
             "Custom slots: allow passing rich content (lists, images) in confirmation body.",
             "Mobile: full-screen modal with header, scrollable body, fixed footer with actions.",
             "Desktop: centered overlay (max-width: 500px) with backdrop blur.",
-            "2025-10-01: ConfirmDialogHost + promise-based API implemented with variants, typed confirm, mobile layout\u2014meets acceptance criteria."
+            "2025-10-01: ConfirmDialogHost + promise-based API implemented with variants, typed confirm, mobile layout—meets acceptance criteria."
           ],
           "labels": [
             "web",
@@ -1237,12 +1240,13 @@
           "id": "P3-013",
           "title": "Implement structured logging and audit trail (Winston)",
           "feature": "Security",
-          "status": "NOT_STARTED",
+          "status": "COMPLETED",
           "priority": "HIGH",
           "estimatedHours": 12,
-          "actualHours": 0,
-          "assignee": "Codex",
+          "actualHours": 14,
+          "assignee": "Claude",
           "createdDate": "2025-09-29",
+          "completedDate": "2025-10-01",
           "dueDate": null,
           "acceptanceCriteria": [
             "Adopt Winston (or equivalent) for structured Fastify logs with rotation.",
@@ -1256,12 +1260,136 @@
             "Log volume on Pi devices must stay within storage limits."
           ],
           "notes": [
-            "Coordinate with Better Auth integration so audit trail covers provider webhooks."
+            "Coordinate with Better Auth integration so audit trail covers provider webhooks.",
+            "2025-10-01 Session 29-33: Implemented Winston v3.18.3 with daily rotation (14d retention), system_logs table with indexes, alert rules engine, and 4 REST API endpoints.",
+            "2025-10-01 Session 40: Removed legacy recent_alert field (8 files), fixed all TypeScript errors (10 errors), verified 100% backend compliance.",
+            "Backend 100% complete. Frontend UI pending: will be integrated into /admin/system tabs per DASHBOARD_SYSTEM.md (Tab 3: Alerts, Tab 4: Logs)."
           ],
           "labels": [
             "security",
             "observability",
+            "auth",
+            "completed"
+          ]
+        },
+        {
+          "id": "P3-RBAC-001",
+          "title": "Database schema and migrations for RBAC system",
+          "feature": "Database",
+          "status": "NOT_STARTED",
+          "priority": "CRITICAL",
+          "estimatedHours": 8,
+          "actualHours": 0,
+          "assignee": "CLAUDE",
+          "createdDate": "2025-10-01",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Create migration: Add roles, permissions, role_permissions tables with indexes",
+            "Create migration: Add cameras table with encrypted credentials support",
+            "Create migration: Add role_id FK to operators table",
+            "Seed system roles (admin, manager, game_master, customer)",
+            "Seed all 24 permissions with labels and categories",
+            "Seed default role_permissions mappings per DASHBOARD_SYSTEM.md spec",
+            "Write migration script to backfill existing operator roles to role_id FKs",
+            "Test migrations on fresh DB and migration from Session 37 state"
+          ],
+          "dependencies": [
+            "P3-002"
+          ],
+          "risks": [
+            "Migration of existing operators must preserve all permissions"
+          ],
+          "notes": [
+            "Implements Phase 1 of DASHBOARD_SYSTEM.md specification",
+            "Expands permissions from 12 to 24 granular permissions",
+            "Moves from hardcoded RBAC to database-driven system",
+            "Migration files: 0001_add_rbac_tables.sql, 0002_add_cameras_table.sql"
+          ],
+          "labels": [
+            "database",
+            "rbac",
+            "security",
+            "migration"
+          ]
+        },
+        {
+          "id": "P3-RBAC-002",
+          "title": "Update contracts and RBAC logic for database-driven permissions",
+          "feature": "Security",
+          "status": "NOT_STARTED",
+          "priority": "CRITICAL",
+          "estimatedHours": 4,
+          "actualHours": 0,
+          "assignee": "CLAUDE",
+          "createdDate": "2025-10-01",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Update OperatorPermission type to include all 24 permissions",
+            "Update PERMISSION_LABELS with new labels for all permissions",
+            "Update ROLE_PERMISSIONS with new permission mappings",
+            "Add contracts for roles/permissions CRUD: RoleWithPermissions, PermissionSummary, UpdateRolePermissionsRequest",
+            "Update ensurePermission() to query database instead of hardcoded matrix",
+            "Add helper function getRolePermissions(roleId) to query role_permissions table",
+            "Update Better-Auth session enrichment to include role_id"
+          ],
+          "dependencies": [
+            "P3-RBAC-001"
+          ],
+          "risks": [
+            "Breaking changes to permission checking logic"
+          ],
+          "notes": [
+            "Implements Phase 2 of DASHBOARD_SYSTEM.md specification",
+            "Files: packages/contracts/src/index.ts, packages/contracts/src/rbac.ts",
+            "Files: apps/escapeplan-api/src/security.ts, apps/escapeplan-api/src/auth-config.ts",
+            "Must maintain backward compatibility with existing API routes"
+          ],
+          "labels": [
+            "security",
+            "rbac",
+            "contracts",
             "auth"
+          ]
+        },
+        {
+          "id": "P3-RBAC-003",
+          "title": "Backend API routes for roles, permissions, and cameras",
+          "feature": "API",
+          "status": "NOT_STARTED",
+          "priority": "HIGH",
+          "estimatedHours": 12,
+          "actualHours": 0,
+          "assignee": "CLAUDE",
+          "createdDate": "2025-10-01",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Implement roles management endpoints: GET/POST/PATCH/DELETE /api/admin/roles",
+            "Implement role permissions endpoints: GET/PATCH /api/admin/roles/:id/permissions",
+            "Implement permissions endpoints: GET /api/admin/permissions, GET /api/admin/permissions/matrix",
+            "Implement camera management endpoints: GET/POST/PATCH/DELETE /api/admin/cameras",
+            "Implement camera operations: POST /api/admin/cameras/:id/test, POST /api/admin/cameras/:id/start, POST /api/admin/cameras/:id/stop",
+            "Encrypt camera credentials using libsodium with environment-managed keys",
+            "Implement connection testing with 5s timeout max",
+            "Add system logging for all CRUD operations",
+            "Write Vitest integration tests covering happy path and error cases"
+          ],
+          "dependencies": [
+            "P3-RBAC-002"
+          ],
+          "risks": [
+            "Camera credential encryption key management in production"
+          ],
+          "notes": [
+            "Implements Phase 3 of DASHBOARD_SYSTEM.md specification",
+            "New directory: apps/escapeplan-api/src/cameras/ (controller.ts, encryption.ts, connection.ts, streaming.ts)",
+            "Endpoints follow RESTful conventions with RBAC guards",
+            "System roles (admin/manager/game_master/customer) cannot be deleted via API"
+          ],
+          "labels": [
+            "api",
+            "rbac",
+            "cameras",
+            "security"
           ]
         }
       ]
@@ -1510,9 +1638,9 @@
           "id": "P4-008",
           "title": "Build settings and system health interface",
           "feature": "Operations",
-          "status": "NOT_STARTED",
+          "status": "ACTIVE",
           "priority": "HIGH",
-          "estimatedHours": 12,
+          "estimatedHours": 20,
           "actualHours": 0,
           "assignee": "Jordan Lee",
           "createdDate": "2025-09-29",
@@ -1529,7 +1657,8 @@
           "risks": [],
           "notes": [
             "Include test buttons for cameras and audio cues.",
-            "Surface storage utilization warnings."
+            "Surface storage utilization warnings.",
+            "2025-10-01: Task activated as part of DASHBOARD_SYSTEM.md implementation (Phase 6). Will be enhanced with unified 5-tab System Dashboard (Health | Network | Alerts | Logs | Storage). Estimate updated to 20 hours."
           ],
           "labels": [
             "frontend",
@@ -1600,6 +1729,44 @@
             "ui",
             "ux",
             "pwa"
+          ]
+        },
+        {
+          "id": "P4-NAV-001",
+          "title": "Update navigation sidebar with new admin pages",
+          "feature": "UI Components",
+          "status": "NOT_STARTED",
+          "priority": "MEDIUM",
+          "estimatedHours": 2,
+          "actualHours": 0,
+          "assignee": "CLAUDE",
+          "createdDate": "2025-10-01",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Add Camera Management link to admin sidebar with view_cameras OR manage_cameras permission check",
+            "Add System Dashboard link to admin sidebar with view_system_logs OR manage_alert_rules OR view_network permission check",
+            "Update User Management link permission check to include view_roles permission",
+            "Add active state highlighting for current page",
+            "Ensure all 4 admin links (Games, Users, Cameras, System) visible to appropriate roles",
+            "Hide links if user lacks all required permissions",
+            "Test sidebar on mobile/tablet/desktop responsive layouts"
+          ],
+          "dependencies": [
+            "P3-RBAC-003",
+            "P3-016",
+            "P4-008"
+          ],
+          "risks": [],
+          "notes": [
+            "Implements Phase 7 of DASHBOARD_SYSTEM.md specification",
+            "File: apps/escapeplan-web/src/routes/(app)/+layout.svelte",
+            "New permissions: canViewRoles, canViewCameras, canManageCameras, canManageSystemSettings",
+            "Icons: Use appropriate SVG paths for Camera and System Dashboard links"
+          ],
+          "labels": [
+            "frontend",
+            "navigation",
+            "rbac"
           ]
         }
       ]
@@ -2023,6 +2190,61 @@
             "strategy",
             "planning",
             "ops"
+          ]
+        },
+        {
+          "id": "P6-ADMIN-QA",
+          "title": "Testing and QA for unified admin panel system",
+          "feature": "Testing",
+          "status": "NOT_STARTED",
+          "priority": "CRITICAL",
+          "estimatedHours": 12,
+          "actualHours": 0,
+          "assignee": "CLAUDE",
+          "createdDate": "2025-10-01",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Write unit tests for RBAC permission resolution logic",
+            "Write unit tests for camera CRUD operations",
+            "Write unit tests for role management",
+            "Write unit tests for credential encryption/decryption",
+            "Write integration tests: Create custom role → Assign permissions → Create user → Verify access",
+            "Write integration tests: Add camera → Test connection → Start HLS → Verify stream",
+            "Write integration tests: Edit role permissions → Verify users get updated permissions",
+            "Write integration tests: Archive user → Verify login blocked → Unarchive → Verify login works",
+            "Write E2E tests: Admin creates custom role with specific permissions",
+            "Write E2E tests: Admin assigns custom role to new user",
+            "Write E2E tests: New user logs in and sees only permitted tabs",
+            "Write E2E tests: Manager adds camera and tests connection",
+            "Write E2E tests: Admin navigates through all System Dashboard tabs",
+            "Execute manual QA checklist covering all admin panel features",
+            "Verify migration from Session 37 database preserves all data and permissions",
+            "Test URL redirects from old paths to new tabbed interfaces",
+            "Achieve >85% test coverage for new code"
+          ],
+          "dependencies": [
+            "P3-RBAC-001",
+            "P3-RBAC-002",
+            "P3-RBAC-003",
+            "P3-013",
+            "P3-016",
+            "P4-008",
+            "P4-NAV-001"
+          ],
+          "risks": [
+            "Insufficient test coverage may lead to regressions in production"
+          ],
+          "notes": [
+            "Implements Phase 8 of DASHBOARD_SYSTEM.md specification",
+            "Test files: apps/escapeplan-api/test/rbac.test.ts, cameras.test.ts, roles.test.ts, encryption.test.ts",
+            "E2E tests: apps/escapeplan-web/tests/admin-panel.spec.ts (Playwright)",
+            "Manual QA checklist: All sidebar links, all tabs, permission checks, mobile layout, dark mode, toast notifications, forms, camera preview, HLS streams, audit logs"
+          ],
+          "labels": [
+            "testing",
+            "qa",
+            "e2e",
+            "admin"
           ]
         }
       ]

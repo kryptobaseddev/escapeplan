@@ -2,12 +2,8 @@
 import logger from './logger.js';
 import { logToDatabase } from './logging/database.js';
 import { createAlert, evaluateAlertRules } from './logging/alerts.js';
-import { runMigrations } from './db/client.js';
 
 console.log('🧪 Testing Logging & Alerting System...\n');
-
-// Ensure database is ready
-runMigrations();
 
 // Test 1: Winston file logging
 console.log('1️⃣ Testing Winston file logging...');

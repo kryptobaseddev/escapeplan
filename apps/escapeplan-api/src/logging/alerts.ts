@@ -1,5 +1,7 @@
 import { nanoid } from 'nanoid';
-import { sqlite } from '../db/client.js';
+import { eq, and, isNull, count, desc, sql } from 'drizzle-orm';
+import { db } from '../db/client.js';
+import { alerts, alertRules, sessionHints } from '../db/schema.js';
 import { logToDatabase } from './database.js';
 import type { AlertLevel, AlertCategory } from './categories.js';
 
@@ -19,19 +21,19 @@ export function createAlert(options: CreateAlertOptions): string {
   const id = `alert-${nanoid(12)}`;
   const now = new Date().toISOString();
 
-  sqlite.prepare(
-    `INSERT INTO alerts (id, session_id, level, category, title, message, context, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
+  // Insert using Drizzle ORM (JSON mode handles stringify automatically)
+  db.insert(alerts).values({
     id,
-    options.sessionId ?? null,
-    options.level,
-    options.category,
-    options.title,
-    options.message,
-    options.context ? JSON.stringify(options.context) : null,
-    now
-  );
+    session_id: options.sessionId ?? null,
+    level: options.level,
+    category: options.category,
+    title: options.title,
+    message: options.message,
+    context: options.context ?? null,
+    created_at: now,
+    dismissed_at: null,
+    dismissed_by: null
+  }).run();
 
   // Log the alert creation
   logToDatabase('info', 'system', `Alert created: ${options.title}`, {
@@ -51,11 +53,17 @@ export function createAlert(options: CreateAlertOptions): string {
 export function dismissAlert(alertId: string, operatorId: string): void {
   const now = new Date().toISOString();
 
-  sqlite.prepare(
-    `UPDATE alerts
-     SET dismissed_at = ?, dismissed_by = ?
-     WHERE id = ? AND dismissed_at IS NULL`
-  ).run(now, operatorId, alertId);
+  // Update using Drizzle ORM
+  db.update(alerts)
+    .set({
+      dismissed_at: now,
+      dismissed_by: operatorId
+    })
+    .where(and(
+      eq(alerts.id, alertId),
+      isNull(alerts.dismissed_at)
+    ))
+    .run();
 
   logToDatabase('info', 'system', `Alert dismissed: ${alertId}`, {
     alertId,
@@ -69,14 +77,23 @@ export function dismissAlert(alertId: string, operatorId: string): void {
  * Auto-dismiss all alerts for a session (e.g., on session completion)
  */
 export function dismissAlertsBySession(sessionId: string, reason: string): void {
-  sqlite.prepare(
-    `UPDATE alerts
-     SET dismissed_at = CURRENT_TIMESTAMP, dismissed_by = 'system'
-     WHERE session_id = ? AND dismissed_at IS NULL`
-  ).run(sessionId);
+  const now = new Date().toISOString();
+
+  // Update using Drizzle ORM (use null for system dismissals to avoid FK constraint)
+  db.update(alerts)
+    .set({
+      dismissed_at: now,
+      dismissed_by: null
+    })
+    .where(and(
+      eq(alerts.session_id, sessionId),
+      isNull(alerts.dismissed_at)
+    ))
+    .run();
 
   logToDatabase('info', 'system', `Auto-dismissed alerts for session: ${reason}`, {
-    sessionId
+    sessionId,
+    reason
   });
 }
 
@@ -84,18 +101,23 @@ export function dismissAlertsBySession(sessionId: string, reason: string): void 
  * Auto-dismiss alerts based on event type
  */
 export function autoDismissAlerts(event: string, context: any): void {
-  // Get all active alerts that should be dismissed by this event
-  const rules = sqlite.prepare(
-    `SELECT DISTINCT ar.auto_dismiss_on
-     FROM alerts a
-     JOIN alert_rules ar ON ar.category = a.category
-     WHERE a.dismissed_at IS NULL AND ar.auto_dismiss_on IS NOT NULL`
-  ).all() as any[];
+  // Get all active alerts with their associated rules using Drizzle ORM
+  const activeAlertsWithRules = db.select({
+    auto_dismiss_on: alertRules.auto_dismiss_on
+  })
+    .from(alerts)
+    .innerJoin(alertRules, eq(alertRules.category, alerts.category))
+    .where(and(
+      isNull(alerts.dismissed_at),
+      sql`${alertRules.auto_dismiss_on} IS NOT NULL`
+    ))
+    .all();
 
-  for (const rule of rules) {
-    if (!rule.auto_dismiss_on) continue;
+  // Get unique auto_dismiss_on values (Drizzle parses JSON automatically)
+  const uniqueRules = [...new Set(activeAlertsWithRules.map(r => r.auto_dismiss_on))].filter(v => v !== null && v !== undefined);
 
-    const dismissEvents = JSON.parse(rule.auto_dismiss_on);
+  for (const autoDismissOn of uniqueRules) {
+    const dismissEvents = autoDismissOn as any[];
     if (Array.isArray(dismissEvents) && dismissEvents.includes(event)) {
       // Dismiss alerts matching this event
       if (context.sessionId) {
@@ -109,12 +131,14 @@ export function autoDismissAlerts(event: string, context: any): void {
  * Evaluate alert rules and create alerts if conditions match
  */
 export function evaluateAlertRules(event: string, context: any): void {
-  const rules = sqlite.prepare(
-    `SELECT * FROM alert_rules WHERE enabled = 1`
-  ).all() as any[];
+  // Get all enabled rules using Drizzle ORM
+  const rules = db.select()
+    .from(alertRules)
+    .where(eq(alertRules.enabled, true))
+    .all();
 
   for (const rule of rules) {
-    const conditions = JSON.parse(rule.conditions);
+    const conditions = rule.conditions as any;
 
     // Check if event matches
     if (conditions.event !== event) continue;
@@ -137,8 +161,8 @@ export function evaluateAlertRules(event: string, context: any): void {
 
     createAlert({
       sessionId: context.sessionId,
-      level: rule.level,
-      category: rule.category,
+      level: rule.level as AlertLevel,
+      category: rule.category as AlertCategory,
       title,
       message,
       context
@@ -155,13 +179,17 @@ export function evaluateAlertRules(event: string, context: any): void {
 function meetsThreshold(threshold: any, context: any): boolean {
   // Handle count-based thresholds (e.g., excessive hints)
   if (threshold.count !== undefined && threshold.window_minutes !== undefined) {
-    // Query session_hints table for hint count in time window
+    // Query session_hints table for hint count in time window using Drizzle ORM
     if (context.sessionId) {
       const cutoffTime = new Date(Date.now() - threshold.window_minutes * 60000).toISOString();
-      const result = sqlite.prepare(
-        `SELECT COUNT(*) as count FROM session_hints
-         WHERE session_id = ? AND delivered_at > ?`
-      ).get(context.sessionId, cutoffTime) as { count: number };
+
+      const [result] = db.select({ count: count() })
+        .from(sessionHints)
+        .where(and(
+          eq(sessionHints.session_id, context.sessionId),
+          sql`${sessionHints.delivered_at} > ${cutoffTime}`
+        ))
+        .all();
 
       // Update context with actual count for use in alert message
       context.count = result.count;
@@ -199,12 +227,18 @@ function meetsThreshold(threshold: any, context: any): boolean {
  * Prevent duplicate alerts for the same rule/session
  */
 function shouldPreventDuplicate(rule: any, sessionId: string): boolean {
-  // Check if there's already an active alert for this rule and session
-  const existing = sqlite.prepare(
-    `SELECT COUNT(*) as count FROM alerts
-     WHERE category = ? AND session_id = ? AND dismissed_at IS NULL
-     AND created_at > datetime('now', '-5 minutes')`
-  ).get(rule.category, sessionId) as { count: number };
+  // Check if there's already an active alert for this rule and session using Drizzle ORM
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60000).toISOString();
+
+  const [existing] = db.select({ count: count() })
+    .from(alerts)
+    .where(and(
+      eq(alerts.category, rule.category),
+      eq(alerts.session_id, sessionId),
+      isNull(alerts.dismissed_at),
+      sql`${alerts.created_at} > ${fiveMinutesAgo}`
+    ))
+    .all();
 
   return existing.count > 0;
 }
@@ -235,16 +269,20 @@ export interface AlertRow {
  * Get all active alerts
  */
 export function getActiveAlerts(): AlertRow[] {
-  return sqlite.prepare(
-    `SELECT * FROM alerts WHERE dismissed_at IS NULL ORDER BY created_at DESC`
-  ).all() as AlertRow[];
+  return db.select()
+    .from(alerts)
+    .where(isNull(alerts.dismissed_at))
+    .orderBy(desc(alerts.created_at))
+    .all() as AlertRow[];
 }
 
 /**
  * Get alerts for a specific session
  */
 export function getSessionAlerts(sessionId: string) {
-  return sqlite.prepare(
-    `SELECT * FROM alerts WHERE session_id = ? ORDER BY created_at DESC`
-  ).all(sessionId);
+  return db.select()
+    .from(alerts)
+    .where(eq(alerts.session_id, sessionId))
+    .orderBy(desc(alerts.created_at))
+    .all();
 }

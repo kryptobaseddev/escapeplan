@@ -129,7 +129,6 @@ export interface ActiveSessionSummary {
   timer: TimerState;
   hintsUsed: number;
   streamThumbnailUrl?: string;
-  recentAlert?: string;
 }
 
 export interface BookingSummary {
@@ -170,7 +169,10 @@ export interface DashboardResponse {
   activeSessions: ActiveSessionSummary[];
   alerts: Array<{
     id: string;
+    sessionId?: string;
     level: 'info' | 'warning' | 'critical';
+    category: 'timer' | 'network' | 'system' | 'session' | 'hint';
+    title: string;
     message: string;
     createdAt: string;
   }>;
@@ -316,7 +318,7 @@ export interface GameMediaConfig {
   galleryAssetIds: string[];
 }
 
-export type PricingModel = 'per_person' | 'flat_rate';
+export type PricingModel = 'per_person' | 'per_session' | 'per_hour';
 
 export interface GamePricingTier {
   id: string;
@@ -492,6 +494,97 @@ export interface UpdateNetworkProfileRequest {
   status?: NetworkHealth;
   statusMessage?: string;
   details?: string;
+}
+
+// ============================================================================
+// LOGGING & ALERTING
+// ============================================================================
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+export type LogCategory = 'session' | 'auth' | 'system' | 'network' | 'api';
+export type AlertLevel = 'info' | 'warning' | 'critical';
+export type AlertCategory = 'timer' | 'network' | 'system' | 'session' | 'hint';
+
+export interface SystemLog {
+  id: string;
+  level: LogLevel;
+  category: LogCategory;
+  message: string;
+  context?: Record<string, any> | null;
+  timestamp: string;
+  created_at: string;
+}
+
+export interface Alert {
+  id: string;
+  sessionId?: string | null;
+  level: AlertLevel;
+  category: AlertCategory;
+  title: string;
+  message: string;
+  context?: Record<string, any> | null;
+  createdAt: string;
+  dismissedAt?: string | null;
+  dismissedBy?: string | null;
+}
+
+export interface AlertRuleConditions {
+  event: string;
+  threshold?: {
+    count?: number;
+    window_minutes?: number;
+    [key: string]: any;
+  };
+  [key: string]: any;
+}
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  description?: string | null;
+  category: AlertCategory;
+  level: AlertLevel;
+  enabled: boolean;
+  conditions: AlertRuleConditions;
+  title_template: string;
+  message_template: string;
+  auto_dismiss_on?: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GetAlertRulesResponse {
+  rules: AlertRule[];
+}
+
+export interface UpdateAlertRuleRequest {
+  enabled?: boolean;
+  level?: AlertLevel;
+  conditions?: AlertRuleConditions;
+  title_template?: string;
+  message_template?: string;
+  auto_dismiss_on?: string[] | null;
+}
+
+export interface GetSystemLogsRequest {
+  level?: LogLevel;
+  category?: LogCategory;
+  limit?: number;
+  offset?: number;
+  search?: string;
+}
+
+export interface GetSystemLogsResponse {
+  logs: SystemLog[];
+  total: number;
+}
+
+export interface DismissAlertRequest {
+  alertId: string;
+}
+
+export interface DismissAlertResponse {
+  success: boolean;
 }
 
 export { ROLE_PERMISSIONS, PERMISSION_LABELS, ROLE_LABELS, ALL_PERMISSIONS } from './rbac.js';

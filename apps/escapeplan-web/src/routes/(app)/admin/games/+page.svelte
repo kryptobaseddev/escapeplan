@@ -56,13 +56,11 @@
       archivedReason: null,
       rooms: game.rooms.map((room) => ({
         ...room,
-        id: uid('room'),
-        uuid: uid('room')
+        id: uid('room')
       })),
       puzzles: game.puzzles.map((puzzle) => ({
         ...puzzle,
         id: uid('puzzle'),
-        uuid: uid('puzzle'),
         hints: puzzle.hints?.map((hint) => ({ ...hint, uuid: uid('hint') })) ?? []
       }))
     };

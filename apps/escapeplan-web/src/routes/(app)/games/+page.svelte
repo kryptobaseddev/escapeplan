@@ -47,7 +47,7 @@
     if (!slug) return '';
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
     const url = new URL(`/timer/${slug}`, origin);
-    const roomIdentity = session.roomUuid ?? session.roomId;
+    const roomIdentity = session.roomId;
     if (roomIdentity) {
       url.searchParams.set('room', roomIdentity);
     }

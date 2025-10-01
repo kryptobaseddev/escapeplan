@@ -9,7 +9,8 @@ let adminSessionCookie: string;
 let testOperatorId: string | null = null;
 
 beforeAll(async () => {
-  await import('../src/db/seed.ts');
+  const { seedIdempotent } = await import('../src/db/seed.ts');
+  await seedIdempotent();
   server = await buildServer();
 
   // Authenticate as admin for test operations

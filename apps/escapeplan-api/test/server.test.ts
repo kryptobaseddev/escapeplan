@@ -8,7 +8,8 @@ let sessionCookie: string;
 let sessionFixture: { bookingId: string; sessionId: string; timerSlug: string } | null = null;
 
 beforeAll(async () => {
-  await import('../src/db/seed.ts');
+  const { seedIdempotent } = await import('../src/db/seed.ts');
+  await seedIdempotent();
   server = await buildServer();
 });
 
@@ -75,8 +76,8 @@ describe('EscapePlan API', () => {
       );
 
       sqlite.prepare(
-        `INSERT INTO sessions (id, booking_id, status, timer_total_seconds, timer_remaining_seconds, timer_status, started_at, scheduled_end, hints_used, stream_thumbnail_url, background_audio_track, background_audio_is_playing, crew_primary, crew_support, recent_alert)
-         VALUES (?, ?, 'running', 3600, 3300, 'running', ?, ?, 0, NULL, NULL, 0, 'Console Operator', NULL, NULL)`
+        `INSERT INTO sessions (id, booking_id, status, timer_total_seconds, timer_remaining_seconds, timer_status, started_at, scheduled_end, hints_used, stream_thumbnail_url, background_audio_track, background_audio_is_playing, crew_primary, crew_support)
+         VALUES (?, ?, 'running', 3600, 3300, 'running', ?, ?, 0, NULL, NULL, 0, 'Console Operator', NULL)`
       ).run(
         sessionId,
         bookingId,

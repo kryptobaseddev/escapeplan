@@ -1,5 +1,5 @@
-import { nanoid } from 'nanoid';
-import { runMigrations, sqlite } from './db/client.js';
+import { randomUUID } from 'node:crypto';
+import { sqlite } from './db/client.js';
 import {
   emitBookingsUpdate,
   emitCommandAck,
@@ -34,6 +34,7 @@ import type {
   NetworkHealth,
   NetworkProfile,
   OperatorProfile,
+  OperatorRole,
   OperatorSummary,
   QuickStartSessionRequest,
   QuickStartSessionResponse,
@@ -46,8 +47,6 @@ import type {
 } from '@escapeplan/contracts';
 import { auth } from './auth.js';
 import { normalizePermissions, permissionsForRole, normalizeRole } from './security.js';
-
-runMigrations();
 
 const authContextPromise = auth.$context;
 
@@ -131,7 +130,6 @@ type SessionRow = {
   background_audio_is_playing: number;
   crew_primary: string;
   crew_support: string | null;
-  recent_alert: string | null;
   party_size: number;
   is_mobile: number;
   is_adhoc: number;
@@ -139,7 +137,6 @@ type SessionRow = {
   game_name: string;
   game_slug: string;
   room_id: string;
-  room_uuid: string | null;
   room_name: string;
 };
 
@@ -171,7 +168,6 @@ type GameRow = {
 
 type GamePuzzleRow = {
   id: string;
-  uuid: string | null;
   game_id: string;
   title: string;
   description: string | null;
@@ -201,7 +197,6 @@ type NetworkProfileRow = {
 
 type RoomRow = {
   id: string;
-  uuid: string | null;
   game_id: string;
   name: string;
   is_mobile_capable: number;
@@ -281,17 +276,17 @@ const gameByIdStmt = sqlite.prepare(
 );
 
 const puzzlesByGameStmt = sqlite.prepare(
-  `SELECT id, uuid, game_id, title, description, solution, media_asset, operator_actions, display_order, hints, media_asset_meta
+  `SELECT id, game_id, title, description, solution, media_asset, operator_actions, display_order, hints, media_asset_meta
    FROM game_puzzles WHERE game_id = ? ORDER BY display_order ASC`
 );
 
 const roomsByGameStmt = sqlite.prepare(
-  `SELECT id, uuid, game_id, name, is_mobile_capable, theme_token, description, slug, capacity
+  `SELECT id, game_id, name, is_mobile_capable, theme_token, description, slug, capacity
    FROM rooms WHERE game_id = ? ORDER BY name ASC`
 );
 
 const roomByIdStmt = sqlite.prepare(
-  `SELECT r.id, r.uuid, r.game_id, r.name, r.is_mobile_capable, r.theme_token, r.description, r.slug, r.capacity,
+  `SELECT r.id, r.game_id, r.name, r.is_mobile_capable, r.theme_token, r.description, r.slug, r.capacity,
           g.slug AS game_slug
    FROM rooms r
    JOIN games g ON g.id = r.game_id
@@ -386,7 +381,6 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
   const roomRows = roomsByGameStmt.all(row.id) as RoomRow[];
   const puzzles: GamePuzzleDefinition[] = puzzleRows.map((puzzle) => ({
     id: puzzle.id,
-    uuid: puzzle.uuid ?? puzzle.id,
     title: puzzle.title,
     description: puzzle.description ?? undefined,
     solution: puzzle.solution ?? undefined,
@@ -398,7 +392,6 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
   }));
   const rooms: GameRoomDefinition[] = roomRows.map((room) => ({
     id: room.id,
-    uuid: room.uuid ?? room.id,
     name: room.name,
     isMobileCapable: Boolean(room.is_mobile_capable),
     themeToken: room.theme_token ?? undefined,
@@ -418,7 +411,7 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
     storyIntro: row.story_intro ?? undefined,
     durationMinutes: row.duration_minutes,
     difficulty: row.difficulty,
-    pricingModel: row.pricing_model,
+    pricingModel: row.pricing_model as 'per_person' | 'per_session' | 'per_hour',
     categories: categories.length ? categories : row.category ? [row.category] : [],
     minPlayers: row.min_players,
     maxPlayers: row.max_players,
@@ -517,11 +510,9 @@ export function getGameDetails(gameId: string): GameDetails | undefined {
 }
 
 function normalizePuzzleInput(puzzle: GamePuzzleDefinition, index: number): GamePuzzleDefinition {
-  const id = puzzle.id && puzzle.id.trim().length > 0 ? puzzle.id : `gpz-${nanoid(12)}`;
-  const uuid = puzzle.uuid && puzzle.uuid.trim().length > 0 ? puzzle.uuid : nanoid();
+  const id = puzzle.id && puzzle.id.trim().length > 0 ? puzzle.id : randomUUID();
   return {
     id,
-    uuid,
     title: puzzle.title,
     description: puzzle.description,
     solution: puzzle.solution,
@@ -534,11 +525,9 @@ function normalizePuzzleInput(puzzle: GamePuzzleDefinition, index: number): Game
 }
 
 function normalizeRoomInput(room: GameRoomDefinition, index: number): GameRoomDefinition {
-  const id = room.id && room.id.trim().length > 0 ? room.id : `room-${nanoid(10)}`;
-  const uuid = room.uuid && room.uuid.trim().length > 0 ? room.uuid : nanoid();
+  const id = room.id && room.id.trim().length > 0 ? room.id : randomUUID();
   return {
     id,
-    uuid,
     name: room.name,
     isMobileCapable: room.isMobileCapable,
     themeToken: room.themeToken,
@@ -550,24 +539,58 @@ function normalizeRoomInput(room: GameRoomDefinition, index: number): GameRoomDe
 }
 
 function persistGameRelations(gameId: string, rooms: GameRoomDefinition[], puzzles: GamePuzzleDefinition[]) {
-  const deleteRooms = sqlite.prepare(`DELETE FROM rooms WHERE game_id = ?`);
-  const deletePuzzles = sqlite.prepare(`DELETE FROM game_puzzles WHERE game_id = ?`);
-  const insertRoom = sqlite.prepare(
-    `INSERT INTO rooms (id, uuid, game_id, name, is_mobile_capable, theme_token, description, slug, capacity)
-     VALUES (@id, @uuid, @game_id, @name, @is_mobile_capable, @theme_token, @description, @slug, @capacity)`
+  // Use UPSERT to avoid foreign key constraint issues with bookings/sessions
+  const upsertRoom = sqlite.prepare(
+    `INSERT INTO rooms (id, game_id, name, is_mobile_capable, theme_token, description, slug, capacity)
+     VALUES (@id, @game_id, @name, @is_mobile_capable, @theme_token, @description, @slug, @capacity)
+     ON CONFLICT(id) DO UPDATE SET
+       name = @name,
+       is_mobile_capable = @is_mobile_capable,
+       theme_token = @theme_token,
+       description = @description,
+       slug = @slug,
+       capacity = @capacity`
   );
-  const insertPuzzle = sqlite.prepare(
-    `INSERT INTO game_puzzles (id, uuid, game_id, title, description, solution, media_asset, operator_actions, display_order, hints, media_asset_meta)
-     VALUES (@id, @uuid, @game_id, @title, @description, @solution, @media_asset, @operator_actions, @display_order, @hints, @media_asset_meta)`
+  const upsertPuzzle = sqlite.prepare(
+    `INSERT INTO game_puzzles (id, game_id, title, description, solution, media_asset, operator_actions, display_order, hints, media_asset_meta)
+     VALUES (@id, @game_id, @title, @description, @solution, @media_asset, @operator_actions, @display_order, @hints, @media_asset_meta)
+     ON CONFLICT(id) DO UPDATE SET
+       title = @title,
+       description = @description,
+       solution = @solution,
+       media_asset = @media_asset,
+       operator_actions = @operator_actions,
+       display_order = @display_order,
+       hints = @hints,
+       media_asset_meta = @media_asset_meta`
   );
 
-  deleteRooms.run(gameId);
-  deletePuzzles.run(gameId);
+  // Get current IDs to identify deletions
+  const existingRoomIds = sqlite.prepare(`SELECT id FROM rooms WHERE game_id = ?`).all(gameId).map((r: any) => r.id);
+  const existingPuzzleIds = sqlite.prepare(`SELECT id FROM game_puzzles WHERE game_id = ?`).all(gameId).map((p: any) => p.id);
 
+  const newRoomIds = rooms.map(r => r.id);
+  const newPuzzleIds = puzzles.map(p => p.id);
+
+  // Delete removed rooms (only if no bookings reference them)
+  const roomsToDelete = existingRoomIds.filter((id: string) => !newRoomIds.includes(id));
+  for (const roomId of roomsToDelete) {
+    const hasBookings = sqlite.prepare(`SELECT COUNT(*) as count FROM bookings WHERE room_id = ?`).get(roomId) as { count: number };
+    if (hasBookings.count === 0) {
+      sqlite.prepare(`DELETE FROM rooms WHERE id = ?`).run(roomId);
+    }
+  }
+
+  // Delete removed puzzles (safe - no foreign key references)
+  const puzzlesToDelete = existingPuzzleIds.filter((id: string) => !newPuzzleIds.includes(id));
+  for (const puzzleId of puzzlesToDelete) {
+    sqlite.prepare(`DELETE FROM game_puzzles WHERE id = ?`).run(puzzleId);
+  }
+
+  // Upsert rooms
   for (const room of rooms) {
-    insertRoom.run({
+    upsertRoom.run({
       id: room.id,
-      uuid: room.uuid ?? room.id,
       game_id: gameId,
       name: room.name,
       is_mobile_capable: room.isMobileCapable ? 1 : 0,
@@ -578,10 +601,10 @@ function persistGameRelations(gameId: string, rooms: GameRoomDefinition[], puzzl
     });
   }
 
+  // Upsert puzzles
   for (const puzzle of puzzles) {
-    insertPuzzle.run({
+    upsertPuzzle.run({
       id: puzzle.id,
-      uuid: puzzle.uuid ?? puzzle.id,
       game_id: gameId,
       title: puzzle.title,
       description: puzzle.description ?? null,
@@ -601,7 +624,7 @@ export function createGame(payload: SaveGameRequest): GameDetails {
   if (slugCheck) {
     throw new Error('Slug already in use');
   }
-  const gameId = `game-${payload.slug}`;
+  const gameId = randomUUID();
   const categories = JSON.stringify(payload.categories ?? []);
   const mediaConfig = payload.media ? JSON.stringify(payload.media) : null;
   const pricingConfig = payload.pricing ? JSON.stringify(payload.pricing) : null;
@@ -811,25 +834,25 @@ export async function createOperatorAccount(input: CreateOperatorRequest): Promi
   const trimmedName = input.name.trim();
   const trimmedBio = input.bio?.trim() ?? null;
   // Better-Auth uses 'image' field which maps to 'avatar_config' column with mode: 'json'
-  // Drizzle will automatically JSON.stringify the object, so pass it directly
-  const avatarImage = input.avatarConfig;
+  // We stringify it for Better Auth compatibility, our adapter will parse it back
+  const avatarImage = input.avatarConfig ? JSON.stringify(input.avatarConfig) : undefined;
 
   const hashedPassword = await context.password.hash(input.password);
 
   const user = await adapter.createUser({
-    email: email ?? undefined,
+    ...(email ? { email } : {}),
     name: trimmedName,
     username,
     role,
-    bio: trimmedBio ?? undefined,
-    image: avatarImage,
+    ...(trimmedBio ? { bio: trimmedBio } : {}),
+    ...(avatarImage ? { image: avatarImage } : {}),
     mustResetPassword: input.mustResetPassword ?? false,
     emailVerified: Boolean(email),
     passwordHash: hashedPassword,
     archivedAt: null,
     archivedBy: null,
     archivedReason: null
-  });
+  } as any) as any;
 
   await adapter.createAccount({
     userId: user.id,
@@ -968,8 +991,9 @@ export async function updateOwnProfile(operatorId: string, payload: UpdateOwnPro
     updates.email = payload.email?.trim();
   }
   if (payload.avatarConfig !== undefined) {
-    // Better-Auth uses 'image' field which maps to 'avatar_config' column
-    updates.image = payload.avatarConfig ? JSON.stringify(payload.avatarConfig) : null;
+    // Better-Auth uses 'image' field which maps to 'avatar_config' column with mode: 'json'
+    // Pass the object directly - Better Auth adapter + Drizzle will handle serialization
+    updates.image = payload.avatarConfig ?? null;
   }
   if (payload.bio !== undefined) {
     const trimmed = payload.bio?.trim();
@@ -1145,7 +1169,6 @@ function mapSessionRow(row: SessionRow): GameSessionDetails {
     gameSlug: row.game_slug,
     roomName: row.room_name,
     roomId: row.room_id,
-    roomUuid: row.room_uuid ?? undefined,
     startedAt: row.started_at,
     scheduledEnd: row.scheduled_end,
     status: row.session_status as GameSessionDetails['status'],
@@ -1162,7 +1185,6 @@ function mapSessionRow(row: SessionRow): GameSessionDetails {
     },
     hintsUsed: row.hints_used,
     streamThumbnailUrl: row.stream_thumbnail_url ?? undefined,
-    recentAlert: row.recent_alert ?? undefined,
     puzzles: [],
     hintLog: [],
     backgroundAudio: row.background_audio_track
@@ -1194,10 +1216,10 @@ export function listActiveSessions(): ActiveSessionsResponse {
     .prepare(
       `SELECT s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
               s.timer_total_elapsed_seconds, s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
-              s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
+              s.background_audio_is_playing, s.crew_primary, s.crew_support,
               b.party_size, b.is_mobile, b.is_adhoc, b.start_time, b.end_time,
               g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
-              r.id AS room_id, r.uuid AS room_uuid, r.name AS room_name
+              r.id AS room_id, r.name AS room_name
        FROM sessions s
        JOIN bookings b ON b.id = s.booking_id
        JOIN games g ON g.id = b.game_id
@@ -1275,10 +1297,10 @@ export function listSessions(filters?: {
   const query = `
     SELECT s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
            s.timer_total_elapsed_seconds, s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
-           s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
+           s.background_audio_is_playing, s.crew_primary, s.crew_support,
            b.party_size, b.is_mobile, b.is_adhoc, b.start_time, b.end_time,
            g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
-           r.id AS room_id, r.uuid AS room_uuid, r.name AS room_name
+           r.id AS room_id, r.name AS room_name
     FROM sessions s
     JOIN bookings b ON b.id = s.booking_id
     JOIN games g ON g.id = b.game_id
@@ -1320,10 +1342,10 @@ export function getSessionById(id: string): GameSessionDetails | undefined {
   const stmt = sqlite.prepare(
     `SELECT s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
             s.timer_total_elapsed_seconds, s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
-            s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
+            s.background_audio_is_playing, s.crew_primary, s.crew_support,
             b.party_size, b.is_mobile, b.is_adhoc,
             g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
-            r.id AS room_id, r.uuid AS room_uuid, r.name AS room_name
+            r.id AS room_id, r.name AS room_name
      FROM sessions s
      JOIN bookings b ON b.id = s.booking_id
      JOIN games g ON g.id = b.game_id
@@ -1361,10 +1383,10 @@ export function getSessionBySlug(slug: string): { session: GameSessionDetails; s
     `SELECT t.slug, t.narrative,
             s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
             s.timer_total_elapsed_seconds, s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
-            s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
+            s.background_audio_is_playing, s.crew_primary, s.crew_support,
             b.party_size, b.is_mobile, b.is_adhoc,
             g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
-            r.id AS room_id, r.uuid AS room_uuid, r.name AS room_name
+            r.id AS room_id, r.name AS room_name
      FROM timer_slugs t
      JOIN sessions s ON s.id = t.session_id
      JOIN bookings b ON b.id = s.booking_id
@@ -1483,8 +1505,8 @@ export function quickStartSession(
   const totalSeconds = durationMinutes * 60;
   const scheduledEndIso = new Date(now.getTime() + totalSeconds * 1000).toISOString();
 
-  const bookingId = `booking-${nanoid(12)}`;
-  const sessionId = `session-${nanoid(12)}`;
+  const bookingId = randomUUID();
+  const sessionId = randomUUID();
   const bookingCode = `ADHOC-${now.getTime()}`;
 
   const bookingRules = safeParse<GameBookingRules>(gameRow.booking_rules_config);
@@ -1529,10 +1551,10 @@ export function quickStartSession(
       `INSERT INTO sessions (
          id, booking_id, status, timer_total_seconds, timer_remaining_seconds, timer_total_elapsed_seconds, timer_status,
          started_at, scheduled_end, hints_used, stream_thumbnail_url,
-         background_audio_track, background_audio_is_playing, crew_primary, crew_support, recent_alert
+         background_audio_track, background_audio_is_playing, crew_primary, crew_support
        ) VALUES (
          @id, @booking_id, 'running', @timer_total_seconds, @timer_total_seconds, 0, 'running',
-         @started_at, @scheduled_end, 0, NULL, NULL, 0, @crew_primary, NULL, NULL
+         @started_at, @scheduled_end, 0, NULL, NULL, 0, @crew_primary, NULL
        )`
     )
     .run({
@@ -1551,7 +1573,7 @@ export function quickStartSession(
   );
   basePuzzles.forEach((puzzle, index) => {
     insertSessionPuzzle.run(
-      `spz-${nanoid(10)}`,
+      randomUUID(),
       sessionId,
       puzzle.title,
       index === 0 ? 'available' : 'locked',
@@ -1669,7 +1691,7 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
 
   switch (command.command) {
     case 'start_timer':
-      sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running', recent_alert = NULL WHERE id = ?`).run(sessionId);
+      sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running' WHERE id = ?`).run(sessionId);
       logToDatabase('info', 'session', 'Timer started', {
         sessionId,
         gameName: session.gameName,
@@ -1677,7 +1699,7 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
       });
       break;
     case 'pause_timer':
-      sqlite.prepare(`UPDATE sessions SET timer_status = 'paused', status = 'paused', recent_alert = ? WHERE id = ?`).run(`⏸ Game paused - ${session.gameName}`, sessionId);
+      sqlite.prepare(`UPDATE sessions SET timer_status = 'paused', status = 'paused' WHERE id = ?`).run(sessionId);
       logToDatabase('info', 'session', 'Timer paused by operator', {
         sessionId,
         gameName: session.gameName,
@@ -1691,7 +1713,7 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
       });
       break;
     case 'resume_timer':
-      sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running', recent_alert = NULL WHERE id = ?`).run(sessionId);
+      sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running' WHERE id = ?`).run(sessionId);
       logToDatabase('info', 'session', 'Timer resumed by operator', {
         sessionId,
         gameName: session.gameName,
@@ -1713,8 +1735,7 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
           `UPDATE sessions
            SET timer_status = 'idle',
                timer_remaining_seconds = timer_total_seconds,
-               timer_total_elapsed_seconds = ?,
-               recent_alert = NULL
+               timer_total_elapsed_seconds = ?
            WHERE id = ?`
         ).run(newTotalElapsed, sessionId);
       }

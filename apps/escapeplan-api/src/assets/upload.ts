@@ -154,7 +154,7 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       asset_type: assetType,
       media_type: mediaType || null,
       file_path: path.join(subPath, filename),
-      game_id: isReusable ? null : gameId,
+      game_id: isReusable ? null : game.id,
       puzzle_id: puzzleId || null,
       hint_order: order ? parseInt(String(order), 10) : null,
       is_reusable: isReusable ? 1 : 0,
@@ -377,6 +377,35 @@ export async function deleteAsset(assetId: string, userId: string, userRole: str
   await updateStorageMetrics();
 
   return { success: true };
+}
+
+/**
+ * Get single asset by ID
+ */
+export async function getAssetById(assetId: string) {
+  const asset = sqlite.prepare('SELECT * FROM assets WHERE id = ?').get(assetId) as AssetRecord | undefined;
+
+  if (!asset) {
+    return null;
+  }
+
+  return {
+    id: asset.id,
+    filename: asset.filename,
+    originalFilename: asset.original_filename,
+    mimeType: asset.mime_type,
+    sizeBytes: asset.size_bytes,
+    assetType: asset.asset_type,
+    mediaType: asset.media_type,
+    url: `/assets/${asset.file_path}`,
+    gameId: asset.game_id,
+    puzzleId: asset.puzzle_id,
+    hintOrder: asset.hint_order,
+    isReusable: Boolean(asset.is_reusable),
+    uploadedBy: asset.uploaded_by,
+    uploadedAt: asset.uploaded_at,
+    metadata: asset.metadata ? JSON.parse(asset.metadata) : null
+  };
 }
 
 /**

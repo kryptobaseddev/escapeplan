@@ -104,7 +104,9 @@
 
       uploading = false;
       progress = 100;
-      onSuccess?.(result);
+
+      // Pass the asset object, not the whole response
+      onSuccess?.(result.asset);
 
       // Reset after success
       setTimeout(() => {

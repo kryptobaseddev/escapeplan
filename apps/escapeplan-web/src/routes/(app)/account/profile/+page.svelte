@@ -7,7 +7,7 @@
   import type { OperatorRole, BotttsAvatarConfig } from '@escapeplan/contracts';
   import type { ActionData, PageData } from './$types';
   import Avatar from '$lib/avatar/Avatar.svelte';
-  import AvatarEditor from '$lib/avatar/AvatarEditor.svelte';
+  import { randomizeAvatarConfig } from '$lib/avatar/avatar-utils';
 
   let { data, form } = $props<{ data: PageData; form: ActionData | null }>();
 
@@ -15,15 +15,27 @@
   let success = $derived(Boolean(form?.success));
   let errorMessage = $derived(form && 'message' in form ? (form as { message?: string }).message : null);
 
-  // Avatar editing state
-  let avatarConfig = $state<BotttsAvatarConfig>({ seed: '' });
-  $effect.pre(() => {
-    avatarConfig = profile.avatarConfig ?? { seed: profile.username };
-  });
-  let showAvatarEditor = $state(false);
+  // Avatar editing state - initialize from profile but don't auto-reset
+  let avatarConfig = $state<BotttsAvatarConfig>(profile.avatarConfig ?? { seed: profile.username });
+  let hasCustomized = $state(false);
 
-  function handleAvatarUpdate(config: BotttsAvatarConfig) {
-    avatarConfig = config;
+  // Only sync avatar from profile if user hasn't customized it
+  $effect(() => {
+    if (!hasCustomized) {
+      avatarConfig = profile.avatarConfig ?? { seed: profile.username };
+    }
+  });
+
+  // Reset after successful save
+  $effect(() => {
+    if (success) {
+      hasCustomized = false;
+    }
+  });
+
+  function randomizeAvatar() {
+    avatarConfig = randomizeAvatarConfig();
+    hasCustomized = true;
   }
 </script>
 
@@ -54,17 +66,11 @@
       <button
         type="button"
         class="btn btn-sm btn-outline"
-        onclick={() => showAvatarEditor = !showAvatarEditor}
+        onclick={randomizeAvatar}
       >
-        {showAvatarEditor ? 'Hide' : 'Edit'} Avatar
+        Randomize Avatar
       </button>
     </header>
-
-    {#if showAvatarEditor}
-      <div class="mt-6">
-        <AvatarEditor config={avatarConfig} onUpdate={handleAvatarUpdate} />
-      </div>
-    {/if}
 
     <form
       method="POST"

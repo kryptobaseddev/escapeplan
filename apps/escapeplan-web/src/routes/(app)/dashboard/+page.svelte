@@ -9,7 +9,7 @@
   import { initializeRealtime } from '$lib/realtime';
   import { bookingsStore, dashboardStore, sessionsStore } from '$lib/realtime/stores';
   import QuickStartModal from '$lib/components/sessions/QuickStartModal.svelte';
-  import type { GameSessionDetails, GameDetails } from '@escapeplan/contracts';
+  import type { GameSessionDetails, GameDetails, Alert } from '@escapeplan/contracts';
   import { apiFetch } from '$lib/api/client';
   import type { CommandResponse } from '$lib/api/types';
 
@@ -50,7 +50,7 @@
     if (!slug) return '';
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
     const url = new URL(`/timer/${slug}`, origin);
-    const roomIdentity = session.roomUuid ?? session.roomId;
+    const roomIdentity = session.roomId;
     if (roomIdentity) {
       url.searchParams.set('room', roomIdentity);
     }
@@ -74,6 +74,23 @@
     } catch (error) {
       console.error('Failed to copy timer link', error);
       setToast('Unable to copy timer link.', 'error');
+    }
+  };
+
+  const dismissAlert = async (alertId: string) => {
+    try {
+      await apiFetch(`/api/admin/alerts/${alertId}/dismiss`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      // Update local state immediately for better UX
+      if (dashboard) {
+        dashboard.alerts = dashboard.alerts.filter((a: Alert) => a.id !== alertId);
+      }
+      setToast('Alert dismissed');
+    } catch (error) {
+      console.error('Failed to dismiss alert', error);
+      setToast('Failed to dismiss alert', 'error');
     }
   };
 
@@ -456,12 +473,27 @@
       <ul class="mt-4 space-y-2">
         {#each dashboard.alerts as alert}
           <li class="rounded-lg border border-base-300 bg-base-200/60 p-3">
-            <div class="flex items-start gap-3">
-              <span class={`mt-1 inline-flex size-2 rounded-full ${alert.level === 'critical' ? 'bg-error' : alert.level === 'warning' ? 'bg-warning' : 'bg-info'}`}></span>
-              <div class="flex-1">
-                <p class="text-sm text-base-content">{alert.message}</p>
-                <p class="mt-1 text-xs text-base-content/40">{new Date(alert.createdAt).toLocaleTimeString()}</p>
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex items-start gap-3 flex-1">
+                <span class={`mt-1 inline-flex size-2 rounded-full ${alert.level === 'critical' ? 'bg-error' : alert.level === 'warning' ? 'bg-warning' : 'bg-info'}`}></span>
+                <div class="flex-1">
+                  <p class="text-sm font-medium text-base-content">{alert.title || alert.message}</p>
+                  {#if alert.title && alert.message !== alert.title}
+                    <p class="mt-1 text-xs text-base-content/70">{alert.message}</p>
+                  {/if}
+                  <p class="mt-1 text-xs text-base-content/40">{new Date(alert.createdAt).toLocaleTimeString()}</p>
+                </div>
               </div>
+              <button
+                type="button"
+                class="btn btn-ghost btn-xs"
+                onclick={() => dismissAlert(alert.id)}
+                title="Dismiss alert"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </li>
         {/each}

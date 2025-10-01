@@ -3,6 +3,7 @@
 <script lang="ts">
   import Avatar from './Avatar.svelte';
   import type { BotttsAvatarConfig } from '@escapeplan/contracts';
+  import { randomizeAvatarConfig } from './avatar-utils';
 
   interface Props {
     config: BotttsAvatarConfig;
@@ -72,21 +73,7 @@
   }
 
   function randomizeAll() {
-    const randomFrom = <T,>(arr: T[]): T[] => [arr[Math.floor(Math.random() * arr.length)]];
-
-    const randomized: BotttsAvatarConfig = {
-      seed: config.seed,
-      backgroundType: randomFrom(backgroundTypes),
-      backgroundColor: randomFrom(backgroundColors),
-      baseColor: randomFrom(baseColors),
-      eyes: randomFrom(eyesOptions),
-      face: randomFrom(faceOptions),
-      mouth: randomFrom(mouthOptions),
-      sides: randomFrom(sidesOptions),
-      texture: randomFrom(textureOptions),
-      top: randomFrom(topOptions)
-    };
-
+    const randomized = randomizeAvatarConfig();
     config = randomized;
     onUpdate(randomized);
   }
@@ -108,6 +95,7 @@
   <!-- Tabs Navigation - Each feature gets its own tab -->
   <div role="tablist" class="tabs tabs-boxed mb-6">
     <button
+      type="button"
       role="tab"
       class="tab {activeTab === 'background' ? 'tab-active' : ''}"
       onclick={() => activeTab = 'background'}
@@ -115,6 +103,7 @@
       Background
     </button>
     <button
+      type="button"
       role="tab"
       class="tab {activeTab === 'baseColor' ? 'tab-active' : ''}"
       onclick={() => activeTab = 'baseColor'}
@@ -122,6 +111,7 @@
       Base Color
     </button>
     <button
+      type="button"
       role="tab"
       class="tab {activeTab === 'eyes' ? 'tab-active' : ''}"
       onclick={() => activeTab = 'eyes'}
@@ -129,6 +119,7 @@
       Eyes
     </button>
     <button
+      type="button"
       role="tab"
       class="tab {activeTab === 'face' ? 'tab-active' : ''}"
       onclick={() => activeTab = 'face'}
@@ -136,6 +127,7 @@
       Face
     </button>
     <button
+      type="button"
       role="tab"
       class="tab {activeTab === 'mouth' ? 'tab-active' : ''}"
       onclick={() => activeTab = 'mouth'}
@@ -143,6 +135,7 @@
       Mouth
     </button>
     <button
+      type="button"
       role="tab"
       class="tab {activeTab === 'sides' ? 'tab-active' : ''}"
       onclick={() => activeTab = 'sides'}
@@ -150,6 +143,7 @@
       Sides
     </button>
     <button
+      type="button"
       role="tab"
       class="tab {activeTab === 'texture' ? 'tab-active' : ''}"
       onclick={() => activeTab = 'texture'}
@@ -157,6 +151,7 @@
       Texture
     </button>
     <button
+      type="button"
       role="tab"
       class="tab {activeTab === 'top' ? 'tab-active' : ''}"
       onclick={() => activeTab = 'top'}
@@ -171,8 +166,7 @@
   </div>
 
   <!-- Tab Content - Each tab shows only its specific options -->
-  {#key activeTab}
-  <div class="tab-content min-h-[300px] border border-primary/20 p-4 rounded-lg">
+  <div class="tab-content min-h-[300px] border border-primary/20 p-4 rounded-lg bg-base-100">
     <!-- Background Tab -->
     {#if activeTab === 'background'}
       <div class="space-y-6">
@@ -358,7 +352,6 @@
       </div>
     {/if}
   </div>
-  {/key}
 </div>
 
 <style>
