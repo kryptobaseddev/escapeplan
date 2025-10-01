@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { invalidate } from '$app/navigation';
   import { openConfirmDialog } from '$lib/components/confirm-dialog';
@@ -10,7 +12,7 @@
 
   let { data } = $props<{ data: PageData }>();
 
-  let createModalOpen = $state(false);
+  let viewMode = $state<'list' | 'create' | 'edit'>('list');
   let createModalGame = $state<GameDetails | null>(null);
   let editingGame = $state<GameDetails | null>(null);
   let pending = $state(false);
@@ -67,16 +69,23 @@
   };
 
   const handleCreateSuccess = async () => {
-    createModalOpen = false;
+    viewMode = 'list';
     createModalGame = null;
     await refreshGames();
     handleFeedback('Game created successfully.');
   };
 
   const handleEditSuccess = async () => {
+    viewMode = 'list';
     editingGame = null;
     await refreshGames();
     handleFeedback('Game updated successfully.');
+  };
+
+  const handleCancel = () => {
+    viewMode = 'list';
+    editingGame = null;
+    createModalGame = null;
   };
 
   const handleArchive = async (game: GameDetails) => {
@@ -163,7 +172,7 @@
 
   const openDuplicateModal = (game: GameDetails) => {
     createModalGame = cloneForDuplicate(game);
-    createModalOpen = true;
+    viewMode = 'create';
   };
 
   let gamesForFiltering = $state<GameDetails[]>(data.games ?? []);
@@ -210,17 +219,18 @@
 </script>
 
 <section class="space-y-8">
-  <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-    <div>
-      <h1 class="section-heading">Game Management</h1>
-      <p class="mt-2 max-w-2xl text-sm text-base-content/60">
-        Configure EscapePlan games with mobile-first modals covering rooms, puzzles, pricing, and booking rules. Changes apply instantly across the operator console.
-      </p>
-    </div>
-    <button class="btn btn-primary w-full lg:w-auto" onclick={() => { createModalGame = null; createModalOpen = true; }}>
-      + Add game
-    </button>
-  </header>
+  {#if viewMode === 'list'}
+    <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+      <div>
+        <h1 class="section-heading">Game Management</h1>
+        <p class="mt-2 max-w-2xl text-sm text-base-content/60">
+          Configure EscapePlan games with mobile-first modals covering rooms, puzzles, pricing, and booking rules. Changes apply instantly across the operator console.
+        </p>
+      </div>
+      <button class="btn btn-primary w-full lg:w-auto" onclick={() => { createModalGame = null; viewMode = 'create'; }}>
+        + Add game
+      </button>
+    </header>
 
   <div class="glass-panel border-white/10 bg-base-200/70 p-5 rounded-2xl space-y-4">
     <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_220px]">
@@ -304,15 +314,15 @@
             </div>
           </dl>
           <div class="mt-5">
-            <div class="dropdown dropdown-end w-full">
+            <div class="dropdown dropdown-end dropdown-bottom w-full">
               <button type="button" class="btn btn-sm btn-ghost w-full" tabindex="0">
                 Actions
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4">
                   <path fill="currentColor" d="M12 13a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm-7-2a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm14 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
                 </svg>
               </button>
-              <ul class="dropdown-content menu menu-sm w-full max-w-xs rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
-                <li><button type="button" onclick={() => { editingGame = game; }}>Edit details</button></li>
+              <ul class="dropdown-content menu menu-sm z-[1] w-full max-w-xs rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
+                <li><button type="button" onclick={() => { editingGame = game; viewMode = 'edit'; }}>Edit details</button></li>
                 <li><button type="button" onclick={() => openDuplicateModal(game)}>Duplicate</button></li>
                 {#if game.archivedAt}
                   <li><button type="button" onclick={() => handleUnarchive(game)} disabled={pending}>Restore</button></li>
@@ -332,9 +342,9 @@
     </div>
 
     <div class="hidden sm:block">
-      <div class="overflow-x-auto rounded-2xl border border-white/10 bg-base-200/70">
+      <div class="rounded-2xl border border-white/10 bg-base-200/70">
         <table class="table table-zebra">
-          <thead class="bg-base-300/60 uppercase tracking-[0.28em] text-xs text-base-content/40">
+        <thead class="bg-base-300/60 uppercase tracking-[0.28em] text-xs text-base-content/40">
             <tr>
               <th class="text-left">Game</th>
               <th class="text-left">Duration</th>
@@ -369,15 +379,15 @@
                 <td>{formatUpdatedAt(game.updatedAt)}</td>
                 <td>
                   <div class="flex justify-end">
-                    <div class="dropdown dropdown-end">
+                    <div class="dropdown dropdown-end dropdown-bottom">
                       <button type="button" class="btn btn-xs btn-ghost" tabindex="0">
                         Actions
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4">
                           <path fill="currentColor" d="M12 13a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm-7-2a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm14 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
                         </svg>
                       </button>
-                      <ul class="dropdown-content menu menu-sm w-56 rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
-                        <li><button type="button" onclick={() => { editingGame = game; }}>Edit details</button></li>
+                      <ul class="dropdown-content menu menu-sm z-[1] w-56 rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
+                        <li><button type="button" onclick={() => { editingGame = game; viewMode = 'edit'; }}>Edit details</button></li>
                         <li><button type="button" onclick={() => openDuplicateModal(game)}>Duplicate</button></li>
                         {#if game.archivedAt}
                           <li><button type="button" onclick={() => handleUnarchive(game)} disabled={pending}>Restore</button></li>
@@ -400,24 +410,23 @@
       </div>
     </div>
   {/if}
+  {:else if viewMode === 'create'}
+    <GameModal
+      open={true}
+      mode="create"
+      action="?/create"
+      game={createModalGame}
+      onclose={handleCancel}
+      onsuccess={handleCreateSuccess}
+    />
+  {:else if viewMode === 'edit' && editingGame}
+    <GameModal
+      open={true}
+      mode="edit"
+      action="?/update"
+      game={editingGame}
+      onclose={handleCancel}
+      onsuccess={handleEditSuccess}
+    />
+  {/if}
 </section>
-
-<GameModal
-  open={createModalOpen}
-  mode="create"
-  action="?/create"
-  game={createModalGame}
-  onclose={() => { createModalOpen = false; createModalGame = null; }}
-  onsuccess={handleCreateSuccess}
-/>
-
-{#if editingGame}
-  <GameModal
-    open={true}
-    mode="edit"
-    action="?/update"
-    game={editingGame}
-    onclose={() => (editingGame = null)}
-    onsuccess={handleEditSuccess}
-  />
-{/if}

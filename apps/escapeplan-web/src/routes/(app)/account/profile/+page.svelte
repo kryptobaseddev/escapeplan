@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { ROLE_LABELS } from '@escapeplan/contracts';

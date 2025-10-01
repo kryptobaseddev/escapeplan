@@ -87,5 +87,18 @@ const pwaPlugin = SvelteKitPWA({
     }) as PluginOption;
 
 export default defineConfig({
-  plugins: [tailwindPlugin, sveltekit(), pwaPlugin]
+  plugins: [tailwindPlugin, sveltekit(), pwaPlugin],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:4000',
+        changeOrigin: true
+      },
+      '/socket.io': {
+        target: 'http://localhost:4000',
+        changeOrigin: true,
+        ws: true
+      }
+    }
+  }
 });

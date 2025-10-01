@@ -17,10 +17,9 @@ Use this file to orient any contributor—human or AI—before they touch the pr
 1. Read the newest session note in `project-docs/project-tracking/sessions/`.
 2. Review active tasks in `TODO.json` for the current phase.
 3. Cross-check linked user stories to understand acceptance criteria (start with epic(s) tied to the current phase).
-4. Run baseline validation (execute from `project-docs/project-tracking/` so the utility can locate the JSON files):
+4. Run baseline validation (the tracker **must** run with `project-docs/project-tracking/` as the working directory so it can locate the JSON files):
    ```bash
-   cd project-docs/project-tracking
-   ./project-tracker validate
+   (cd project-docs/project-tracking && ./project-tracker validate)
    ```
 5. If anything fails, log it in the session note before continuing.
 

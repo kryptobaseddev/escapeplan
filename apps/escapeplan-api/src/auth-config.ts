@@ -151,6 +151,9 @@ function buildBaseOptions(): BetterAuthOptions {
         hash: async (password) =>
           argon2.hash(password, { type: argon2.argon2id }),
         verify: async ({ hash, password }) => argon2.verify(hash, password)
+      },
+      async sendVerificationEmail() {
+        // Not implemented - email verification not used
       }
     },
     advanced: {

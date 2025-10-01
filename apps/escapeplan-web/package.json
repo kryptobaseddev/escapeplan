@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "prepare": "svelte-kit sync || echo ''",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
+    "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "devDependencies": {
     "@fontsource/fira-mono": "^5.0.0",
@@ -19,14 +21,19 @@
     "@sveltejs/vite-plugin-svelte": "^6.0.0",
     "@tailwindcss/postcss": "^4.1.13",
     "@tailwindcss/vite": "^4.1.13",
+    "@testing-library/jest-dom": "^6.9.0",
+    "@testing-library/svelte": "^5.2.8",
+    "@testing-library/user-event": "^14.6.1",
     "@vite-pwa/sveltekit": "^1.0.0",
     "daisyui": "^5.1.25",
+    "jsdom": "^27.0.0",
     "postcss": "^8.5.6",
     "svelte": "^5.25.0",
     "svelte-check": "^4.0.0",
     "tailwindcss": "^4.1.13",
     "typescript": "^5.0.0",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^1.6.1"
   },
   "dependencies": {
     "@dicebear/bottts": "^9.2.4",

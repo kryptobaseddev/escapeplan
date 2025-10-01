@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import type { PageData } from './$types';

@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { goto, invalidate } from '$app/navigation';
   import { browser } from '$app/environment';
@@ -376,14 +378,14 @@
           {/if}
 
           <div class="mt-5">
-            <div class="dropdown dropdown-end w-full">
+            <div class="dropdown dropdown-end dropdown-bottom w-full">
               <button type="button" class="btn btn-sm btn-ghost w-full sm:w-auto" tabindex="0">
                 Actions
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4">
                   <path fill="currentColor" d="M12 13a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm-7-2a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm14 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
                 </svg>
               </button>
-              <ul class="dropdown-content menu menu-sm w-full max-w-xs rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
+              <ul class="dropdown-content menu menu-sm z-[1] w-full max-w-xs rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
                 <li><button type="button" onclick={() => handleEdit(user)}>Edit details</button></li>
                 <li><button type="button" onclick={() => handleReset(user)}>Reset password</button></li>
                 {#if user.archivedAt}
@@ -421,9 +423,9 @@
     </div>
 
     <div class="hidden sm:block">
-      <div class="overflow-x-auto rounded-2xl border border-white/10 bg-base-200/70">
+      <div class="rounded-2xl border border-white/10 bg-base-200/70">
         <table class="table table-zebra">
-          <thead class="bg-base-300/60 uppercase tracking-[0.28em] text-xs text-base-content/40">
+        <thead class="bg-base-300/60 uppercase tracking-[0.28em] text-xs text-base-content/40">
             <tr>
               <th class="text-left">Operator</th>
               <th class="text-left">Role</th>
@@ -466,14 +468,14 @@
                 </td>
                 <td>
                   <div class="flex justify-end">
-                    <div class="dropdown dropdown-end">
+                    <div class="dropdown dropdown-end dropdown-bottom">
                       <button type="button" class="btn btn-xs btn-ghost" tabindex="0">
                         Actions
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4">
                           <path fill="currentColor" d="M12 13a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm-7-2a2 2 0 1 1 0-4 2 2 0 0 1 0 4Zm14 0a2 2 0 1 1 0-4 2 2 0 0 1 0 4Z" />
                         </svg>
                       </button>
-                      <ul class="dropdown-content menu menu-sm w-48 rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
+                      <ul class="dropdown-content menu menu-sm z-[1] w-48 rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
                         <li><button type="button" onclick={() => handleEdit(user)}>Edit details</button></li>
                         <li><button type="button" onclick={() => handleReset(user)}>Reset password</button></li>
                         {#if user.archivedAt}

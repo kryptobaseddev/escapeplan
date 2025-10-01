@@ -1,15 +1,15 @@
-<svelte:options runes={false} />
+<svelte:options runes={true} />
 
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import type { ConfirmDialogOptions } from './confirm-dialog';
   import { confirmDialogStore, closeConfirmDialog } from './confirm-dialog';
 
-  let options: ConfirmDialogOptions | null = null;
-  let typedValue = '';
-  let dialogElement: HTMLDialogElement | null = null;
-  let currentRequest: unknown = null;
-  let cancelButton: HTMLButtonElement | null = null;
+  let options = $state<ConfirmDialogOptions | null>(null);
+  let typedValue = $state('');
+  let dialogElement = $state<HTMLDialogElement | null>(null);
+  let currentRequest = $state<unknown>(null);
+  let cancelButton = $state<HTMLButtonElement | null>(null);
 
   const unsubscribe = confirmDialogStore.subscribe(({ current }) => {
     if (current !== currentRequest) {
@@ -48,15 +48,16 @@
     }
   }
 
-  $: confirmWord = options?.confirmWord ?? options?.confirmText ?? 'CONFIRM';
+  const confirmWord = $derived(options?.confirmWord ?? options?.confirmText ?? 'CONFIRM');
+  const confirmDisabled = $derived(Boolean(options?.requiresTypedConfirm && typedValue !== confirmWord));
 
-  $: confirmDisabled = Boolean(options?.requiresTypedConfirm && typedValue !== confirmWord);
+  $effect(() => {
+    if (options && cancelButton) {
+      tick().then(() => cancelButton?.focus());
+    }
+  });
 
-  $: if (options && cancelButton) {
-    tick().then(() => cancelButton?.focus());
-  }
-
-  $: variantClass = (() => {
+  const variantClass = $derived((() => {
     switch (options?.variant) {
       case 'warning':
         return 'btn-warning';
@@ -65,7 +66,7 @@
       default:
         return 'btn-info';
     }
-  })();
+  })());
 </script>
 
 {#if options}
@@ -89,10 +90,8 @@
       </header>
 
       {#if options.customContent}
-        <svelte:component
-          this={options.customContent.component}
-          {...options.customContent.props}
-        />
+        {@const Component = options.customContent.component}
+        <Component {...options.customContent.props} />
       {/if}
 
       {#if options.requiresTypedConfirm}

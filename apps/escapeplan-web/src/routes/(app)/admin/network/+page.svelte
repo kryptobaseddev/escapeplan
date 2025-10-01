@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import type { PageData } from './$types';
   import { enhance } from '$app/forms';

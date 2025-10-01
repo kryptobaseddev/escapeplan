@@ -1,4 +1,4 @@
-import type { ComponentType } from 'svelte';
+import type { Component } from 'svelte';
 
 type Variant = 'info' | 'warning' | 'danger';
 
@@ -11,7 +11,7 @@ export interface ConfirmDialogOptions {
   requiresTypedConfirm?: boolean;
   confirmWord?: string;
   customContent?: {
-    component: ComponentType;
+    component: Component;
     props?: Record<string, unknown>;
   };
   disableBackdropClose?: boolean;

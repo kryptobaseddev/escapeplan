@@ -33,10 +33,10 @@ export function runMigrations() {
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
+      email TEXT UNIQUE,
       email_verified INTEGER NOT NULL DEFAULT 0,
       role TEXT NOT NULL,
-      avatar_url TEXT,
+      avatar_config TEXT,
       bio TEXT,
       permissions TEXT NOT NULL DEFAULT '[]',
       must_reset_password INTEGER NOT NULL DEFAULT 0,
@@ -163,6 +163,7 @@ export function runMigrations() {
       status TEXT NOT NULL,
       timer_total_seconds INTEGER NOT NULL,
       timer_remaining_seconds INTEGER NOT NULL,
+      timer_total_elapsed_seconds INTEGER NOT NULL DEFAULT 0,
       timer_status TEXT NOT NULL,
       started_at TEXT NOT NULL,
       scheduled_end TEXT NOT NULL,
@@ -220,6 +221,50 @@ export function runMigrations() {
       message TEXT NOT NULL,
       last_checked TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS assets (
+      id TEXT PRIMARY KEY,
+      filename TEXT NOT NULL,
+      original_filename TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      size_bytes INTEGER NOT NULL,
+      asset_type TEXT NOT NULL,
+      media_type TEXT,
+      file_path TEXT NOT NULL,
+      game_id TEXT REFERENCES games(id) ON DELETE CASCADE,
+      puzzle_id TEXT,
+      hint_order INTEGER,
+      is_reusable INTEGER NOT NULL DEFAULT 0,
+      uploaded_by TEXT NOT NULL REFERENCES operators(id),
+      uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      metadata TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_assets_game_id ON assets(game_id);
+    CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(asset_type);
+    CREATE INDEX IF NOT EXISTS idx_assets_reusable ON assets(is_reusable);
+
+    CREATE TABLE IF NOT EXISTS asset_usage (
+      id TEXT PRIMARY KEY,
+      asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+      used_in_game_id TEXT REFERENCES games(id) ON DELETE CASCADE,
+      used_in_puzzle_id TEXT,
+      usage_type TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_asset_usage_asset ON asset_usage(asset_id);
+    CREATE INDEX IF NOT EXISTS idx_asset_usage_game ON asset_usage(used_in_game_id);
+
+    CREATE TABLE IF NOT EXISTS storage_metrics (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      total_size_bytes INTEGER NOT NULL,
+      total_files INTEGER NOT NULL,
+      by_type TEXT NOT NULL,
+      by_game TEXT NOT NULL,
+      last_backup_at TEXT,
+      recorded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   // Ensure new columns exist for legacy databases
@@ -269,6 +314,7 @@ export function runMigrations() {
   ensureColumn('bookings', 'notes', 'TEXT');
 
   ensureColumn('game_puzzles', 'uuid', 'TEXT');
+  ensureColumn('game_puzzles', 'slug', 'TEXT');
   ensureColumn('game_puzzles', 'hints', 'TEXT');
   ensureColumn('game_puzzles', 'media_asset_meta', 'TEXT');
 

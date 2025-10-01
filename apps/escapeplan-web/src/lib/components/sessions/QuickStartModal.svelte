@@ -1,4 +1,4 @@
-<svelte:options runes={false} />
+<svelte:options runes={true} />
 
 <script lang="ts">
   import { apiFetch } from '$lib/api/client';
@@ -11,24 +11,28 @@
     GameSessionDetails
   } from '@escapeplan/contracts';
 
-  export let open = false;
-  export let games: GameDetails[] = [];
-  export let activeSessions: GameSessionDetails[] = [];
-  export let onclose: (() => void) | undefined;
-  export let onsuccess: ((session: GameSessionDetails) => void) | undefined;
+  interface Props {
+    open?: boolean;
+    games?: GameDetails[];
+    activeSessions?: GameSessionDetails[];
+    onclose?: () => void;
+    onsuccess?: (session: GameSessionDetails) => void;
+  }
 
-  let dialogElement: HTMLDialogElement | null = null;
-  let selectedGameId: string | null = null;
-  let selectedRoomId: string | null = null;
-  let partySize = 4;
-  let durationMinutes: number | string | null = null;
-  let notes = '';
-  let errorMessage: string | null = null;
-  let submitting = false;
-  let occupiedRoomMap = new Map<string, GameSessionDetails>();
-  let availableRooms: GameRoomDefinition[] = [];
-  let occupiedSummaries: Array<{ room: GameRoomDefinition; session: GameSessionDetails }> = [];
-  let lastGameId: string | null = null;
+  const props: Props = $props();
+
+  let dialogElement = $state<HTMLDialogElement | null>(null);
+  let selectedGameId = $state<string | null>(null);
+  let selectedRoomId = $state<string | null>(null);
+  let partySize = $state(4);
+  let durationMinutes = $state<number | string | null>(null);
+  let notes = $state('');
+  let errorMessage = $state<string | null>(null);
+  let submitting = $state(false);
+  let occupiedRoomMap = $state(new Map<string, GameSessionDetails>());
+  let availableRooms = $state<GameRoomDefinition[]>([]);
+  let occupiedSummaries = $state<Array<{ room: GameRoomDefinition; session: GameSessionDetails }>>([]);
+  let lastGameId = $state<string | null>(null);
 
   const occupancyForRoom = (room: GameRoomDefinition | undefined | null) => {
     if (!room) return undefined;
@@ -38,7 +42,7 @@
   const firstAvailableRoomId = (game: GameDetails | null | undefined) => {
     if (!game) return null;
     const rooms = game.rooms ?? [];
-    const available = rooms.find((room) => !occupancyForRoom(room));
+    const available = rooms.find((room: GameRoomDefinition) => !occupancyForRoom(room));
     return available?.id ?? null;
   };
 
@@ -51,6 +55,7 @@
   };
 
   const resetState = () => {
+    const games = props.games ?? [];
     const firstGame = games[0] ?? null;
     selectedGameId = firstGame?.id ?? null;
     selectedRoomId = firstAvailableRoomId(firstGame) ?? firstGame?.rooms?.[0]?.id ?? null;
@@ -61,42 +66,55 @@
   };
 
   const close = () => {
-    onclose?.();
+    props.onclose?.();
   };
 
-  $: {
+  // Build occupiedRoomMap from activeSessions
+  $effect(() => {
     const map = new Map<string, GameSessionDetails>();
-    for (const session of activeSessions ?? []) {
+    const activeSessions = props.activeSessions ?? [];
+    for (const session of activeSessions) {
       if (session.roomId) map.set(session.roomId, session);
       if (session.roomUuid) map.set(session.roomUuid, session);
     }
     occupiedRoomMap = map;
-  }
+  });
 
-  const currentGame = () => games.find((game) => game.id === selectedGameId) ?? null;
-  const currentRoom = () => currentGame()?.rooms.find((room) => room.id === selectedRoomId) ?? null;
+  const currentGame = () => {
+    const games = props.games ?? [];
+    return games.find((game: GameDetails) => game.id === selectedGameId) ?? null;
+  };
 
-  $: if (open) {
-    if (!selectedGameId || !games.find((game) => game.id === selectedGameId)) {
-      resetState();
+  const currentRoom = () => currentGame()?.rooms.find((room: GameRoomDefinition) => room.id === selectedRoomId) ?? null;
+
+  // Reset state when modal opens if selected game is invalid
+  $effect(() => {
+    const open = props.open;
+    const games = props.games ?? [];
+    if (open) {
+      if (!selectedGameId || !games.find((game: GameDetails) => game.id === selectedGameId)) {
+        resetState();
+      }
     }
-  }
+  });
 
-  $: {
+  // Update availableRooms and occupiedSummaries when game or occupancy changes
+  $effect(() => {
     const game = currentGame();
     if (game) {
       const rooms = game.rooms ?? [];
-      availableRooms = rooms.filter((room) => !occupancyForRoom(room));
+      availableRooms = rooms.filter((room: GameRoomDefinition) => !occupancyForRoom(room));
       occupiedSummaries = rooms
-        .map((room) => ({ room, session: occupancyForRoom(room) }))
-        .filter((entry): entry is { room: GameRoomDefinition; session: GameSessionDetails } => Boolean(entry.session));
+        .map((room: GameRoomDefinition) => ({ room, session: occupancyForRoom(room) }))
+        .filter((entry: { room: GameRoomDefinition; session: GameSessionDetails | undefined }): entry is { room: GameRoomDefinition; session: GameSessionDetails } => Boolean(entry.session));
     } else {
       availableRooms = [];
       occupiedSummaries = [];
     }
-  }
+  });
 
-  $: {
+  // Auto-select available room when game changes or room becomes unavailable
+  $effect(() => {
     if (!selectedGameId) {
       selectedRoomId = null;
     } else {
@@ -105,21 +123,24 @@
         selectedRoomId = null;
       } else {
         const rooms = game.rooms ?? [];
-        const stillAvailable = rooms.some((room) => room.id === selectedRoomId && !occupancyForRoom(room));
+        const stillAvailable = rooms.some((room: GameRoomDefinition) => room.id === selectedRoomId && !occupancyForRoom(room));
         if (!stillAvailable) {
           selectedRoomId = firstAvailableRoomId(game);
         }
       }
     }
-  }
+  });
 
-  $: if (selectedGameId !== lastGameId) {
-    lastGameId = selectedGameId;
-    const game = currentGame();
-    if (game) {
-      partySize = clampPartySize(game, Number(partySize) || game.minPlayers || 1);
+  // Clamp party size when game changes
+  $effect(() => {
+    if (selectedGameId !== lastGameId) {
+      lastGameId = selectedGameId;
+      const game = currentGame();
+      if (game) {
+        partySize = clampPartySize(game, Number(partySize) || game.minPlayers || 1);
+      }
     }
-  }
+  });
 
   const submitQuickStart = async () => {
     if (!selectedGameId || !selectedRoomId) {
@@ -148,8 +169,8 @@
       gameId: game.id,
       roomId: room.id,
       partySize: normalizedPartySize,
-      durationMinutes: overrideMinutes && overrideMinutes > 0 ? overrideMinutes : null,
-      notes: notes.trim() ? notes.trim() : null
+      durationMinutes: overrideMinutes && overrideMinutes > 0 ? overrideMinutes : undefined,
+      notes: notes.trim() ? notes.trim() : undefined
     };
 
     submitting = true;
@@ -159,7 +180,7 @@
         method: 'POST',
         body: JSON.stringify(request)
       });
-      onsuccess?.(result.session);
+      props.onsuccess?.(result.session);
       close();
     } catch (error) {
       console.error('Quick start failed', error);
@@ -175,7 +196,7 @@
   };
 </script>
 
-{#if open}
+{#if props.open}
   <dialog
     class="modal modal-bottom sm:modal-middle"
     open
@@ -189,7 +210,7 @@
       <header class="space-y-2">
         <h2 class="text-lg font-semibold text-base-content">Quick start session</h2>
         <p class="text-sm text-base-content/60">
-          Launch an ad-hoc session without a booking. Choose the game and room, adjust party size, and optionally shorten the timer.
+          Launch an ad-hoc session without a booking. Choose the game, adjust party size, and optionally override the default timer.
         </p>
       </header>
 
@@ -213,38 +234,19 @@
             bind:value={selectedGameId}
             required
           >
-            {#each games as game}
+            {#each props.games ?? [] as game}
               <option value={game.id}>{game.name}</option>
             {/each}
           </select>
         </label>
 
-        <label class="form-control">
-          <span class="label-text">Room</span>
-          <select
-            class="select select-bordered"
-            bind:value={selectedRoomId}
-            required
-            disabled={!availableRooms.length}
-          >
-            {#if availableRooms.length}
-              {#each availableRooms as room}
-                <option value={room.id}>{room.name}{room.isMobileCapable ? ' · Mobile kit' : ''}</option>
-              {/each}
-            {:else}
-              <option value="" disabled>No rooms available</option>
-            {/if}
-          </select>
-          {#if occupiedSummaries.length}
-            <span class="label-text-alt text-xs text-base-content/60">
-              Currently running: {occupiedSummaries
-                .map(({ room, session }) => `${room.name} until ${formatTime(session.scheduledEnd)}`)
-                .join(', ')}
-            </span>
-          {:else if !availableRooms.length}
-            <span class="label-text-alt text-xs text-error">All rooms are currently in use.</span>
-          {/if}
-        </label>
+        <!-- Room auto-selected to 'Main' - hidden from UI -->
+        <input type="hidden" bind:value={selectedRoomId} />
+        {#if occupiedSummaries.length}
+          <div class="alert alert-warning border border-warning/30 bg-warning/10 text-sm">
+            <span>Currently running until {formatTime(occupiedSummaries[0].session.scheduledEnd)}</span>
+          </div>
+        {/if}
 
         <div class="grid gap-4 md:grid-cols-2">
           <label class="form-control">

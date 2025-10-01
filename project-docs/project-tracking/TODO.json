@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-10-01",
+  "lastUpdated": "2025-09-30",
   "projectName": "EscapePlan",
   "projectVersion": "0.1.0",
   "currentPhase": "PHASE_1",
@@ -803,10 +803,10 @@
           "id": "P3-021",
           "title": "CLAUDE-1 \u00b7 Finalize Better-Auth backend alignment",
           "feature": "Auth",
-          "status": "NOT_STARTED",
+          "status": "IN_REVIEW",
           "priority": "CRITICAL",
           "estimatedHours": 18,
-          "actualHours": 0,
+          "actualHours": 3,
           "assignee": "CLAUDE-1",
           "createdDate": "2025-10-02",
           "dueDate": null,
@@ -828,7 +828,10 @@
           "notes": [
             "Must reference Better-Auth schema docs and SESSION_6 planning notes.",
             "Coordinate JSON migration with CLAUDE-2 to avoid payload drift.",
-            "Provide migration rollback guidance for QA."
+            "Provide migration rollback guidance for QA.",
+            "2025-09-30 (SESSION_14): Completed all acceptance criteria. No new migrations needed (avatar_config column already exists). Refactored createOperatorAccount and updateOperatorAccount to use Better-Auth 'image' field exclusively. Removed direct DB updates. Added comprehensive test suite in test/operator-management.test.ts with 5 tests (1 skipped for archive blocking known issue). All 7 tests pass sequentially. Avatar JSON round-trips verified via CLI and tests. Documented API contract and coordination points for CLAUDE-2 in SESSION_14_NOTES.md.",
+            "2025-09-30 (SESSION_19): Security hardening follow-up complete. Audited multi-session invalidation on archive (atomic SQL deletion), archive blocking at endpoint level (prevents timing attacks), last admin protection, and password reset flows. Created comprehensive test suite test/security-hardening.test.ts with 5 edge-case tests covering archived user login blocking (403 ACCOUNT_ARCHIVED), multi-session cleanup, unarchive restoration, last admin protection, and password change flag clearing. All 13 backend tests passing (5 security + 5 operator mgmt + 3 server). Documented findings in SESSION_19_NOTES.md.",
+            "2025-09-30 (SESSION_20): Fixed email validation to be truly optional, matching frontend behavior. SCHEMA FIXES: (1) Removed .notNull() from schema.ts email field. (2) Removed NOT NULL from client.ts CREATE TABLE. (3) Updated createUserSchema validation to accept optional email or empty string: z.string().email().optional().or(z.literal('')). Created test/email-optional.test.ts with 3 tests covering undefined email, empty string email, and invalid format rejection. All 16 backend tests passing (5 security + 5 operator + 3 server + 3 email validation). Schema now consistent across all layers. QA PENDING: 6 manual UI test scenarios documented in SESSION_20_NOTES.md for frontend validation."
           ],
           "labels": [
             "auth",
@@ -840,10 +843,10 @@
           "id": "P3-022",
           "title": "CLAUDE-2 \u00b7 Console integration & validation after Better-Auth sync",
           "feature": "Admin Console",
-          "status": "NOT_STARTED",
+          "status": "IN_REVIEW",
           "priority": "HIGH",
           "estimatedHours": 16,
-          "actualHours": 0,
+          "actualHours": 5,
           "assignee": "CLAUDE-2",
           "createdDate": "2025-10-02",
           "dueDate": null,
@@ -865,7 +868,8 @@
           "notes": [
             "Reference Better-Auth/Refine integration docs and SESSION_6 requirements.",
             "Coordinate with CLAUDE-1 on API contract updates before implementing UI adjustments.",
-            "Prepare test artifacts (screenshots, logs) for CLAUDE QA review."
+            "Prepare test artifacts (screenshots, logs) for CLAUDE QA review.",
+            "2025-09-30 (SESSION_16): All functionality validated end-to-end. Console already integrated correctly with Better-Auth (from SESSION_13). CRITICAL FIXES: (1) Added archived user login blocking at Fastify route level (apps/escapeplan-api/src/index.ts lines 326-342) - verified working with 403 response. (2) Fixed profile editor bug - updateOwnProfile missing adapter initialization (apps/escapeplan-api/src/state.ts line 968). TEST INFRASTRUCTURE: Installed Vitest + Testing Library, configured vitest.config.ts. Backend tests: 8/8 passing. Frontend integration tests: 4/4 passing. Component tests: 21 written (blocked by Svelte 5 tooling). MANUAL QA EXECUTED: 8 test scenarios documented with curl commands and responses - create operator, update avatar, archive, verify archive blocking, unarchive, role permissions, network panel, profile editor. All tests passed. Removed .tmp-qa-check.ts temp file. Status: IN_REVIEW with complete QA evidence in SESSION_16_NOTES.md."
           ],
           "labels": [
             "auth",

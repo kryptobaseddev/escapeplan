@@ -15,24 +15,42 @@ export const load: PageServerLoad = async (event) => {
   }
 
   const fetcher = makeServerFetcher(event);
+  const url = event.url;
+  const status = url.searchParams.get('status') || 'active';
+  const search = url.searchParams.get('search') || '';
+  const sortBy = (url.searchParams.get('sortBy') as 'date' | 'game' | 'location') || 'date';
+  const sortOrder = (url.searchParams.get('sortOrder') as 'asc' | 'desc') || 'desc';
 
   try {
-    const response = await fetcher<ActiveSessionsResponse>('/sessions/active');
+    const queryParams = new URLSearchParams({
+      ...(status && { status }),
+      ...(search && { search }),
+      sortBy,
+      sortOrder
+    });
+    const response = await fetcher<ActiveSessionsResponse>(`/sessions?${queryParams.toString()}`);
     let games: GameDetails[] = [];
     try {
       games = await fetcher<GameDetails[]>('/admin/games');
     } catch (error) {
       console.error('Failed to load games for quick start', error);
     }
-    return { pageTitle: 'Game Runner', sessions: response.sessions, generatedAt: response.generatedAt, games };
+    return {
+      pageTitle: 'Game Runner',
+      sessions: response.sessions,
+      generatedAt: response.generatedAt,
+      games,
+      filters: { status, search, sortBy, sortOrder }
+    };
   } catch (error) {
-    console.error('Failed to load active sessions', error);
+    console.error('Failed to load sessions', error);
     return {
       pageTitle: 'Game Runner',
       sessions: [],
       generatedAt: null,
-      sessionsError: 'Unable to load active sessions from Fastify mock API.',
-      games: []
+      sessionsError: 'Unable to load sessions from API.',
+      games: [],
+      filters: { status, search, sortBy, sortOrder }
     };
   }
 };

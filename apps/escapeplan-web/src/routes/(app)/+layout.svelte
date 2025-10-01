@@ -1,4 +1,4 @@
-<svelte:options runes={false} />
+<svelte:options runes={true} />
 
 <script lang="ts">
   import '../../app.css';
@@ -12,24 +12,23 @@
   import { ROLE_LABELS } from '@escapeplan/contracts';
   import Avatar from '$lib/avatar/Avatar.svelte';
 
-  export let data: LayoutData;
-  export let children: Snippet;
+  interface Props {
+    data: LayoutData;
+    children: Snippet;
+  }
+
+  const props: Props = $props();
 
   const manifestLinkTag = pwaInfo?.webManifest?.linkTag ?? '';
 
-  let adminLinks: { href: string; label: string; icon: string }[] = [];
-  let roleLabel = data.user ? data.user.role.replace(/_/g, ' ') : '';
-  let allNavItems: { href: string; label: string; icon: string }[] = [];
-  let currentPageTitle = 'EscapePlan Console';
-  let userInitials = 'EP';
-  const canManageUsers = data.user?.permissions?.includes('manage_users') ?? false;
-  const canManageGames = data.user?.permissions?.includes('manage_games') ?? false;
-  const canViewNetwork = data.user?.permissions?.includes('view_network') ?? false;
-  const canManageNetwork = data.user?.permissions?.includes('manage_network') ?? false;
+  const canManageUsers = $derived(props.data.user?.permissions?.includes('manage_users') ?? false);
+  const canManageGames = $derived(props.data.user?.permissions?.includes('manage_games') ?? false);
+  const canViewNetwork = $derived(props.data.user?.permissions?.includes('view_network') ?? false);
+  const canManageNetwork = $derived(props.data.user?.permissions?.includes('manage_network') ?? false);
 
-  let drawerOpen = false;
-  let sidebarCollapsed = false;
-  let lastPathname = '';
+  let drawerOpen = $state(false);
+  let sidebarCollapsed = $state(false);
+  let lastPathname = $state('');
 
   onMount(() => {
     initializeRealtime();
@@ -41,13 +40,13 @@
     }
   });
 
-  $: {
+  $effect(() => {
     const pathname = $page.url.pathname;
     if (lastPathname && pathname !== lastPathname) {
       drawerOpen = false;
     }
     lastPathname = pathname;
-  }
+  });
 
   function toggleDrawer(force?: boolean) {
     drawerOpen = typeof force === 'boolean' ? force : !drawerOpen;
@@ -82,7 +81,7 @@
     icon: 'M12 12a4 4 0 100-8 4 4 0 000 8zm7 7a6 6 0 10-14 0h2a4 4 0 118 0h2z'
   };
 
-  $: adminLinks = [
+  const adminLinks = $derived([
     ...(canManageGames
       ? [
           {
@@ -110,27 +109,27 @@
           }
         ]
       : [])
-  ];
+  ]);
 
-  $: roleLabel = data.user ? ROLE_LABELS[data.user.role] ?? data.user.role.replace(/_/g, ' ') : '';
-  $: allNavItems = [...primaryLinks, ...adminLinks, accountLink];
+  const roleLabel = $derived(props.data.user ? ROLE_LABELS[props.data.user.role as keyof typeof ROLE_LABELS] ?? props.data.user.role.replace(/_/g, ' ') : '');
+  const allNavItems = $derived([...primaryLinks, ...adminLinks, accountLink]);
 
-  $: currentPageTitle = (() => {
+  const currentPageTitle = $derived((() => {
     const explicit = $page.data?.pageTitle;
     if (explicit) return explicit;
     const path = $page.url.pathname;
     const entry = allNavItems.find((link) => path === link.href || path.startsWith(`${link.href}/`));
     return entry?.label ?? 'EscapePlan Console';
-  })();
+  })());
 
-  $: userInitials = (() => {
-    const source = data.user?.name || data.user?.username || 'EP';
+  const userInitials = $derived((() => {
+    const source = props.data.user?.name || props.data.user?.username || 'EP';
     return source
       .split(/\s+/)
       .slice(0, 2)
-      .map((part) => part.charAt(0)?.toUpperCase() ?? '')
+      .map((part: string) => part.charAt(0)?.toUpperCase() ?? '')
       .join('') || 'EP';
-  })();
+  })());
 </script>
 
 <svelte:head>
@@ -197,7 +196,7 @@
     <main class="relative flex-1 px-4 py-8 lg:px-10">
       <div class="pointer-events-none absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-secondary/5" aria-hidden="true"></div>
       <div class="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-8">
-        {@render children()}
+        {@render props.children()}
       </div>
     </main>
   </div>
@@ -278,10 +277,10 @@
         <!-- User info -->
         <div class="flex items-center gap-3 {sidebarCollapsed ? 'lg:justify-center' : ''}">
           <div class="shrink-0 overflow-hidden rounded-2xl">
-            <Avatar config={data.user?.avatarConfig} username={data.user?.username} size={48} />
+            <Avatar config={props.data.user?.avatarConfig} username={props.data.user?.username} size={48} />
           </div>
           <div class="profile-meta flex flex-col text-xs text-base-content/60 transition-all {sidebarCollapsed ? 'lg:hidden' : 'lg:flex'}">
-            <span class="truncate text-sm font-semibold text-base-content/80">{data.user?.name}</span>
+            <span class="truncate text-sm font-semibold text-base-content/80">{props.data.user?.name}</span>
             <span class="truncate text-[0.65rem] uppercase tracking-[0.35em]">{roleLabel}</span>
           </div>
         </div>

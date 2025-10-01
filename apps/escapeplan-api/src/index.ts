@@ -27,6 +27,7 @@ import {
   getNetworkProfile,
   listGameDetails,
   listActiveSessions,
+  listSessions,
   quickStartSession,
   listOperatorSummaries,
   toTimerBroadcast,
@@ -40,7 +41,9 @@ import {
   listOperatorSummaries
 } from './state.js';
 import { auth, requireSession } from './auth.js';
-import { runMigrations } from './db/client.js';
+import { db, runMigrations } from './db/client.js';
+import { operators } from './db/schema.js';
+import { eq } from 'drizzle-orm';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
 
@@ -69,7 +72,7 @@ const createUserSchema = z.object({
   name: z.string().min(1),
   role: z.enum(operatorRoleValues),
   password: z.string().min(12),
-  email: z.string().email(),
+  email: z.string().email().optional().or(z.literal('')),
   avatarConfig: avatarConfigSchema.optional(),
   bio: z.string().max(500).optional(),
   mustResetPassword: z.boolean().optional()
@@ -321,6 +324,24 @@ export async function buildServer() {
   await app.register(async (api) => {
     api.all('/auth/*', async (request, reply) => {
       try {
+        // Block archived users from signing in
+        if (request.url.includes('/sign-in') && request.method === 'POST') {
+          const body = request.body as Record<string, unknown> | undefined;
+          const username = typeof body?.username === 'string' ? body.username : null;
+
+          if (username) {
+            const [user] = await db.select().from(operators).where(eq(operators.username, username.trim().toLowerCase())).limit(1);
+            if (user?.archived_at) {
+              return reply.status(403).send({
+                error: {
+                  code: 'ACCOUNT_ARCHIVED',
+                  message: 'This account has been archived and cannot sign in'
+                }
+              });
+            }
+          }
+        }
+
         const origin = `${request.protocol}://${request.headers.host}`;
         const url = new URL(request.url, origin);
 
@@ -523,7 +544,7 @@ export async function buildServer() {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
       try {
-        const profile = updateOwnProfile(session.user.id, parsed.data);
+        const profile = await updateOwnProfile(session.user.id, parsed.data);
         return profile;
       } catch (error) {
         request.log.error({ err: error }, 'Failed to update profile');
@@ -755,6 +776,20 @@ export async function buildServer() {
         request.log.error({ err: error }, 'Failed to create ad-hoc session');
         return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
       }
+    });
+
+    api.get('/sessions', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_sessions')) return;
+
+      const query = request.query as { status?: string; search?: string; sortBy?: 'date' | 'game' | 'location'; sortOrder?: 'asc' | 'desc' };
+      return listSessions({
+        status: query.status,
+        search: query.search,
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder
+      });
     });
 
     api.get('/sessions/active', async (request, reply) => {

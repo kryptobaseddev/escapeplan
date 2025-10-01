@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import type { ActionData } from './$types';
 
@@ -12,14 +14,10 @@
         EscapePlan
       </span>
       <div>
-        <h1 class="hero-title">EscapePlan operator console</h1>
+        <h1 class="hero-title">Operator Console</h1>
         <p class="mt-4 max-w-xl text-sm text-base-content/70 sm:text-base">
-          Authenticate on the local appliance to manage bookings, timers, and live room feeds. No WAN connection is required.
+          Sign in to manage bookings, timers, and live room feeds.
         </p>
-      </div>
-      <div class="glass-panel inline-flex items-center gap-3 border-white/10 bg-base-200/50 px-4 py-3 text-sm text-base-content/70">
-        <span class="inline-flex size-2 rounded-full bg-success shadow shadow-success/40"></span>
-        <span>Appliance status · Online</span>
       </div>
     </div>
 

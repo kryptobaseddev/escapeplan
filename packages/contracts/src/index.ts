@@ -107,6 +107,7 @@ export interface UpdateOwnProfileRequest {
 export interface TimerState {
   totalSeconds: number;
   remainingSeconds: number;
+  totalElapsedSeconds: number;
   status: TimerStatus;
   startedAt?: string;
   updatedAt: string;
@@ -406,6 +407,7 @@ export interface GameHintDefinition {
   content: string;
   assetUrl?: string;
   order: number;
+  countAsHint?: boolean;
 }
 
 export interface ArchiveGameRequest {

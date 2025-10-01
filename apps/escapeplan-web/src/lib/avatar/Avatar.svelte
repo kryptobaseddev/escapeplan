@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { createAvatar } from '@dicebear/core';
   import * as bottts from '@dicebear/bottts';
@@ -12,10 +14,10 @@
 
   let { config, username = 'user', size = 48, class: className = '' }: Props = $props();
 
-  // Generate SVG from config or default seed
-  const avatarSvg = $derived.by(() => {
+  // Generate data URI from config or default seed
+  const avatarDataUri = $derived.by(() => {
     const seed = config?.seed || username;
-    const options: any = { seed };
+    const options: any = { seed, size };
 
     // Apply config options if provided
     if (config) {
@@ -31,27 +33,20 @@
     }
 
     const avatar = createAvatar(bottts, options);
-    return avatar.toString();
+    return avatar.toDataUri();
   });
 </script>
 
-<div
+<img
+  src={avatarDataUri}
+  alt="User avatar"
   class="avatar-container {className}"
   style="width: {size}px; height: {size}px;"
-  aria-label="User avatar"
->
-  {@html avatarSvg}
-</div>
+/>
 
 <style>
   .avatar-container {
     display: inline-block;
     flex-shrink: 0;
-  }
-
-  .avatar-container :global(svg) {
-    width: 100%;
-    height: 100%;
-    display: block;
   }
 </style>

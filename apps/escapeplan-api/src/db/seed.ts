@@ -143,7 +143,6 @@ const adapter = authContext.internalAdapter;
 const adminEmail = 'admin@escapeplan.local';
 const adminPermissions = permissionsForRole('admin');
 const adminBio = 'Primary EscapePlan appliance administrator.';
-const adminPermissionsSerialized = JSON.stringify(adminPermissions);
 const adminBaseProfile = {
   name: 'System Administrator',
   username: 'admin',
@@ -164,22 +163,28 @@ const defaultAvatarConfig = {
   mouth: ['smile01']
 };
 
+// Better-Auth with Drizzle mode: 'json' automatically stringifies objects/arrays
+// So pass permissions and avatar_config directly as objects, not JSON strings
 const adminProfileUpdates = {
   ...adminBaseProfile,
-  permissions: adminPermissionsSerialized,
+  permissions: adminPermissions,
   passwordHash: hashedPassword,
-  avatarConfig: JSON.stringify(defaultAvatarConfig)
+  image: defaultAvatarConfig
 };
 
 if (!existingAdmin) {
   const adminUser = await adapter.createUser({
     email: adminEmail,
     ...adminBaseProfile,
-    passwordHash: hashedPassword
+    passwordHash: hashedPassword,
+    image: defaultAvatarConfig
   });
   adminId = adminUser.id;
 
-  await adapter.updateUser(adminId, adminProfileUpdates);
+  // Update permissions after creation
+  await adapter.updateUser(adminId, {
+    permissions: adminPermissions
+  });
 
   await adapter.createAccount({
     userId: adminId,
@@ -205,9 +210,9 @@ db.prepare(
   `INSERT INTO rooms (id, game_id, name, is_mobile_capable, theme_token)
    VALUES (@id, @game_id, @name, @is_mobile_capable, @theme_token)`
 ).run({
-  id: 'room-harbor-hold',
+  id: 'room-main',
   game_id: pirateGame.id,
-  name: 'Harbor Hold',
+  name: 'Main',
   is_mobile_capable: 0,
   theme_token: 'escapeplan-pirate'
 });

@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import type { PageData } from './$types';
   import { formatDate, formatTime, formatTimer } from '$lib/utils/datetime';
@@ -8,11 +10,13 @@
   import { bookingsStore, dashboardStore, sessionsStore } from '$lib/realtime/stores';
   import QuickStartModal from '$lib/components/sessions/QuickStartModal.svelte';
   import type { GameSessionDetails, GameDetails } from '@escapeplan/contracts';
+  import { apiFetch } from '$lib/api/client';
+  import type { CommandResponse } from '$lib/api/types';
 
   let { data } = $props<{ data: PageData }>();
 
   let dashboard = $state(data.dashboard ?? null);
-  let sessions = $state(data.dashboard?.activeSessions ?? []);
+  let sessions = $state<GameSessionDetails[]>(data.dashboard?.activeSessions ?? []);
   let bookings = $state(data.dashboard?.upcomingBookings ?? []);
   let games = $state(data.games ?? []);
   let quickStartOpen = $state(false);
@@ -52,6 +56,8 @@
     return url.toString();
   };
 
+  let copySuccessMap = $state<Record<string, boolean>>({});
+
   const copyTimerLink = async (session: GameSessionDetails) => {
     const url = buildTimerUrl(session);
     if (!url) {
@@ -60,7 +66,10 @@
     }
     try {
       await navigator.clipboard.writeText(url);
-      setToast('Timer link copied to clipboard.');
+      copySuccessMap[session.id] = true;
+      setTimeout(() => {
+        copySuccessMap[session.id] = false;
+      }, 2000);
     } catch (error) {
       console.error('Failed to copy timer link', error);
       setToast('Unable to copy timer link.', 'error');
@@ -75,6 +84,18 @@
     }
     window.open(url, '_blank', 'noopener');
   };
+
+  async function dispatchTimerCommand(sessionId: string, command: 'start_timer' | 'pause_timer' | 'resume_timer' | 'reset_timer') {
+    try {
+      await apiFetch<CommandResponse>(fetch, `/sessions/${sessionId}/commands`, {
+        method: 'POST',
+        body: JSON.stringify({ command, payload: {} })
+      });
+    } catch (error) {
+      console.error('Timer command failed', error);
+      setToast('Failed to update timer.', 'error');
+    }
+  }
 
   onMount(() => {
     initializeRealtime({
@@ -102,7 +123,7 @@
     });
 
     const unsubSessions = sessionsStore.subscribe((value) => {
-      sessions = value;
+      sessions = [...value]; // Create new array reference to trigger reactivity
     });
 
     const todayKey = `${new Date().toISOString().slice(0, 10)}|all`;
@@ -129,10 +150,9 @@
 <section class="space-y-8">
   <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
     <div>
-      <h1 class="section-heading">Control room overview</h1>
+      <h1 class="section-heading">Control Room</h1>
       <p class="mt-2 max-w-2xl text-sm text-base-content/60">
-        Real-time status for storefront rooms, mobile kits, and live sessions across the EscapePlan appliance.
-        All metrics are sourced locally from the Fastify control API.
+        Real-time status for rooms, and view alerts and bookings
       </p>
     </div>
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
@@ -247,40 +267,133 @@
           {:else}
             {#each sessions as session}
               <article class="rounded-xl border border-white/10 bg-base-100/60 p-5">
-                <div class="flex flex-wrap items-start justify-between gap-4">
-                  <div class="space-y-1">
-                    <p class="text-sm uppercase tracking-[0.25em] text-base-content/40">{session.roomName}</p>
-                    <h3 class="flex items-center gap-2 text-xl font-display text-base-content">
-                      {session.gameName}
-                      {#if session.isAdhoc}
-                        <span class="badge badge-outline border-primary/40 text-[11px] text-primary">Ad-hoc</span>
+                <div class="flex flex-col gap-3">
+                  <!-- Top row: Game name, action buttons, timer -->
+                  <div class="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 class="flex items-center gap-2 text-xl font-display text-base-content">
+                        {session.gameName}
+                        {#if session.isAdhoc}
+                          <span class="badge badge-outline border-primary/40 text-[11px] text-primary">Ad-hoc</span>
+                        {/if}
+                      </h3>
+                      <p class="mt-1 text-xs text-base-content/60">{session.players} players</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+                      <a class="btn btn-sm btn-primary" href={`/games/${session.id}`}>Open runner</a>
+                      <a class="btn btn-sm btn-ghost border border-white/10" href={`/bookings?focus=${session.id}`}>View booking</a>
+                    </div>
+
+                    <div class="text-right">
+                      <p class={`text-3xl font-display ${session.timer.remainingSeconds <= 300 ? 'text-warning' : 'text-primary'}`}>
+                        {formatTimer(session.timer.remainingSeconds)}
+                      </p>
+                      <p class="mt-1 text-xs uppercase tracking-[0.3em] text-base-content/50">{session.timer.status}</p>
+                      <p class="text-xs text-base-content/40">
+                        Total: {formatTimer(session.timer.totalElapsedSeconds)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- Bottom row: Session details, timer controls + room display -->
+                  <div class="flex flex-wrap items-start justify-between gap-4">
+                    <dl class="space-y-1 text-sm">
+                      <div class="flex items-center gap-2 text-base-content/70">
+                        <dt class="font-medium">Started:</dt>
+                        <dd>{new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</dd>
+                      </div>
+                      <div class="flex items-center gap-2 text-base-content/70">
+                        <dt class="font-medium">Scheduled end:</dt>
+                        <dd>{new Date(session.scheduledEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</dd>
+                      </div>
+                      <div class="flex items-center gap-2 text-base-content/70">
+                        <dt class="font-medium">Hints used:</dt>
+                        <dd>{session.hintsUsed}</dd>
+                      </div>
+                    </dl>
+
+                    <div class="flex flex-col items-end gap-2">
+
+                    <div class="flex items-center gap-1">
+                      {#if session.timer.status === 'idle'}
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-circle btn-primary"
+                          onclick={() => dispatchTimerCommand(session.id, 'start_timer')}
+                          aria-label="Start timer"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                      {:else if session.timer.status === 'running'}
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-circle btn-warning"
+                          onclick={() => dispatchTimerCommand(session.id, 'pause_timer')}
+                          aria-label="Pause timer"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                      {:else if session.timer.status === 'paused'}
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-circle btn-success"
+                          onclick={() => dispatchTimerCommand(session.id, 'resume_timer')}
+                          aria-label="Resume timer"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
                       {/if}
-                    </h3>
-                    <p class="text-xs text-base-content/60">{session.players} players · {session.isMobile ? 'Mobile kit' : 'Storefront room'}</p>
-                  </div>
-                  <div class="text-right">
-                    <p class={`text-3xl font-display ${session.timer.remainingSeconds <= 300 ? 'text-warning' : 'text-primary'}`}>
-                      {formatTimer(session.timer.remainingSeconds)}
-                    </p>
-                    <p class="mt-1 text-xs uppercase tracking-[0.3em] text-base-content/50">{session.status}</p>
-                  </div>
-                </div>
-                <div class="mt-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div class="flex items-center gap-3 text-xs text-base-content/60">
-                    <span>Hints used: <strong class="text-base-content">{session.hintsUsed}</strong></span>
-                    {#if session.recentAlert}
-                      <span class="badge badge-warning badge-sm">{session.recentAlert}</span>
-                    {/if}
-                  </div>
-                  <div class="flex flex-wrap gap-2">
-                    <a class="btn btn-sm btn-primary" href={`/games/${session.id}`}>Open runner</a>
-                    <a class="btn btn-sm btn-ghost border border-white/10" href={`/bookings?focus=${session.id}`}>View booking</a>
-                    <button type="button" class="btn btn-sm btn-ghost border border-white/10" onclick={() => copyTimerLink(session)}>
-                      Copy timer link
-                    </button>
-                    <button type="button" class="btn btn-sm btn-ghost border border-white/10" onclick={() => openTimerLink(session)}>
-                      Open room display
-                    </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-circle btn-ghost border border-white/10"
+                        onclick={() => dispatchTimerCommand(session.id, 'reset_timer')}
+                        aria-label="Reset timer"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      </button>
+                    </div>
+
+                    <div class="flex items-center gap-1">
+                      <span class="mr-1 text-xs text-base-content/40">Room Display:</span>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-ghost border border-white/10"
+                        onclick={() => copyTimerLink(session)}
+                        aria-label="Copy URL to clipboard"
+                      >
+                        {#if copySuccessMap[session.id]}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                          </svg>
+                        {:else}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        {/if}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-ghost border border-white/10"
+                        onclick={() => openTimerLink(session)}
+                        aria-label="Open in new tab"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </button>
+                    </div>
+                    </div>
                   </div>
                 </div>
               </article>

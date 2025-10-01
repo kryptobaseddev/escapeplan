@@ -23,7 +23,7 @@ afterAll(async () => {
   await server.close();
 });
 
-describe('EscapePlan mock API', () => {
+describe('EscapePlan API', () => {
   test('authenticates operator and establishes session', async () => {
     const response = await server.inject({
       method: 'POST',

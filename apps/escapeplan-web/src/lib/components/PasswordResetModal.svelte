@@ -1,21 +1,29 @@
-<svelte:options runes={false} />
+<svelte:options runes={true} />
 
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { SubmitFunction } from '@sveltejs/kit';
   import type { OperatorSummary } from '@escapeplan/contracts';
 
-  export let open = false;
-  export let action = '';
-  export let user: OperatorSummary | null = null;
-  export let onclose: (() => void) | undefined = undefined;
-  export let onsuccess: (() => void) | undefined = undefined;
+  interface Props {
+    open?: boolean;
+    action?: string;
+    user?: OperatorSummary | null;
+    onclose?: () => void;
+    onsuccess?: () => void;
+  }
 
-  let errorMessage: string | null = null;
-  let dialogElement: HTMLDialogElement | null = null;
-  let password = '';
-  let forceReset = true;
-  let initialised = false;
+  const props = $props();
+
+  let dialogElement = $state<HTMLDialogElement | null>(null);
+  let errorMessage = $state<string | null>(null);
+  let password = $state('');
+  let forceReset = $state(true);
+  let initialised = $state(false);
+
+  const openFlag = $derived(Boolean(props.open as boolean | undefined));
+  const actionValue = $derived((props.action as string | undefined) ?? '');
+  const userValue = $derived((props.user as OperatorSummary | null | undefined) ?? null);
 
   const handleSubmit: SubmitFunction = () => {
     return async ({ result, update }) => {
@@ -27,7 +35,7 @@
       if (result.type === 'success') {
         await update({ invalidateAll: false });
         errorMessage = null;
-        onsuccess?.();
+        (props.onsuccess as (() => void) | undefined)?.();
         return;
       }
       await update();
@@ -35,28 +43,32 @@
   };
 
   function close() {
-    onclose?.();
+    (props.onclose as (() => void) | undefined)?.();
   }
 
-  $: if (!open && initialised) {
-    initialised = false;
-    password = '';
-  }
+  $effect(() => {
+    if (!openFlag && initialised) {
+      initialised = false;
+      password = '';
+    }
+  });
 
-  $: if (open && !initialised) {
-    password = '';
-    forceReset = true;
-    errorMessage = null;
-    initialised = true;
-  }
+  $effect(() => {
+    if (openFlag && !initialised) {
+      password = '';
+      forceReset = true;
+      errorMessage = null;
+      initialised = true;
+    }
+  });
 </script>
 
-{#if open}
+{#if openFlag}
   <dialog class="modal modal-bottom sm:modal-middle" open bind:this={dialogElement} oncancel={(e) => { e.preventDefault(); close(); }}>
     <div class="modal-box max-h-[90vh] w-full max-w-lg overflow-y-auto px-6 py-6">
       <header class="space-y-1">
         <h2 class="text-lg font-semibold text-base-content">Reset password</h2>
-        <p class="text-sm text-base-content/70">Generate a new password for {user?.name ?? 'this user'}.</p>
+        <p class="text-sm text-base-content/70">Generate a new password for {userValue?.name ?? 'this user'}.</p>
       </header>
 
       {#if errorMessage}
@@ -65,8 +77,8 @@
         </div>
       {/if}
 
-      <form method="POST" action={action} class="mt-6 space-y-4" use:enhance={handleSubmit}>
-        <input type="hidden" name="id" value={user?.id} />
+      <form method="POST" action={actionValue} class="mt-6 space-y-4" use:enhance={handleSubmit}>
+        <input type="hidden" name="id" value={userValue?.id} />
 
         <label class="form-control">
           <span class="label-text">New password</span>

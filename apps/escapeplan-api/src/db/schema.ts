@@ -5,12 +5,12 @@ export const operators = sqliteTable('operators', {
   id: text('id').primaryKey(),
   username: text('username').notNull().unique(),
   name: text('name').notNull(),
-  email: text('email').notNull().unique(),
+  email: text('email').unique(),
   email_verified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   role: text('role').notNull(),
-  avatar_config: text('avatar_config'), // JSON: DiceBear Bottts config
+  avatar_config: text('avatar_config', { mode: 'json' }), // JSON: DiceBear Bottts config
   bio: text('bio'),
-  permissions: text('permissions').notNull().default(sql`'[]'`),
+  permissions: text('permissions', { mode: 'json' }).notNull().default(sql`'[]'`),
   must_reset_password: integer('must_reset_password', { mode: 'boolean' }).notNull().default(false),
   password_hash: text('password_hash'),
   last_login_at: text('last_login_at'),
@@ -105,6 +105,7 @@ export const sessions = sqliteTable('sessions', {
   status: text('status').notNull(),
   timerTotalSeconds: integer('timer_total_seconds').notNull(),
   timerRemainingSeconds: integer('timer_remaining_seconds').notNull(),
+  timerTotalElapsedSeconds: integer('timer_total_elapsed_seconds').notNull().default(0),
   timerStatus: text('timer_status').notNull(),
   startedAt: text('started_at').notNull(),
   scheduledEnd: text('scheduled_end').notNull(),

@@ -18,7 +18,7 @@
   --color-base-300: #191d24;
   --color-base-content: #f6f7fb;
   --color-primary: #00d5c8;
-  --color-primary-content: #012a27;
+  --color-primary-content: #0a0b0d;
   --color-secondary: #c43131;
   --color-secondary-content: #ffe1e1;
   --color-accent: #1e88e5;
@@ -50,7 +50,7 @@ body {
   background-attachment: fixed;
 }
 
-a {
+a:not(.btn) {
   @apply text-primary underline-offset-4 hover:underline;
 }
 

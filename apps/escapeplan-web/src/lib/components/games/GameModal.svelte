@@ -13,6 +13,7 @@
     SaveGameRequest
   } from '@escapeplan/contracts';
   import type { SubmitFunction } from '@sveltejs/kit';
+  import HintModal from './HintModal.svelte';
 
   type Mode = 'create' | 'edit';
 
@@ -43,6 +44,8 @@
     bookingRules: GameBookingRules;
   }
 
+  const defaultPricingModel: GamePricingConfig['model'] = 'per_person';
+
   let workingGame: EditableGame = createEmptyGame();
   let payloadJson = '';
   let slugTouched = false;
@@ -50,6 +53,11 @@
   let draggingPuzzleId: string | null = null;
   let draggingHint: { puzzleId: string; hintId: string } | null = null;
   let bookingCustomFields: BookingCustomField[] = [];
+
+  // Hint modal state
+  let hintModalOpen = false;
+  let editingHint: { puzzle: EditablePuzzle; hint: EditableHint | null } | null = null;
+  let activeHintTab: Record<string, 'text' | 'image' | 'audio' | 'video'> = {};
 
   const tabItems: Array<{ id: TabId; label: string }> = [
     { id: 'details', label: 'Game Details' },
@@ -59,8 +67,6 @@
     { id: 'pricing', label: 'Pricing' },
     { id: 'booking', label: 'Booking Rules' }
   ];
-
-  const defaultPricingModel: GamePricingConfig['model'] = 'per_person';
 
   const difficultyOptions = [
     { value: 'Beginner', label: 'Beginner', stars: 1, helper: 'Great for first-timers' },
@@ -242,6 +248,7 @@
       ...hint,
       order: index + 1
     }));
+    workingGame.puzzles = [...workingGame.puzzles]; // trigger Svelte reactivity
   }
 
   function resetState() {
@@ -463,13 +470,66 @@
 
   function addHint(puzzle: EditablePuzzle) {
     puzzle.hints = [...puzzle.hints, { ...createEmptyHint(), order: puzzle.hints.length + 1 }];
+    workingGame.puzzles = [...workingGame.puzzles]; // trigger Svelte reactivity
     updatePayload();
   }
 
   function removeHint(puzzle: EditablePuzzle, hintId: string) {
     puzzle.hints = puzzle.hints.filter((hint) => hint.uuid !== hintId);
     applyHintOrder(puzzle);
+    workingGame.puzzles = [...workingGame.puzzles]; // trigger Svelte reactivity
     updatePayload();
+  }
+
+  // Hint modal functions
+  function openHintModal(puzzle: EditablePuzzle, hint: EditableHint | null = null) {
+    editingHint = { puzzle, hint };
+    hintModalOpen = true;
+  }
+
+  function closeHintModal() {
+    hintModalOpen = false;
+    editingHint = null;
+  }
+
+  function saveHintFromModal(savedHint: GameHintDefinition) {
+    if (!editingHint) return;
+
+    const { puzzle, hint: originalHint } = editingHint;
+
+    if (originalHint) {
+      // Editing existing hint
+      const index = puzzle.hints.findIndex(h => h.uuid === originalHint.uuid);
+      if (index !== -1) {
+        puzzle.hints[index] = savedHint as EditableHint;
+      }
+    } else {
+      // Adding new hint
+      puzzle.hints = [...puzzle.hints, savedHint as EditableHint];
+    }
+
+    applyHintOrder(puzzle);
+    workingGame.puzzles = [...workingGame.puzzles];
+    updatePayload();
+    closeHintModal();
+  }
+
+  function groupHintsByType(hints: EditableHint[]) {
+    return {
+      text: hints.filter(h => h.type === 'text'),
+      image: hints.filter(h => h.type === 'image'),
+      audio: hints.filter(h => h.type === 'audio'),
+      video: hints.filter(h => h.type === 'video')
+    };
+  }
+
+  function getActiveHintTab(puzzleId: string): 'text' | 'image' | 'audio' | 'video' {
+    return activeHintTab[puzzleId] ?? 'text';
+  }
+
+  function setActiveHintTab(puzzleId: string, tab: 'text' | 'image' | 'audio' | 'video') {
+    activeHintTab[puzzleId] = tab;
+    activeHintTab = { ...activeHintTab }; // trigger reactivity
   }
 
   function updatePayload() {
@@ -641,23 +701,23 @@
 </script>
 
 {#if open}
-  <dialog
-    class="modal modal-bottom sm:modal-middle"
-    open
-    bind:this={dialogElement}
-    oncancel={(event) => {
-      event.preventDefault();
-      close();
-    }}
-  >
-    <div class="modal-box max-h-[90vh] w-full max-w-5xl overflow-y-auto px-6 py-6">
-      <header class="space-y-2">
-        <h2 class="text-lg font-semibold text-base-content">
-          {mode === 'create' ? 'Add game configuration' : `Edit ${game?.name ?? 'game'}`}
-        </h2>
-        <p class="text-sm text-base-content/60">
-          Tabbed modal covers game metadata, media assets, rooms, puzzles, pricing, and booking rules. All fields map directly to the EscapePlan API schema.
-        </p>
+  <div class="w-full">
+    <div class="rounded-2xl border border-white/10 bg-base-200/70 p-6">
+      <header class="space-y-4">
+        <button type="button" class="btn btn-ghost btn-sm gap-2" onclick={close}>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back to games
+        </button>
+        <div>
+          <h2 class="text-2xl font-semibold text-base-content">
+            {mode === 'create' ? 'Add game configuration' : `Edit ${game?.name ?? 'game'}`}
+          </h2>
+          <p class="mt-1 text-sm text-base-content/60">
+            Configure game metadata, media assets, rooms, puzzles, pricing, and booking rules. All fields map directly to the EscapePlan API schema.
+          </p>
+        </div>
       </header>
 
       {#if errorMessage}
@@ -684,53 +744,85 @@
           {/each}
         </nav>
 
-        <section class="rounded-2xl border border-white/10 bg-base-200/60 p-5 shadow-inner">
+        <section class="space-y-6">
           {#if activeTab === 'details'}
-            <div class="space-y-5">
-              <div class="grid gap-4 md:grid-cols-2">
-                <label class="form-control">
-                  <span class="label-text">Game name</span>
+            <div class="space-y-6">
+              <div class="grid gap-6 md:grid-cols-2">
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text font-medium text-base">Game name</span>
+                  </label>
                   <input
-                    class="input input-bordered"
+                    class="input input-bordered w-full bg-base-100"
+                    placeholder="Enter game name"
                     bind:value={workingGame.name}
                     required
                     oninput={handleNameInput}
                   />
-                </label>
-                <label class="form-control">
-                  <span class="label-text">Slug</span>
+                </div>
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text font-medium text-base">URL Slug</span>
+                  </label>
                   <input
-                    class="input input-bordered lowercase"
+                    class="input input-bordered lowercase w-full bg-base-100"
+                    placeholder="game-url-slug"
                     bind:value={workingGame.slug}
                     required
                     pattern="^[a-z0-9-]+$"
                     oninput={handleSlugInput}
                   />
-                  <span class="label-text-alt text-xs text-base-content/60">Lowercase letters, numbers, and hyphens only.</span>
-                </label>
+                  <label class="label">
+                    <span class="label-text-alt text-base-content/60">Lowercase letters, numbers, and hyphens only</span>
+                  </label>
+                </div>
               </div>
-              <label class="form-control">
-                <span class="label-text">Description</span>
-                <textarea class="textarea textarea-bordered" rows={3} bind:value={workingGame.description} required oninput={markDirty}></textarea>
-              </label>
-              <label class="form-control">
-                <span class="label-text">Story intro (optional)</span>
-                <textarea class="textarea textarea-bordered" rows={3} bind:value={workingGame.storyIntro} oninput={markDirty}></textarea>
-              </label>
-              <div class="grid gap-4 md:grid-cols-3">
-                <label class="form-control">
-                  <span class="label-text">Duration (minutes)</span>
-                  <input
-                    class="input input-bordered"
-                    type="number"
-                    min="5"
-                    max="240"
-                    bind:value={workingGame.durationMinutes}
-                    oninput={markDirty}
-                  />
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-medium text-base">Description</span>
                 </label>
-                <div class="form-control md:col-span-1">
-                  <span class="label-text">Difficulty</span>
+                <textarea
+                  class="textarea textarea-bordered w-full bg-base-100"
+                  rows={4}
+                  placeholder="Brief description of the game..."
+                  bind:value={workingGame.description}
+                  required
+                  oninput={markDirty}
+                ></textarea>
+              </div>
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-medium text-base">Story intro <span class="text-base-content/50">(optional)</span></span>
+                </label>
+                <textarea
+                  class="textarea textarea-bordered w-full bg-base-100"
+                  rows={4}
+                  placeholder="Story introduction or narrative hook..."
+                  bind:value={workingGame.storyIntro}
+                  oninput={markDirty}
+                ></textarea>
+              </div>
+              <div class="grid gap-6 md:grid-cols-3">
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text font-medium text-base">Duration</span>
+                  </label>
+                  <div class="input-group">
+                    <input
+                      class="input input-bordered w-full bg-base-100"
+                      type="number"
+                      min="5"
+                      max="240"
+                      bind:value={workingGame.durationMinutes}
+                      oninput={markDirty}
+                    />
+                    <span class="bg-base-200 px-4 flex items-center">minutes</span>
+                  </div>
+                </div>
+                <div class="form-control md:col-span-2">
+                  <label class="label">
+                    <span class="label-text font-medium text-base">Difficulty</span>
+                  </label>
                   <div class="flex flex-wrap gap-2" role="radiogroup" aria-label="Select difficulty">
                     {#each difficultyOptions as option}
                       <button
@@ -748,15 +840,19 @@
                       </button>
                     {/each}
                   </div>
-                  <span class="label-text-alt text-xs text-base-content/60">{selectedDifficulty.helper}</span>
+                  <label class="label">
+                    <span class="label-text-alt text-base-content/60">{selectedDifficulty.helper}</span>
+                  </label>
                 </div>
-                <label class="form-control">
-                  <span class="label-text">Pricing model</span>
-                  <select class="select select-bordered" bind:value={workingGame.pricingModel} onchange={markDirty}>
-                    <option value="per_person">Per person</option>
-                    <option value="flat_rate">Flat rate</option>
-                  </select>
+              </div>
+              <div class="form-control">
+                <label class="label">
+                  <span class="label-text font-medium text-base">Pricing model</span>
                 </label>
+                <select class="select select-bordered w-full bg-base-100" bind:value={workingGame.pricingModel} onchange={markDirty}>
+                  <option value="per_person">Per person pricing</option>
+                  <option value="flat_rate">Flat rate pricing</option>
+                </select>
               </div>
               <div class="grid gap-4 md:grid-cols-2">
                 <label class="form-control">
@@ -1005,78 +1101,106 @@
                     </label>
                   </div>
                   <section class="mt-4 rounded-xl border border-dashed border-white/10 bg-base-200/70 p-4">
-                    <div class="mb-3 flex items-center justify-between gap-3">
+                    <div class="mb-4 flex items-center justify-between gap-3">
                       <h4 class="text-sm font-semibold text-base-content">Hints</h4>
-                      <button type="button" class="btn btn-xs btn-secondary" onclick={() => addHint(puzzle)}>
+                      <button type="button" class="btn btn-xs btn-secondary" onclick={() => openHintModal(puzzle)}>
                         + Add hint
                       </button>
                     </div>
+
                     {#if puzzle.hints.length === 0}
-                      <p class="rounded-lg border border-white/5 bg-base-100/70 p-3 text-xs text-base-content/60">No hints yet.</p>
-                    {/if}
-                    <div class="space-y-3">
-                      {#each puzzle.hints as hint (hint.uuid)}
-                        <div
-                          class="rounded-lg border border-white/10 bg-base-100/70 p-3"
-                          role="group"
-                          ondragover={(event) => handleHintDragOver(puzzle, hint.uuid, event)}
-                          ondrop={handleHintDrop}
+                      <p class="rounded-lg border border-white/5 bg-base-100/70 p-3 text-xs text-base-content/60">No hints yet. Click "+ Add hint" to create one.</p>
+                    {:else}
+                      {@const hintGroups = groupHintsByType(puzzle.hints)}
+
+                      <!-- Hint Type Tabs -->
+                      <div class="tabs tabs-boxed mb-3 bg-base-300/50">
+                        <button
+                          type="button"
+                          class={`tab ${getActiveHintTab(puzzle.id) === 'text' ? 'tab-active' : ''}`}
+                          onclick={() => setActiveHintTab(puzzle.id, 'text')}
                         >
-                          <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                            <div class="flex flex-wrap gap-3 md:flex-nowrap">
-                              <label class="form-control">
-                                <span class="label-text">Type</span>
-                                <select class="select select-bordered select-sm" bind:value={hint.type} onchange={markDirty}>
-                                  <option value="text">Text</option>
-                                  <option value="image">Image</option>
-                                  <option value="audio">Audio</option>
-                                  <option value="video">Video</option>
-                                </select>
-                              </label>
-                              <label class="form-control">
-                                <span class="label-text">Order</span>
-                                <input class="input input-bordered input-sm" type="number" min="1" bind:value={hint.order} oninput={markDirty} />
-                              </label>
-                            </div>
-                            <div class="flex items-center gap-2">
-                              <button
-                                type="button"
-                                class="btn btn-xs btn-ghost text-base-content/60"
-                                aria-label="Reorder hint"
-                                draggable="true"
-                                ondragstart={(event) => handleHintDragStart(puzzle.id, hint.uuid, event)}
-                                ondragend={handleHintDrop}
-                              >
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4">
-                                  <path fill="currentColor" d="M4 10h16v2H4zm0-4h16v2H4zm0 8h16v2H4zm0 4h16v2H4z" />
-                                </svg>
-                              </button>
-                              <button type="button" class="btn btn-xs btn-ghost text-error" onclick={() => removeHint(puzzle, hint.uuid)}>
-                                Remove
-                              </button>
-                            </div>
-                          </div>
-                          <label class="form-control mt-2">
-                            <span class="label-text">Content</span>
-                            <textarea class="textarea textarea-bordered textarea-sm" rows={2} bind:value={hint.content} oninput={markDirty}></textarea>
-                          </label>
-                          <label class="form-control mt-2">
-                            <span class="label-text">Asset URL</span>
-                            <input class="input input-bordered input-sm" bind:value={hint.assetUrl} placeholder="optional" oninput={markDirty} />
-                          </label>
+                          Text
+                        </button>
+                        <button
+                          type="button"
+                          class={`tab ${getActiveHintTab(puzzle.id) === 'image' ? 'tab-active' : ''}`}
+                          onclick={() => setActiveHintTab(puzzle.id, 'image')}
+                        >
+                          Image
+                        </button>
+                        <button
+                          type="button"
+                          class={`tab ${getActiveHintTab(puzzle.id) === 'audio' ? 'tab-active' : ''}`}
+                          onclick={() => setActiveHintTab(puzzle.id, 'audio')}
+                        >
+                          Audio
+                        </button>
+                        <button
+                          type="button"
+                          class={`tab ${getActiveHintTab(puzzle.id) === 'video' ? 'tab-active' : ''}`}
+                          onclick={() => setActiveHintTab(puzzle.id, 'video')}
+                        >
+                          Video
+                        </button>
+                      </div>
+
+                      <!-- Hints Table -->
+                      {@const hintsForTab = hintGroups[getActiveHintTab(puzzle.id)]}
+                      {#if hintsForTab.length === 0}
+                        <p class="rounded-lg border border-white/5 bg-base-100/70 p-3 text-xs text-base-content/60">
+                          No {getActiveHintTab(puzzle.id)} hints yet.
+                        </p>
+                      {:else}
+                        <div class="overflow-x-auto">
+                          <table class="table table-sm">
+                            <thead>
+                              <tr>
+                                <th class="text-xs uppercase text-base-content/60">File Name</th>
+                                <th class="text-xs uppercase text-base-content/60">Description</th>
+                                <th class="text-center text-xs uppercase text-base-content/60">Count as Hint</th>
+                                <th class="w-24"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {#each hintsForTab as hint (hint.uuid)}
+                                <tr class="hover">
+                                  <td class="text-sm">{hint.assetUrl || '—'}</td>
+                                  <td class="max-w-xs truncate text-sm">{hint.content || '—'}</td>
+                                  <td class="text-center">
+                                    <input type="checkbox" checked={hint.countAsHint ?? true} class="checkbox checkbox-primary checkbox-sm" disabled />
+                                  </td>
+                                  <td>
+                                    <div class="flex items-center justify-end gap-2">
+                                      <button
+                                        type="button"
+                                        class="btn btn-xs btn-ghost text-base-content/70 hover:text-primary"
+                                        onclick={() => openHintModal(puzzle, hint)}
+                                        aria-label="Edit hint"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                        </svg>
+                                      </button>
+                                      <button
+                                        type="button"
+                                        class="btn btn-xs btn-ghost text-base-content/70 hover:text-error"
+                                        onclick={() => removeHint(puzzle, hint.uuid)}
+                                        aria-label="Delete hint"
+                                      >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              {/each}
+                            </tbody>
+                          </table>
                         </div>
-                      {/each}
-                    </div>
-                    <div
-                      class="h-3"
-                      role="presentation"
-                      aria-hidden="true"
-                      ondragover={(event) => {
-                        event.preventDefault();
-                        handleHintListDrop(puzzle, event);
-                      }}
-                      ondrop={(event) => handleHintListDrop(puzzle, event)}
-                    ></div>
+                      {/if}
+                    {/if}
                   </section>
                 </article>
               {/each}
@@ -1412,5 +1536,14 @@
         </footer>
       </form>
     </div>
-  </dialog>
+  </div>
+
+  <!-- Hint Modal (opens on top of Game Form) -->
+  <HintModal
+    open={hintModalOpen}
+    puzzleName={editingHint?.puzzle.title ?? ''}
+    hint={editingHint?.hint ?? null}
+    onclose={closeHintModal}
+    onsave={saveHintFromModal}
+  />
 {/if}

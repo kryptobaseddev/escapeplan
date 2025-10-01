@@ -67,9 +67,9 @@ type OperatorRow = {
   username: string;
   name: string;
   role: string;
-  avatar_config: string | null;
+  avatar_config: string | Record<string, unknown> | null; // string from raw SQLite, object from Drizzle with mode: 'json'
   bio: string | null;
-  permissions: string | null;
+  permissions: string | Record<string, unknown> | null; // string from raw SQLite, object from Drizzle with mode: 'json'
   email: string;
   email_verified: number;
   must_reset_password: number;
@@ -114,6 +114,7 @@ type SessionRow = {
   session_status: string;
   timer_total_seconds: number;
   timer_remaining_seconds: number;
+  timer_total_elapsed_seconds: number;
   timer_status: string;
   started_at: string;
   scheduled_end: string;
@@ -210,11 +211,17 @@ function mapOperator(row: OperatorRow | undefined): OperatorProfile | undefined 
       .prepare(`UPDATE operators SET role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
       .run(resolvedRole, row.id);
   }
-  const permissions = normalizePermissions(resolvedRole, row.permissions);
+  // Handle permissions: can be string (raw SQLite) or already parsed (Drizzle with mode: 'json')
+  const permissionsValue = typeof row.permissions === 'string' ? row.permissions : JSON.stringify(row.permissions);
+  const permissions = normalizePermissions(resolvedRole, permissionsValue);
+
+  // Handle avatar_config: can be string (raw SQLite) or already parsed (Drizzle with mode: 'json')
   let avatarConfig;
   if (row.avatar_config) {
     try {
-      avatarConfig = JSON.parse(row.avatar_config);
+      avatarConfig = typeof row.avatar_config === 'string'
+        ? JSON.parse(row.avatar_config)
+        : row.avatar_config;
     } catch {
       avatarConfig = undefined;
     }
@@ -780,7 +787,6 @@ export async function createOperatorAccount(input: CreateOperatorRequest): Promi
 
   const role = normalizeRole(input.role);
   const permissions = permissionsForRole(role);
-  const serializedPermissions = JSON.stringify(permissions);
   const context = await getAuthContext();
   const adapter = await getInternalAdapter();
 
@@ -793,7 +799,9 @@ export async function createOperatorAccount(input: CreateOperatorRequest): Promi
 
   const trimmedName = input.name.trim();
   const trimmedBio = input.bio?.trim() ?? null;
-  const avatarConfig = input.avatarConfig ? JSON.stringify(input.avatarConfig) : null;
+  // Better-Auth uses 'image' field which maps to 'avatar_config' column with mode: 'json'
+  // Drizzle will automatically JSON.stringify the object, so pass it directly
+  const avatarImage = input.avatarConfig;
 
   const hashedPassword = await context.password.hash(input.password);
 
@@ -803,6 +811,7 @@ export async function createOperatorAccount(input: CreateOperatorRequest): Promi
     username,
     role,
     bio: trimmedBio ?? undefined,
+    image: avatarImage,
     mustResetPassword: input.mustResetPassword ?? false,
     emailVerified: Boolean(email),
     passwordHash: hashedPassword,
@@ -818,20 +827,10 @@ export async function createOperatorAccount(input: CreateOperatorRequest): Promi
     password: hashedPassword
   });
 
-  // Set avatar_config via direct DB update
-  if (avatarConfig) {
-    db.prepare(`UPDATE operators SET avatar_config = ? WHERE id = ?`).run(avatarConfig, user.id);
-  }
-
+  // Update permissions after creation (Better-Auth doesn't include this in createUser)
+  // permissions column has mode: 'json', so Drizzle will automatically stringify the array
   await adapter.updateUser(user.id, {
-    role,
-    permissions: serializedPermissions,
-    bio: trimmedBio ?? undefined,
-    mustResetPassword: input.mustResetPassword ?? false,
-    passwordHash: hashedPassword,
-    archivedAt: null,
-    archivedBy: null,
-    archivedReason: null
+    permissions: permissions
   });
 
   const row = getOperatorRow(user.id);
@@ -850,13 +849,13 @@ export async function updateOperatorAccount(id: string, input: UpdateOperatorReq
   const roleValue = input.role ?? row.role;
   const resolvedRole = normalizeRole(roleValue);
   const permissions = permissionsForRole(resolvedRole);
-  const serializedPermissions = JSON.stringify(permissions);
   const context = await getAuthContext();
   const adapter = await getInternalAdapter();
 
+  // permissions column has mode: 'json', so Drizzle will automatically stringify the array
   const updates: Record<string, unknown> = {
     role: resolvedRole,
-    permissions: serializedPermissions
+    permissions: permissions
   };
 
   if (input.name !== undefined) {
@@ -866,7 +865,9 @@ export async function updateOperatorAccount(id: string, input: UpdateOperatorReq
     updates.email = input.email?.trim();
   }
   if (input.avatarConfig !== undefined) {
-    updates.avatarConfig = input.avatarConfig ? JSON.stringify(input.avatarConfig) : null;
+    // Better-Auth uses 'image' field which maps to 'avatar_config' column with mode: 'json'
+    // Drizzle will automatically JSON.stringify the object, so pass it directly
+    updates.image = input.avatarConfig ?? null;
   }
   if (input.bio !== undefined) {
     const trimmed = input.bio?.trim();
@@ -877,12 +878,6 @@ export async function updateOperatorAccount(id: string, input: UpdateOperatorReq
   }
 
   await adapter.updateUser(id, updates);
-
-  if (Object.prototype.hasOwnProperty.call(updates, 'avatarConfig')) {
-    db
-      .prepare(`UPDATE operators SET avatar_config = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`)
-      .run(updates.avatarConfig ?? null, id);
-  }
 
   const updated = getOperatorRow(id);
   if (!updated) {
@@ -946,26 +941,33 @@ export async function changeOwnPassword(operatorId: string, payload: ChangeOwnPa
   await adapter.updateUser(operatorId, { mustResetPassword: false, passwordHash: hashedPassword });
 }
 
-export function updateOwnProfile(operatorId: string, payload: UpdateOwnProfileRequest): OperatorProfile {
+export async function updateOwnProfile(operatorId: string, payload: UpdateOwnProfileRequest): Promise<OperatorProfile> {
   const row = getOperatorRow(operatorId);
   if (!row) {
     throw new Error('Operator not found');
   }
-  const name = payload.name?.trim() ?? row.name;
-  const email = payload.email === undefined ? row.email : payload.email?.trim() || null;
-  const avatarConfig =
-    payload.avatarConfig === undefined
-      ? row.avatar_config
-      : payload.avatarConfig
-        ? JSON.stringify(payload.avatarConfig)
-        : null;
-  const bio = payload.bio === undefined ? row.bio : payload.bio?.trim() ? payload.bio.trim() : null;
 
-  sqlite
-    .prepare(
-      `UPDATE operators SET name = ?, email = ?, avatar_config = ?, bio = ?, updated_at = ? WHERE id = ?`
-    )
-    .run(name, email, avatarConfig, bio, new Date().toISOString(), operatorId);
+  // Build updates object for Better-Auth adapter
+  const updates: Record<string, unknown> = {};
+
+  if (payload.name !== undefined) {
+    updates.name = payload.name.trim();
+  }
+  if (payload.email !== undefined) {
+    updates.email = payload.email?.trim();
+  }
+  if (payload.avatarConfig !== undefined) {
+    // Better-Auth uses 'image' field which maps to 'avatar_config' column
+    updates.image = payload.avatarConfig ? JSON.stringify(payload.avatarConfig) : null;
+  }
+  if (payload.bio !== undefined) {
+    const trimmed = payload.bio?.trim();
+    updates.bio = trimmed || null;
+  }
+
+  // Use Better-Auth adapter to update
+  const adapter = await getInternalAdapter();
+  await adapter.updateUser(operatorId, updates);
 
   const updated = getOperatorRow(operatorId);
   const profile = mapOperator(updated);
@@ -1142,6 +1144,7 @@ function mapSessionRow(row: SessionRow): GameSessionDetails {
     timer: {
       totalSeconds: row.timer_total_seconds,
       remainingSeconds: row.timer_remaining_seconds,
+      totalElapsedSeconds: row.timer_total_elapsed_seconds,
       status: row.timer_status as GameSessionDetails['timer']['status'],
       startedAt: row.started_at,
       updatedAt: new Date().toISOString()
@@ -1179,7 +1182,7 @@ export function listActiveSessions(): ActiveSessionsResponse {
   const rows = sqlite
     .prepare(
       `SELECT s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
-              s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
+              s.timer_total_elapsed_seconds, s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
               s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
               b.party_size, b.is_mobile, b.is_adhoc, b.start_time, b.end_time,
               g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
@@ -1220,10 +1223,92 @@ export function listActiveSessions(): ActiveSessionsResponse {
   };
 }
 
+export function listSessions(filters?: {
+  status?: string;
+  search?: string;
+  sortBy?: 'date' | 'game' | 'location';
+  sortOrder?: 'asc' | 'desc';
+}): ActiveSessionsResponse {
+  let whereConditions: string[] = [];
+  let params: any[] = [];
+
+  // Status filter
+  if (filters?.status && filters.status !== 'all') {
+    if (filters.status === 'active') {
+      whereConditions.push(`s.status IN ('running', 'paused')`);
+    } else {
+      whereConditions.push(`s.status = ?`);
+      params.push(filters.status);
+    }
+  }
+
+  // Search filter
+  if (filters?.search) {
+    whereConditions.push(`(g.name LIKE ? OR r.name LIKE ? OR b.id LIKE ?)`);
+    const searchPattern = `%${filters.search}%`;
+    params.push(searchPattern, searchPattern, searchPattern);
+  }
+
+  const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+  // Sort order
+  let orderBy = 's.started_at DESC';
+  if (filters?.sortBy === 'game') {
+    orderBy = `g.name ${filters.sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+  } else if (filters?.sortBy === 'location') {
+    orderBy = `r.name ${filters.sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+  } else if (filters?.sortBy === 'date') {
+    orderBy = `s.started_at ${filters.sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+  }
+
+  const query = `
+    SELECT s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
+           s.timer_total_elapsed_seconds, s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
+           s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
+           b.party_size, b.is_mobile, b.is_adhoc, b.start_time, b.end_time,
+           g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
+           r.id AS room_id, r.uuid AS room_uuid, r.name AS room_name
+    FROM sessions s
+    JOIN bookings b ON b.id = s.booking_id
+    JOIN games g ON g.id = b.game_id
+    JOIN rooms r ON r.id = b.room_id
+    ${whereClause}
+    ORDER BY ${orderBy}
+  `;
+
+  const rows = sqlite.prepare(query).all(...params) as SessionRow[];
+
+  const sessions = rows.map((row) => {
+    const details = mapSessionRow(row);
+    const puzzleRows = puzzlesStmt.all(row.session_id) as { id: string; session_id: string; title: string; status: string; display_order: number }[];
+    details.puzzles = puzzleRows.map((puzzle) => ({
+      id: puzzle.id,
+      title: puzzle.title,
+      status: puzzle.status as GameSessionDetails['puzzles'][number]['status'],
+      order: puzzle.display_order
+    }));
+    const hints = hintsStmt.all(row.session_id) as { id: string; session_id: string; type: string; message: string; asset_url: string | null; delivered_by: string; delivered_at: string }[];
+    details.hintLog = hints.map((hint) => ({
+      id: hint.id,
+      type: hint.type as GameSessionDetails['hintLog'][number]['type'],
+      message: hint.message,
+      assetUrl: hint.asset_url ?? undefined,
+      deliveredBy: hint.delivered_by,
+      deliveredAt: hint.delivered_at
+    }));
+    return details;
+  });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    sessions
+  };
+}
+
 export function getSessionById(id: string): GameSessionDetails | undefined {
   const stmt = sqlite.prepare(
     `SELECT s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
-            s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
+            s.timer_total_elapsed_seconds, s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
             s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
             b.party_size, b.is_mobile, b.is_adhoc,
             g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
@@ -1264,7 +1349,7 @@ export function getSessionBySlug(slug: string): { session: GameSessionDetails; s
   const stmt = sqlite.prepare(
     `SELECT t.slug, t.narrative,
             s.id AS session_id, s.booking_id, s.status AS session_status, s.timer_total_seconds, s.timer_remaining_seconds,
-            s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
+            s.timer_total_elapsed_seconds, s.timer_status, s.started_at, s.scheduled_end, s.hints_used, s.stream_thumbnail_url, s.background_audio_track,
             s.background_audio_is_playing, s.crew_primary, s.crew_support, s.recent_alert,
             b.party_size, b.is_mobile, b.is_adhoc,
             g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
@@ -1428,11 +1513,11 @@ export function quickStartSession(
   sqlite
     .prepare(
       `INSERT INTO sessions (
-         id, booking_id, status, timer_total_seconds, timer_remaining_seconds, timer_status,
+         id, booking_id, status, timer_total_seconds, timer_remaining_seconds, timer_total_elapsed_seconds, timer_status,
          started_at, scheduled_end, hints_used, stream_thumbnail_url,
          background_audio_track, background_audio_is_playing, crew_primary, crew_support, recent_alert
        ) VALUES (
-         @id, @booking_id, 'running', @timer_total_seconds, @timer_total_seconds, 'running',
+         @id, @booking_id, 'running', @timer_total_seconds, @timer_total_seconds, 0, 'running',
          @started_at, @scheduled_end, 0, NULL, NULL, 0, @crew_primary, NULL, NULL
        )`
     )
@@ -1577,11 +1662,27 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
     case 'resume_timer':
       sqlite.prepare(`UPDATE sessions SET timer_status = 'running', status = 'running', recent_alert = 'Timer resumed' WHERE id = ?`).run(sessionId);
       break;
-    case 'reset_timer':
-      sqlite
-        .prepare(`UPDATE sessions SET timer_status = 'idle', timer_remaining_seconds = timer_total_seconds, recent_alert = 'Timer reset' WHERE id = ?`)
-        .run(sessionId);
+    case 'reset_timer': {
+      // Calculate elapsed time before reset
+      const beforeReset = sqlite.prepare(
+        `SELECT timer_total_seconds, timer_remaining_seconds, timer_total_elapsed_seconds FROM sessions WHERE id = ?`
+      ).get(sessionId) as { timer_total_seconds: number; timer_remaining_seconds: number; timer_total_elapsed_seconds: number } | undefined;
+
+      if (beforeReset) {
+        const elapsedThisRound = beforeReset.timer_total_seconds - beforeReset.timer_remaining_seconds;
+        const newTotalElapsed = beforeReset.timer_total_elapsed_seconds + elapsedThisRound;
+
+        sqlite.prepare(
+          `UPDATE sessions
+           SET timer_status = 'idle',
+               timer_remaining_seconds = timer_total_seconds,
+               timer_total_elapsed_seconds = ?,
+               recent_alert = 'Timer reset'
+           WHERE id = ?`
+        ).run(newTotalElapsed, sessionId);
+      }
       break;
+    }
     case 'send_hint': {
       const message = String(command.payload?.message ?? '').trim();
       if (!message) {
@@ -1628,3 +1729,86 @@ export function applyCommand(sessionId: string, command: CommandRequest): Comman
 
   return response;
 }
+
+
+// =============================================================================
+// Server-Side Countdown Ticker
+// =============================================================================
+
+/**
+ * Timer ticker that runs every second to decrement remaining time
+ * for all sessions with timer_status = "running"
+ */
+function tickTimers() {
+  try {
+    // Get all running timers
+    const runningSessions = sqlite.prepare(
+      `SELECT id, timer_remaining_seconds, timer_total_elapsed_seconds
+       FROM sessions
+       WHERE timer_status = 'running' AND timer_remaining_seconds > 0`
+    ).all() as Array<{ id: string; timer_remaining_seconds: number; timer_total_elapsed_seconds: number }>;
+
+    if (runningSessions.length === 0) {
+      return; // No active timers
+    }
+
+    // Decrement each timer and update
+    const updateStmt = sqlite.prepare(
+      `UPDATE sessions
+       SET timer_remaining_seconds = ?,
+           timer_total_elapsed_seconds = ?
+       WHERE id = ?`
+    );
+
+    const batchUpdate = sqlite.transaction((sessions: typeof runningSessions) => {
+      for (const session of sessions) {
+        const newRemaining = Math.max(0, session.timer_remaining_seconds - 1);
+        const newElapsed = session.timer_total_elapsed_seconds + 1;
+        updateStmt.run(newRemaining, newElapsed, session.id);
+
+        // If timer hits zero, mark as completed
+        if (newRemaining === 0) {
+          sqlite.prepare(
+            `UPDATE sessions SET timer_status = 'completed', status = 'completed' WHERE id = ?`
+          ).run(session.id);
+        }
+      }
+    });
+
+    batchUpdate(runningSessions);
+
+    // Emit updates for affected sessions
+    for (const session of runningSessions) {
+      const updated = getSessionById(session.id);
+      if (updated) {
+        emitSessionUpdate(updated);
+        emitTimerUpdate({
+          slug: updated.gameSlug ?? "",
+          gameName: updated.gameName,
+          roomName: updated.roomName,
+          timer: updated.timer,
+          background: { type: "image", url: "" }
+        });
+      }
+    }
+
+    // Emit dashboard update if any timers changed
+    if (runningSessions.length > 0) {
+      emitDashboardUpdate(getDashboard());
+    }
+  } catch (error) {
+    console.error("[Timer Ticker] Error:", error);
+  }
+}
+
+// Start the ticker - runs every 1000ms (1 second)
+const timerInterval = setInterval(tickTimers, 1000);
+
+// Ensure ticker stops if module unloads (for dev server restarts)
+if (typeof process !== "undefined") {
+  process.on("SIGTERM", () => clearInterval(timerInterval));
+  process.on("SIGINT", () => clearInterval(timerInterval));
+}
+
+console.log("[Timer Ticker] Started - running every 1 second");
+
