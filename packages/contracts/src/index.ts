@@ -28,7 +28,9 @@ export type OperatorPermission =
   | 'view_network'
   | 'manage_network'
   | 'manage_users'
-  | 'manage_files';
+  | 'manage_files'
+  | 'view_system_logs'
+  | 'manage_system_settings';
 
 export interface OperatorProfile {
   id: string;
@@ -218,7 +220,6 @@ export interface GameSessionDetails extends ActiveSessionSummary {
   };
   gameSlug?: string;
   roomId?: string;
-  roomUuid?: string;
 }
 
 export interface TimerBroadcast {
@@ -289,7 +290,6 @@ export interface CommandResponse {
 
 export interface GamePuzzleDefinition {
   id: string;
-  uuid: string;
   title: string;
   description?: string;
   solution?: string;
@@ -302,7 +302,6 @@ export interface GamePuzzleDefinition {
 
 export interface GameRoomDefinition {
   id: string;
-  uuid: string;
   name: string;
   description?: string;
   slug?: string;

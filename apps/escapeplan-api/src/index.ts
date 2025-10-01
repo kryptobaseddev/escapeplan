@@ -44,12 +44,13 @@ import {
   listOperatorSummaries
 } from './state.js';
 import { auth, requireSession } from './auth.js';
-import { db, runMigrations } from './db/client.js';
+import { db, runMigrations, sqlite } from './db/client.js';
 import { operators } from './db/schema.js';
 import { eq } from 'drizzle-orm';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
 import { handleAssetUpload, getStorageMetrics, deleteAsset, listAssets, linkReusableAsset } from './assets/upload.js';
+import { logToDatabase, dismissAlert } from './logging/index.js';
 
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
 
@@ -126,7 +127,6 @@ const hintSchema = z.object({
 
 const puzzleSchema = z.object({
   id: z.string().min(1).optional(),
-  uuid: z.string().min(1).optional(),
   title: z.string().min(1),
   description: z.string().optional(),
   solution: z.string().optional(),
@@ -139,7 +139,6 @@ const puzzleSchema = z.object({
 
 const roomSchema = z.object({
   id: z.string().min(1).optional(),
-  uuid: z.string().min(1).optional(),
   name: z.string().min(1),
   description: z.string().optional(),
   slug: z.string().regex(/^[a-z0-9-]+$/).optional(),
@@ -773,6 +772,149 @@ export async function buildServer() {
       } catch (error) {
         request.log.error({ err: error }, 'Failed to update network profile');
         return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    // =========================================================================
+    // Logging & Alerting System Routes
+    // =========================================================================
+
+    // Get all alert rules
+    api.get('/admin/alert-rules', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_system_logs')) return;
+
+      const rules = sqlite.prepare('SELECT * FROM alert_rules ORDER BY category, name').all();
+      return { rules };
+    });
+
+    // Update an alert rule
+    api.patch('/admin/alert-rules/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_system_settings')) return;
+
+      const { id } = request.params as { id: string };
+      const { enabled, level, conditions, title_template, message_template, auto_dismiss_on } = request.body as {
+        enabled?: boolean;
+        level?: string;
+        conditions?: object;
+        title_template?: string;
+        message_template?: string;
+        auto_dismiss_on?: string[] | null;
+      };
+
+      try {
+        const updates: string[] = [];
+        const params: any[] = [];
+
+        if (enabled !== undefined) {
+          updates.push('enabled = ?');
+          params.push(enabled ? 1 : 0);
+        }
+        if (level !== undefined) {
+          updates.push('level = ?');
+          params.push(level);
+        }
+        if (conditions !== undefined) {
+          updates.push('conditions = ?');
+          params.push(JSON.stringify(conditions));
+        }
+        if (title_template !== undefined) {
+          updates.push('title_template = ?');
+          params.push(title_template);
+        }
+        if (message_template !== undefined) {
+          updates.push('message_template = ?');
+          params.push(message_template);
+        }
+        if (auto_dismiss_on !== undefined) {
+          updates.push('auto_dismiss_on = ?');
+          params.push(auto_dismiss_on ? JSON.stringify(auto_dismiss_on) : null);
+        }
+
+        if (updates.length === 0) {
+          return reply.status(400).send({ statusCode: 400, message: 'No fields to update' });
+        }
+
+        updates.push('updated_at = CURRENT_TIMESTAMP');
+        params.push(id);
+
+        sqlite.prepare(
+          `UPDATE alert_rules SET ${updates.join(', ')} WHERE id = ?`
+        ).run(...params);
+
+        logToDatabase('info', 'system', `Alert rule updated: ${id}`, {
+          ruleId: id,
+          updatedBy: session.user.id
+        });
+
+        return { success: true };
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to update alert rule');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Get system logs with filtering
+    api.get('/admin/logs', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_system_logs')) return;
+
+      try {
+        const { level, category, limit = '100', offset = '0', search } = request.query as {
+          level?: string;
+          category?: string;
+          limit?: string;
+          offset?: string;
+          search?: string;
+        };
+
+        let query = 'SELECT * FROM system_logs WHERE 1=1';
+        const queryParams: any[] = [];
+
+        if (level) {
+          query += ' AND level = ?';
+          queryParams.push(level);
+        }
+        if (category) {
+          query += ' AND category = ?';
+          queryParams.push(category);
+        }
+        if (search) {
+          query += ' AND message LIKE ?';
+          queryParams.push(`%${search}%`);
+        }
+
+        query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
+        queryParams.push(parseInt(limit, 10), parseInt(offset, 10));
+
+        const logs = sqlite.prepare(query).all(...queryParams);
+        const total = sqlite.prepare('SELECT COUNT(*) as count FROM system_logs').get() as { count: number };
+
+        return { logs, total: total.count };
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to query system logs');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Dismiss an alert
+    api.post('/admin/alerts/:id/dismiss', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+
+      const { id } = request.params as { id: string };
+
+      try {
+        dismissAlert(id, session.user.id as string);
+        emitDashboardUpdate(getDashboard());
+        return { success: true };
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to dismiss alert');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
       }
     });
 

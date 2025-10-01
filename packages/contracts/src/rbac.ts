@@ -10,7 +10,9 @@ export const PERMISSION_LABELS: Record<OperatorPermission, string> = {
   view_network: 'View appliance network status',
   manage_network: 'Modify network configuration',
   manage_users: 'Manage operator accounts and roles',
-  manage_files: 'Manage asset and file storage'
+  manage_files: 'Manage asset and file storage',
+  view_system_logs: 'View system logs and audit trail',
+  manage_system_settings: 'Configure alert rules and system settings'
 };
 
 export const ROLE_PERMISSIONS: Record<OperatorRole, OperatorPermission[]> = {
@@ -23,7 +25,8 @@ export const ROLE_PERMISSIONS: Record<OperatorRole, OperatorPermission[]> = {
     'view_games',
     'manage_games',
     'view_network',
-    'manage_users'
+    'manage_users',
+    'view_system_logs'
   ],
   game_master: ['view_dashboard', 'view_bookings', 'manage_sessions', 'view_games'],
   customer: ['view_dashboard', 'view_bookings']
