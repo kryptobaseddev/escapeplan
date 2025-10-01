@@ -1,15 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { apiFetch } from '$lib/api/client';
   import AssetBrowser from '$lib/components/assets/AssetBrowser.svelte';
   import AssetUpload from '$lib/components/assets/AssetUpload.svelte';
   import type { PageData } from './$types';
 
-  export let data: PageData;
+  let { data }: { data: PageData } = $props();
 
-  let activeTab: 'overview' | 'library' | 'backups' = 'overview';
-  let metrics = data.metrics;
-  let refreshing = false;
+  let activeTab = $state<'overview' | 'library' | 'backups'>('overview');
+  let metrics = $state(data.metrics);
+  let refreshing = $state(false);
 
   async function refreshMetrics() {
     refreshing = true;
@@ -38,9 +37,11 @@
     return new Date(dateString).toLocaleString();
   }
 
-  $: usedPercent = metrics?.total?.usedBytes && metrics?.total?.totalBytes
-    ? Math.round((metrics.total.usedBytes / metrics.total.totalBytes) * 100)
-    : 0;
+  const usedPercent = $derived(
+    metrics?.total?.usedBytes && metrics?.total?.totalBytes
+      ? Math.round((metrics.total.usedBytes / metrics.total.totalBytes) * 100)
+      : 0
+  );
 </script>
 
 <svelte:head>
@@ -59,7 +60,7 @@
       type="button"
       class="btn btn-secondary btn-sm"
       class:loading={refreshing}
-      on:click={refreshMetrics}
+      onclick={refreshMetrics}
       disabled={refreshing}
     >
       {#if refreshing}
@@ -77,21 +78,21 @@
     <button
       type="button"
       class="tab {activeTab === 'overview' ? 'tab-active' : ''}"
-      on:click={() => activeTab = 'overview'}
+      onclick={() => activeTab = 'overview'}
     >
       Overview
     </button>
     <button
       type="button"
       class="tab {activeTab === 'library' ? 'tab-active' : ''}"
-      on:click={() => activeTab = 'library'}
+      onclick={() => activeTab = 'library'}
     >
       Asset Library
     </button>
     <button
       type="button"
       class="tab {activeTab === 'backups' ? 'tab-active' : ''}"
-      on:click={() => activeTab = 'backups'}
+      onclick={() => activeTab = 'backups'}
     >
       Backups
     </button>

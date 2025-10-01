@@ -1,19 +1,28 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { apiFetch } from '$lib/api/client';
 
-  export let gameId: string | undefined = undefined;
-  export let assetType: string | undefined = undefined;
-  export let mediaType: string | undefined = undefined;
-  export let isReusable: boolean | undefined = undefined;
-  export let onSelect: ((asset: any) => void) | undefined = undefined;
-  export let selectedAssetId: string | undefined = undefined;
-  export let showSearch: boolean = true;
+  let {
+    gameId = undefined,
+    assetType = undefined,
+    mediaType = undefined,
+    isReusable = undefined,
+    onSelect = undefined,
+    selectedAssetId = undefined,
+    showSearch = true
+  }: {
+    gameId?: string;
+    assetType?: string;
+    mediaType?: string;
+    isReusable?: boolean;
+    onSelect?: (asset: any) => void;
+    selectedAssetId?: string;
+    showSearch?: boolean;
+  } = $props();
 
-  let assets: any[] = [];
-  let loading = true;
-  let error: string | null = null;
-  let searchQuery = '';
+  let assets = $state<any[]>([]);
+  let loading = $state(true);
+  let error = $state<string | null>(null);
+  let searchQuery = $state('');
 
   async function loadAssets() {
     loading = true;
@@ -42,8 +51,6 @@
     }
   }
 
-  onMount(loadAssets);
-
   function handleSelect(asset: any) {
     onSelect?.(asset);
   }
@@ -69,13 +76,25 @@
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${Math.round((bytes / Math.pow(k, i)) * 100) / 100} ${sizes[i]}`;
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
   }
 
-  $: if (searchQuery !== undefined) {
-    const timeout = setTimeout(loadAssets, 300);
+  // Load assets when component mounts
+  $effect(() => {
+    loadAssets();
+  });
+
+  // Debounced search effect
+  $effect(() => {
+    // Reference searchQuery to track it
+    searchQuery;
+
+    const timeout = setTimeout(() => {
+      loadAssets();
+    }, 300);
+
     return () => clearTimeout(timeout);
-  }
+  });
 </script>
 
 <div class="space-y-4">
@@ -87,7 +106,7 @@
         class="input input-bordered flex-1"
         bind:value={searchQuery}
       />
-      <button type="button" class="btn btn-secondary" on:click={loadAssets}>
+      <button type="button" class="btn btn-secondary" onclick={loadAssets}>
         <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
@@ -126,7 +145,7 @@
               ? 'border-primary shadow-lg'
               : 'border-white/10 hover:border-primary/50 hover:shadow-md'
           }`}
-          on:click={() => handleSelect(asset)}
+          onclick={() => handleSelect(asset)}
         >
           <figure class="relative h-40 bg-base-200">
             {#if asset.media_type === 'image'}

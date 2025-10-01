@@ -1,23 +1,37 @@
 <script lang="ts">
   import { apiFetch } from '$lib/api/client';
 
-  export let gameId: string;
-  export let assetType: 'thumbnail' | 'room_background' | 'gallery' | 'puzzle_media' | 'hint_media';
-  export let puzzleId: string | undefined = undefined;
-  export let mediaType: 'text' | 'image' | 'audio' | 'video' | undefined = undefined;
-  export let order: number | undefined = undefined;
-  export let isReusable: boolean = false;
-  export let onSuccess: ((asset: any) => void) | undefined = undefined;
-  export let onError: ((error: string) => void) | undefined = undefined;
-  export let accept: string = '*/*';
-  export let maxSizeMB: number = 50;
-  export let disabled: boolean = false;
+  let {
+    gameId,
+    assetType,
+    puzzleId = undefined,
+    mediaType = undefined,
+    order = undefined,
+    isReusable = false,
+    onSuccess = undefined,
+    onError = undefined,
+    accept = '*/*',
+    maxSizeMB = 50,
+    disabled = false
+  }: {
+    gameId: string;
+    assetType: 'thumbnail' | 'room_background' | 'gallery' | 'puzzle_media' | 'hint_media';
+    puzzleId?: string;
+    mediaType?: 'text' | 'image' | 'audio' | 'video';
+    order?: number;
+    isReusable?: boolean;
+    onSuccess?: (asset: any) => void;
+    onError?: (error: string) => void;
+    accept?: string;
+    maxSizeMB?: number;
+    disabled?: boolean;
+  } = $props();
 
-  let uploading = false;
-  let progress = 0;
-  let error: string | null = null;
-  let dragOver = false;
-  let fileInput: HTMLInputElement;
+  let uploading = $state(false);
+  let progress = $state(0);
+  let error = $state<string | null>(null);
+  let dragOver = $state(false);
+  let fileInput = $state<HTMLInputElement>();
 
   async function uploadFile(file: File) {
     if (disabled || uploading) return;
@@ -139,22 +153,22 @@
     }
   }
 
-  $: dropzoneClass = [
+  const dropzoneClass = $derived([
     'relative rounded-xl border-2 border-dashed p-8 text-center transition-all',
     dragOver ? 'border-primary bg-primary/10' : 'border-base-content/20 bg-base-100/70',
     disabled || uploading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer hover:border-primary/60 hover:bg-base-100',
-  ].join(' ');
+  ].join(' '));
 </script>
 
 <div
   class={dropzoneClass}
   role="button"
   tabindex={disabled || uploading ? -1 : 0}
-  on:dragover={handleDragOver}
-  on:dragleave={handleDragLeave}
-  on:drop={handleDrop}
-  on:click={triggerFileInput}
-  on:keydown={(e) => {
+  ondragover={handleDragOver}
+  ondragleave={handleDragLeave}
+  ondrop={handleDrop}
+  onclick={triggerFileInput}
+  onkeydown={(e) => {
     if ((e.key === 'Enter' || e.key === ' ') && !disabled && !uploading) {
       e.preventDefault();
       triggerFileInput();
@@ -167,7 +181,7 @@
     class="hidden"
     {accept}
     {disabled}
-    on:change={(e) => handleFiles(e.currentTarget.files)}
+    onchange={(e) => handleFiles(e.currentTarget.files)}
   />
 
   {#if uploading}
@@ -194,7 +208,7 @@
       <button
         type="button"
         class="btn btn-sm btn-ghost"
-        on:click={(e) => {
+        onclick={(e) => {
           e.stopPropagation();
           error = null;
         }}
