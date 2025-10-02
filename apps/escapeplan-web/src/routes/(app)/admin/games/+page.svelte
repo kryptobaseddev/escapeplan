@@ -5,6 +5,7 @@
   import { openConfirmDialog } from '$lib/components/confirm-dialog';
   import ArchiveReasonContent from '$lib/components/ArchiveReasonContent.svelte';
   import GameModal from '$lib/components/games/GameModal.svelte';
+  import GameDetailsModal from '$lib/components/games/GameDetailsModal.svelte';
   import { apiFetch } from '$lib/api/client';
   import type { GameDetails } from '@escapeplan/contracts';
   import { formatDistanceToNow } from 'date-fns';
@@ -15,6 +16,8 @@
   let viewMode = $state<'list' | 'create' | 'edit'>('list');
   let createModalGame = $state<GameDetails | null>(null);
   let editingGame = $state<GameDetails | null>(null);
+  let viewingGame = $state<GameDetails | null>(null);
+  let showDetailsModal = $state(false);
   let pending = $state(false);
   let feedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
 
@@ -173,6 +176,22 @@
     viewMode = 'create';
   };
 
+  const openDetailsModal = (game: GameDetails) => {
+    viewingGame = game;
+    showDetailsModal = true;
+  };
+
+  const closeDetailsModal = () => {
+    showDetailsModal = false;
+    viewingGame = null;
+  };
+
+  const openEditFromDetails = (game: GameDetails) => {
+    closeDetailsModal();
+    editingGame = game;
+    viewMode = 'edit';
+  };
+
   let gamesForFiltering = $state<GameDetails[]>(data.games ?? []);
 
   $effect(() => {
@@ -277,7 +296,13 @@
         <article class="rounded-2xl border border-white/10 bg-base-200/70 p-5">
           <header class="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 class="text-lg font-semibold text-base-content">{game.name}</h2>
+              <button
+                type="button"
+                class="text-left hover:text-primary transition-colors"
+                onclick={() => openDetailsModal(game)}
+              >
+                <h2 class="text-lg font-semibold text-base-content">{game.name}</h2>
+              </button>
               <p class="text-xs text-base-content/50">Slug: {game.slug}</p>
               <p class="text-xs text-base-content/40">Updated {formatUpdatedAt(game.updatedAt)}</p>
             </div>
@@ -357,7 +382,13 @@
               <tr class="text-sm">
                 <td>
                   <div class="flex flex-col gap-1">
-                    <span class="font-medium text-base-content">{game.name}</span>
+                    <button
+                      type="button"
+                      class="text-left font-medium text-base-content hover:text-primary transition-colors"
+                      onclick={() => openDetailsModal(game)}
+                    >
+                      {game.name}
+                    </button>
                     <span class="text-xs text-base-content/50">{game.slug}</span>
                     {#if game.categories?.length}
                       <div class="flex flex-wrap gap-1">
@@ -425,6 +456,16 @@
       game={editingGame}
       onclose={handleCancel}
       onsuccess={handleEditSuccess}
+    />
+  {/if}
+
+  <!-- Game Details Modal -->
+  {#if viewingGame}
+    <GameDetailsModal
+      bind:open={showDetailsModal}
+      game={viewingGame}
+      onclose={closeDetailsModal}
+      onedit={openEditFromDetails}
     />
   {/if}
 </section>

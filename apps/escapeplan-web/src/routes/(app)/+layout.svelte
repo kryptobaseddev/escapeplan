@@ -25,6 +25,8 @@
   const canManageGames = $derived(props.data.user?.permissions?.includes('manage_games') ?? false);
   const canViewNetwork = $derived(props.data.user?.permissions?.includes('view_network') ?? false);
   const canManageNetwork = $derived(props.data.user?.permissions?.includes('manage_network') ?? false);
+  const canViewSystemLogs = $derived(props.data.user?.permissions?.includes('view_system_logs') ?? false);
+  const canManageAlerts = $derived(props.data.user?.permissions?.includes('manage_alert_rules') ?? false);
 
   let drawerOpen = $state(false);
   let sidebarCollapsed = $state(false);
@@ -100,11 +102,11 @@
           }
         ]
       : []),
-    ...(canViewNetwork
+    ...(canViewNetwork || canViewSystemLogs || canManageAlerts
       ? [
           {
-            href: '/admin/network',
-            label: 'Network Control',
+            href: '/admin/system',
+            label: 'System Dashboard',
             icon: 'M4 5h16v2H4zm2 4h12v2H6zm3 4h6v2H9zm-5 4h16v2H4z'
           }
         ]
@@ -119,7 +121,7 @@
     if (explicit) return explicit;
     const path = $page.url.pathname;
     const entry = allNavItems.find((link) => path === link.href || path.startsWith(`${link.href}/`));
-    return entry?.label ?? 'EscapePlan Console';
+    return entry?.label ?? 'Console';
   })());
 
   const userInitials = $derived((() => {
@@ -180,7 +182,7 @@
 
           <div class="flex flex-col">
             <h1 class="font-display text-base text-base-content sm:text-lg">{currentPageTitle}</h1>
-            <p class="hidden text-xs uppercase tracking-[0.3em] text-base-content/40 sm:block">EscapePlan Console</p>
+            <p class="hidden text-xs uppercase tracking-[0.3em] text-base-content/40 sm:block">Console</p>
           </div>
         </div>
 
@@ -216,7 +218,7 @@
             <img src="/logo.png" alt="EscapePlan" class="h-7 w-auto" />
           </span>
           <div class="brand-text flex flex-col text-base-content transition-all {sidebarCollapsed ? 'lg:hidden' : 'lg:flex'}">
-            <span class="font-display text-base">EscapePlan Ops</span>
+            <span class="font-display text-base">EscapePlan</span>
             <span class="text-xs uppercase tracking-[0.35em] text-base-content/50">Control Room</span>
           </div>
           <button

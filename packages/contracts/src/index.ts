@@ -19,18 +19,40 @@ export interface BotttsAvatarConfig {
 }
 
 export type OperatorPermission =
+  // Dashboard & Bookings
   | 'view_dashboard'
   | 'view_bookings'
   | 'manage_bookings'
+  // Sessions & Games
+  | 'view_sessions'
   | 'manage_sessions'
   | 'view_games'
   | 'manage_games'
+  // Network
   | 'view_network'
   | 'manage_network'
+  // Users & RBAC
+  | 'view_users'
   | 'manage_users'
-  | 'manage_files'
+  | 'view_roles'
+  | 'manage_roles'
+  | 'view_permissions'
+  | 'manage_permissions'
+  | 'archive_users'
+  // Assets & Storage
+  | 'view_assets'
+  | 'manage_assets'
+  | 'view_storage'
+  | 'manage_storage'
+  // Cameras
+  | 'view_cameras'
+  | 'manage_cameras'
+  // System & Logs
   | 'view_system_logs'
-  | 'manage_system_settings';
+  | 'view_system_health'
+  | 'manage_system_health'
+  | 'view_alert_rules'
+  | 'manage_alert_rules';
 
 export interface OperatorProfile {
   id: string;
@@ -192,18 +214,24 @@ export interface BookingCalendarResponse {
 
 export interface PuzzleState {
   id: string;
+  puzzleId?: string; // Reference back to game_puzzles
   title: string;
+  description?: string | null;
+  solution?: string | null;
   status: 'locked' | 'available' | 'in_progress' | 'completed';
   order: number;
+  hints?: GameHintDefinition[]; // Copy of hints for quick access
 }
 
 export type HintMedium = 'text' | 'image' | 'audio' | 'video';
 
 export interface HintEvent {
   id: string;
+  puzzleId?: string | null; // Which puzzle this hint was for
   type: HintMedium;
   message: string;
   assetUrl?: string;
+  volumeLevel?: number | null; // Volume at which hint was sent
   deliveredBy: string;
   deliveredAt: string;
 }
@@ -211,6 +239,8 @@ export interface HintEvent {
 export interface GameSessionDetails extends ActiveSessionSummary {
   puzzles: PuzzleState[];
   hintLog: HintEvent[];
+  milestones?: SessionMilestone[]; // Triggered milestones
+  availableMilestones?: GameMilestone[]; // Milestones that can be manually triggered
   backgroundAudio?: {
     trackName: string;
     url: string;
@@ -222,6 +252,7 @@ export interface GameSessionDetails extends ActiveSessionSummary {
   };
   gameSlug?: string;
   roomId?: string;
+  gameDefaultVolume?: number; // Game-wide default volume
 }
 
 export interface TimerBroadcast {
@@ -280,7 +311,7 @@ export interface AuthSessionEnvelope {
 }
 
 export interface CommandRequest {
-  command: 'start_timer' | 'pause_timer' | 'resume_timer' | 'reset_timer' | 'send_hint' | 'mark_puzzle';
+  command: 'start_timer' | 'pause_timer' | 'resume_timer' | 'reset_timer' | 'send_hint' | 'mark_puzzle' | 'trigger_milestone';
   payload?: Record<string, unknown>;
 }
 
@@ -372,9 +403,11 @@ export interface GameDetails {
   pricePerPlayerCents: number;
   resourcesRequired: number;
   validationNotes?: string;
+  defaultVolume: number; // 0-100, game-wide default for all media
   media?: GameMediaConfig;
   pricing?: GamePricingConfig;
   bookingRules?: GameBookingRules;
+  milestones?: GameMilestone[]; // Game milestones configuration
   createdAt: string;
   updatedAt: string;
   archivedAt?: string | null;
@@ -398,11 +431,13 @@ export interface SaveGameRequest {
   pricePerPlayerCents: number;
   resourcesRequired: number;
   validationNotes?: string;
+  defaultVolume?: number; // 0-100, game-wide default volume
   puzzles: GamePuzzleDefinition[];
   rooms: GameRoomDefinition[];
   media?: GameMediaConfig;
   pricing?: GamePricingConfig;
   bookingRules?: GameBookingRules;
+  milestones?: Omit<GameMilestone, 'id' | 'gameId' | 'createdAt' | 'updatedAt'>[]; // Milestone definitions
 }
 
 export interface GameHintDefinition {
@@ -410,8 +445,54 @@ export interface GameHintDefinition {
   type: HintMedium;
   content: string;
   assetUrl?: string;
+  volumeLevel?: number; // 0-100, overrides asset/game default
   order: number;
   countAsHint?: boolean;
+}
+
+// Game Milestone types
+export type MilestoneType = 'intro' | 'escaped' | 'failed' | 'custom';
+export type MilestoneTriggerType = 'manual' | 'timer' | 'condition';
+export type MilestoneMediaType = 'text' | 'image' | 'audio' | 'video';
+
+export interface GameMilestoneTriggerConfig {
+  // Timer-based triggers
+  minutes?: number; // Play at X minutes elapsed
+  interval?: number; // Play every X minutes
+  // Condition-based triggers
+  hintsUsed?: number; // After X hints used
+  puzzlesCompleted?: number; // After X puzzles completed
+}
+
+export interface GameMilestone {
+  id: string;
+  gameId: string;
+  type: MilestoneType;
+  name: string; // User-friendly name
+  mediaType?: MilestoneMediaType | null;
+  content?: string | null; // Text content or description
+  assetId?: string | null; // Reference to asset
+  volumeLevel: number; // 0-100
+  displayOrder: number;
+  triggerType: MilestoneTriggerType;
+  triggerConfig?: GameMilestoneTriggerConfig | null;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionMilestone {
+  id: string;
+  sessionId: string;
+  milestoneId: string;
+  milestoneType: MilestoneType;
+  milestoneName: string;
+  mediaType?: MilestoneMediaType | null;
+  content?: string | null;
+  assetUrl?: string | null;
+  volumeLevel?: number | null;
+  triggeredAt: string;
+  triggeredBy?: string | null; // Operator ID, null for auto-triggers
 }
 
 export interface ArchiveGameRequest {
@@ -494,6 +575,37 @@ export interface UpdateNetworkProfileRequest {
   status?: NetworkHealth;
   statusMessage?: string;
   details?: string;
+}
+
+// WiFi Client Scanning & Connection
+export interface WiFiNetwork {
+  ssid: string;
+  bssid: string;
+  signal: number; // Signal strength percentage 0-100
+  frequency: number; // MHz
+  security: string; // e.g., "WPA2-PSK", "Open", "WPA3-SAE"
+  channel: number;
+  inUse: boolean;
+}
+
+export interface WiFiScanResponse {
+  networks: WiFiNetwork[];
+  scannedAt: string;
+}
+
+export interface WiFiClientConnectRequest {
+  ssid: string;
+  password?: string;
+  security?: string;
+}
+
+export interface WiFiClientStatus {
+  connected: boolean;
+  ssid?: string;
+  signal?: number;
+  ipAddress?: string;
+  gateway?: string;
+  dns?: string[];
 }
 
 // ============================================================================
@@ -587,4 +699,138 @@ export interface DismissAlertResponse {
   success: boolean;
 }
 
-export { ROLE_PERMISSIONS, PERMISSION_LABELS, ROLE_LABELS, ALL_PERMISSIONS } from './rbac.js';
+// ============================================================================
+// DATABASE-DRIVEN RBAC TYPES
+// ============================================================================
+
+export interface Role {
+  id: string;
+  name: string;
+  description?: string | null;
+  isSystem: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Permission {
+  id: string;
+  name: OperatorPermission;
+  label: string;
+  category: 'dashboard' | 'bookings' | 'sessions' | 'games' | 'network' | 'users' | 'rbac' | 'storage' | 'cameras' | 'system';
+  description?: string | null;
+  createdAt: string;
+}
+
+export interface RolePermission {
+  id: string;
+  roleId: string;
+  permissionId: string;
+  grantedAt: string;
+  grantedBy?: string | null;
+}
+
+export interface RoleWithPermissions extends Role {
+  permissions: Permission[];
+}
+
+export interface PermissionSummary extends Permission {
+  assignedToRoles: number; // Count of roles with this permission
+}
+
+export interface CreateRoleRequest {
+  name: string;
+  description?: string | null;
+  permissionIds: string[];
+}
+
+export interface UpdateRoleRequest {
+  name?: string;
+  description?: string | null;
+}
+
+export interface UpdateRolePermissionsRequest {
+  permissionIds: string[];
+}
+
+export interface GetRolesResponse {
+  roles: RoleWithPermissions[];
+}
+
+export interface GetPermissionsResponse {
+  permissions: PermissionSummary[];
+}
+
+// Database-driven RBAC is now fully implemented
+// All roles and permissions are stored in the database (roles, permissions, role_permissions tables)
+
+// ============================================================================
+// ROLE AND PERMISSION LABELS (for UI display)
+// ============================================================================
+
+export const ROLE_LABELS: Record<OperatorRole, string> = {
+  admin: 'Administrator',
+  manager: 'Manager',
+  game_master: 'Game Master',
+  customer: 'Customer'
+};
+
+export const PERMISSION_LABELS: Record<OperatorPermission, string> = {
+  view_dashboard: 'View dashboard and status widgets',
+  view_bookings: 'View booking calendar',
+  manage_bookings: 'Create, modify, and cancel bookings',
+  view_sessions: 'View active sessions',
+  manage_sessions: 'Start, pause, and end game sessions',
+  view_games: 'View game library',
+  manage_games: 'Create and edit games',
+  view_network: 'View network configuration',
+  manage_network: 'Modify network settings',
+  view_users: 'View operator list',
+  manage_users: 'Create and edit operators',
+  view_roles: 'View roles',
+  manage_roles: 'Create and edit roles',
+  view_permissions: 'View permissions',
+  manage_permissions: 'Assign permissions to roles',
+  archive_users: 'Archive operators',
+  view_assets: 'View media assets',
+  manage_assets: 'Upload and manage media',
+  view_storage: 'View storage metrics',
+  manage_storage: 'Manage file storage',
+  view_cameras: 'View camera streams',
+  manage_cameras: 'Configure cameras',
+  view_system_logs: 'View system logs',
+  view_system_health: 'View system health metrics',
+  manage_system_health: 'Manage system health',
+  view_alert_rules: 'View alert rules',
+  manage_alert_rules: 'Configure alert rules'
+};
+
+// Role-Permission mapping (for reference/validation - actual source of truth is database)
+export const ROLE_PERMISSIONS: Record<OperatorRole, OperatorPermission[]> = {
+  admin: [
+    'view_dashboard', 'view_bookings', 'manage_bookings',
+    'view_sessions', 'manage_sessions', 'view_games', 'manage_games',
+    'view_network', 'manage_network',
+    'view_users', 'manage_users', 'view_roles', 'manage_roles', 'view_permissions', 'manage_permissions', 'archive_users',
+    'view_assets', 'manage_assets', 'view_storage', 'manage_storage',
+    'view_cameras', 'manage_cameras',
+    'view_system_logs', 'view_system_health', 'manage_system_health', 'view_alert_rules', 'manage_alert_rules'
+  ],
+  manager: [
+    'view_dashboard', 'view_bookings', 'manage_bookings',
+    'view_sessions', 'manage_sessions', 'view_games', 'manage_games',
+    'view_network',
+    'view_users', 'manage_users',
+    'view_assets', 'manage_assets', 'view_storage',
+    'view_cameras', 'manage_cameras',
+    'view_system_logs', 'view_system_health'
+  ],
+  game_master: [
+    'view_dashboard', 'view_bookings',
+    'view_sessions', 'manage_sessions', 'view_games',
+    'view_cameras',
+    'view_system_logs'
+  ],
+  customer: [
+    'view_dashboard', 'view_bookings'
+  ]
+};

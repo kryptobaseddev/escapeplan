@@ -153,7 +153,7 @@ Production system runs on Raspberry Pi OS with:
   - `escapeplan-api.service` - Fastify server on port 4000
   - `escapeplan-ffmpeg@.service` - Camera stream workers (RTSP→HLS)
 
-Platform automation lives in `platform/escapeplan-base/` using pi-gen to build bootable OS images. See `project-docs/project-overview.md` for full deployment architecture.
+Platform automation is in separate `escapeplan-base` repository using pi-gen to build bootable OS images. This repo builds to `.deb` package for installation. See `project-docs/project-overview.md` for full deployment architecture.
 
 ## Development Workflow
 

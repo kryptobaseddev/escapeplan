@@ -22,7 +22,7 @@
         "Risks from parity gaps captured in risk register."
       ],
       "businessValue": "Ensures the roadmap emphasizes competitive advantages for store and mobile operations; informs MVP focus.",
-      "technicalNotes": "project-docs/project-overview.md \u00a71.1.1 holds matrix; sync with TODO risk register RISK-002.",
+      "technicalNotes": "project-docs/project-overview.md §1.1.1 holds matrix; sync with TODO risk register RISK-002.",
       "risks": [
         "Missing competitor insights leads to scope creep later."
       ],
@@ -64,7 +64,7 @@
       "mockups": [],
       "testCases": [
         "Validate overview document contains success metrics table.",
-        "Verify project-docs/project-overview.md \u00a71.4 and \u00a717 describe MVP scope and roadmap with store/mobile split."
+        "Verify project-docs/project-overview.md §1.4 and §17 describe MVP scope and roadmap with store/mobile split."
       ],
       "createdDate": "2025-09-29",
       "createdBy": "Planning Session",
@@ -565,7 +565,7 @@
       "story": "As a participant in the room, I want a branded timer display so I can track progress and receive hints visually.",
       "acceptanceCriteria": [
         "Each game slug renders timer, hint notifications, and room background image/video.",
-        "Display updates in sync with operator actions with drift \u22641s.",
+        "Display updates in sync with operator actions with drift ≤1s.",
         "Works offline within local network tablets without authentication."
       ],
       "businessValue": "Improves immersion and reduces need for separate timer hardware.",
@@ -1027,7 +1027,7 @@
       ],
       "story": "As the technician, I want to add cameras to the system and assign them to rooms so operators can view live feeds during games without manual configuration.",
       "acceptanceCriteria": [
-        "Technician navigates to Admin \u2192 Cameras page",
+        "Technician navigates to Admin → Cameras page",
         "Page shows list of cameras as cards on mobile, table on desktop",
         "Each camera card shows: live thumbnail (5s refresh), name, room assignment, status badge (online/offline/testing), last seen timestamp if offline, action menu",
         "Technician clicks \"+ Add Camera\" button in header",
@@ -1078,7 +1078,7 @@
       ],
       "story": "As a general manager, I want to see how much storage is being used and by what so I can avoid running out of space and manage assets effectively.",
       "acceptanceCriteria": [
-        "Manager navigates to Admin \u2192 Storage page",
+        "Manager navigates to Admin → Storage page",
         "Dashboard shows donut chart with three segments: Used (blue), Reserved (yellow), Available (green), center shows percentage used",
         "Below chart, metric cards display: Total capacity, Used space, Available space, Number of assets, Largest single asset, Oldest backup date",
         "Storage breakdown section shows: Database size, Assets total (with count by type: images/audio/video), HLS cache size, Backups total, Logs size, System (OS/packages)",
@@ -1187,7 +1187,7 @@
       "businessValue": "Keeps operator management trustworthy and prevents accidental credential drift.",
       "technicalNotes": "Coordinate with CLAUDE-1 for payload schema; reference Better-Auth and SESSION_6 admin panel requirements.",
       "risks": [
-        "UI could desync if schema changes aren\u2019t handled atomically."
+        "UI could desync if schema changes aren’t handled atomically."
       ],
       "effort": 7,
       "dependencies": [
@@ -1206,6 +1206,54 @@
       "notes": [
         "Assigned to CLAUDE-2. Provide QA artifacts for CLAUDE (QA) sign-off."
       ]
+    },
+    {
+      "id": "US-ADMIN-001",
+      "title": "View unified system dashboard with health, network, alerts, logs, and storage tabs",
+      "persona": "Administrator",
+      "epic": "Admin Panel & System Management",
+      "priority": "HIGH",
+      "status": "IN_PROGRESS",
+      "implementedIn": "P4-DASH-001",
+      "relatedTodos": [
+        "P4-DASH-001",
+        "P4-NAV-001",
+        "P4-UI-001"
+      ],
+      "story": "As an administrator, I want a unified system dashboard so I can monitor and manage all system aspects (health, network, alerts, logs, storage) in one place.",
+      "acceptanceCriteria": [
+        "Single /admin/system page with 5 tabs accessible via URL hash",
+        "Health tab shows system resources and service status",
+        "Network tab displays SSID configuration and status",
+        "Alerts tab allows viewing and editing alert rules",
+        "Logs tab provides filtering, search, and CSV export",
+        "Storage tab shows metrics and asset management",
+        "Permission-based tab visibility enforced",
+        "Old URLs redirect to appropriate tabs"
+      ],
+      "businessValue": "Streamlines system administration, reduces navigation overhead, provides single-pane-of-glass monitoring",
+      "technicalNotes": "Built with Svelte 5 tabs, hash-based routing. Migrated content from /admin/network, /admin/storage, /admin/system/alerts, /admin/system/logs. Health tab needs real API endpoint.",
+      "risks": [
+        "Health tab currently uses mock data",
+        "Network tab edit form not yet migrated"
+      ],
+      "effort": 13,
+      "dependencies": [
+        "US-LOG-001"
+      ],
+      "mockups": [],
+      "testCases": [
+        "Navigate to /admin/system and verify all 5 tabs load",
+        "Test URL hash navigation (#health, #network, #alerts, #logs, #storage)",
+        "Verify old URLs redirect correctly",
+        "Test permission-based tab visibility for different roles",
+        "Verify Alerts tab can toggle rules on/off",
+        "Verify Logs tab can filter and export CSV"
+      ],
+      "createdDate": "2025-10-01",
+      "createdBy": "SESSION_39",
+      "lastModified": "2025-10-01",
+      "modifiedBy": "SESSION_39"
     }
   ],
   "epics": {

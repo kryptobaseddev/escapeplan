@@ -1,3 +1,0 @@
-EscapePlan appliance configuration templates. The provisioning CLI or web admin
-copies these to /etc/escapeplan/*. Update fields with real deployment values
-before enabling services.

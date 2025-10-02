@@ -161,9 +161,9 @@ export interface GameHintDefinition {
 
 + const pirateGameId = randomUUID();
   const pirateGame = {
--   id: 'game-pirate-mutany',
+-   id: 'game-pirate-mutiny',
 +   id: pirateGameId,
-    slug: 'pirate-mutany',  // Slug stays for URLs
+    slug: 'pirate-mutiny',  // Slug stays for URLs
     ...
   };
 

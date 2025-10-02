@@ -40,7 +40,11 @@ import {
   updateOwnProfile,
   resetOperatorPassword,
   archiveOperatorAccount,
-  unarchiveOperatorAccount
+  unarchiveOperatorAccount,
+  scanWiFiNetworks,
+  connectToWiFi,
+  getWiFiClientStatus,
+  disconnectFromWiFi
 } from './state.js';
 import { auth, requireSession } from './auth.js';
 import { db, sqlite } from './db/client.js';
@@ -50,6 +54,7 @@ import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realti
 import { applyEscapePlanConfig } from './platform.js';
 import { handleAssetUpload, getStorageMetrics, deleteAsset, listAssets, linkReusableAsset, getAssetById } from './assets/upload.js';
 import { logToDatabase, dismissAlert } from './logging/index.js';
+import { setupUpdateRoutes } from './updates.js';
 
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
 
@@ -345,6 +350,9 @@ export async function buildServer() {
   });
 
   app.get('/health', async () => ({ status: 'ok' }));
+
+  // Setup update routes
+  setupUpdateRoutes(app);
 
   await app.register(async (api) => {
     api.all('/auth/*', async (request, reply) => {
@@ -775,6 +783,70 @@ export async function buildServer() {
       }
     });
 
+    // WiFi Client Management Routes
+    api.get('/admin/network/scan', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_network')) return;
+
+      try {
+        return scanWiFiNetworks();
+      } catch (error) {
+        request.log.error({ err: error }, 'WiFi scan failed');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/network/client', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_network')) return;
+
+      try {
+        return getWiFiClientStatus();
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to get WiFi client status');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.post('/admin/network/client', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_network')) return;
+
+      const schema = z.object({
+        ssid: z.string(),
+        password: z.string().optional(),
+        security: z.string().optional()
+      });
+
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        return connectToWiFi(parsed.data);
+      } catch (error) {
+        request.log.error({ err: error }, 'WiFi connection failed');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.delete('/admin/network/client', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_network')) return;
+
+      try {
+        return disconnectFromWiFi();
+      } catch (error) {
+        request.log.error({ err: error }, 'WiFi disconnection failed');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
     // =========================================================================
     // Logging & Alerting System Routes
     // =========================================================================
@@ -796,7 +868,7 @@ export async function buildServer() {
     api.patch('/admin/alert-rules/:id', async (request, reply) => {
       const session = await ensureAuth(request, reply);
       if (!session) return;
-      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_system_settings')) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_alert_rules')) return;
 
       const { id } = request.params as { id: string };
       const { enabled, level, conditions, title_template, message_template, auto_dismiss_on } = request.body as {
@@ -1122,7 +1194,11 @@ export async function buildServer() {
   return app;
 }
 
-if (process.argv[1] === new URL(import.meta.url).pathname) {
+const skipAutostart = process.env.ESCAPEPLAN_SKIP_AUTOSTART === '1';
+const isVitest = typeof process.env.VITEST_WORKER_ID !== 'undefined';
+const isTestEnv = process.env.NODE_ENV === 'test' || isVitest;
+
+if (!skipAutostart && !isTestEnv) {
   const server = await buildServer();
   try {
     await server.listen({ port: DEFAULT_PORT, host: '0.0.0.0' });

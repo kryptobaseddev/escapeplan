@@ -1,22 +1,128 @@
-# EscapePlan Apps
+# EscapePlan Application
 
-This repository hosts the EscapePlan application stack: the Fastify API service, the SvelteKit operator PWA, and the shared TypeScript contracts consumed by both. It is organised as a pnpm workspace so the API, web client, and shared packages stay in sync.
+Offline-first escape room management system for Raspberry Pi.
 
-## Structure
-- `apps/escapeplan-api` – Node.js 22 Fastify service, Drizzle ORM, Vitest.
-- `apps/escapeplan-web` – SvelteKit 2 PWA powered by Tailwind CSS 4 and DaisyUI.
-- `packages/contracts` – Shared DTOs and validation logic published as `@escapeplan/contracts`.
-- `project-docs/` – Product brief, project tracker, and operational playbooks for day-to-day work.
+## 📦 Repository Structure
 
-## Getting Started
-1. Install pnpm 10.12.4 or later.
-2. Run `pnpm install` at the repo root to hydrate all workspaces.
-3. Start the API with `pnpm --filter escapeplan-api dev` and the web client with `pnpm --filter escapeplan-web dev`.
+```
+escapeplan-app/
+├── apps/
+│   ├── escapeplan-api/     # Fastify backend (port 4000)
+│   └── escapeplan-web/     # SvelteKit PWA (port 5173)
+├── packages/
+│   └── contracts/          # Shared TypeScript types
+├── scripts/
+│   └── build-deb.sh        # Debian package builder
+└── .github/workflows/      # CI/CD pipelines
+```
 
-## Scripts
-- `pnpm build` – Runs `tsup` (API), `vite build` (web), and `tsc` (contracts).
-- `pnpm test` – Delegates to package-level Vitest suites.
-- `pnpm lint` – Type-checks the API until ESLint/Tsup integration lands.
+## 🚀 Quick Start
 
-## Related Projects
-Platform automation (pi-gen image, system services, OTA packaging) lives in the sibling `escapeplan-platform` repository under `platform/escapeplan-base/`. See `project-docs/project-overview.md` for the full release plan and cross-repo workflows.
+```bash
+# Install dependencies
+pnpm install
+
+# Development (runs API + Web concurrently)
+pnpm run dev
+
+# Build all packages
+pnpm run build
+
+# Run tests
+pnpm run test
+
+# Type check
+pnpm run lint
+```
+
+## 📦 Building for Production
+
+### Local `.deb` Package Build
+
+```bash
+# Build .deb package
+pnpm run build:deb
+
+# Output: dist/escapeplan_0.1.0_arm64.deb
+```
+
+### GitHub Actions (Automated)
+
+**On every push to `main`:**
+- ✅ Lint & type check
+- ✅ Run tests
+- ✅ Build packages
+
+**On version tag (`v*.*.*`):**
+- ✅ Build `.deb` package
+- ✅ Create GitHub Release
+- ✅ Upload `.deb` to release assets
+
+```bash
+# Create release
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+## 🔄 Auto-Update System
+
+### API Endpoints
+
+- `GET /api/updates/check` - Check for new releases
+- `GET /api/updates/version` - Get current version
+
+### Configuration
+
+Set `GITHUB_REPO` environment variable:
+
+```bash
+export GITHUB_REPO="yourorg/escapeplan"
+```
+
+### How It Works
+
+1. App checks GitHub Releases API for latest version
+2. Compares semantic versions (current vs latest)
+3. Returns `.deb` download URL if update available
+4. User downloads and installs: `sudo dpkg -i escapeplan_*.deb`
+
+## 🔐 RBAC System
+
+Database-driven role-based access control with 27 permissions across 4 roles:
+
+- **Admin** (27 perms): Full system access
+- **Manager** (17 perms): Operations + user management
+- **Game Master** (7 perms): Session control only
+- **Customer** (2 perms): View-only dashboard
+
+## 📚 Development Guides
+
+See `CLAUDE.md` for:
+- Architecture overview
+- API routes reference
+- Database schema
+- Real-time WebSocket events
+- Development workflow
+
+## 🐛 Troubleshooting
+
+**Port 4000 already in use:**
+```bash
+lsof -ti:4000 | xargs kill -9
+```
+
+**Module not found errors:**
+```bash
+rm -rf node_modules pnpm-lock.yaml
+pnpm install
+```
+
+**Build failures:**
+```bash
+pnpm run lint  # Check TypeScript errors
+pnpm run test  # Run tests
+```
+
+## 📄 License
+
+Proprietary - All rights reserved

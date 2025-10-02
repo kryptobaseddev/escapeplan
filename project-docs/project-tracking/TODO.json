@@ -43,162 +43,6 @@
           ]
         },
         {
-          "id": "P1-002",
-          "title": "Define EscapePlan MVP scope, success metrics, and release boundaries",
-          "feature": "Strategy",
-          "status": "COMPLETED",
-          "priority": "CRITICAL",
-          "estimatedHours": 8,
-          "actualHours": 6,
-          "assignee": "Keaton",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Enumerate MVP feature list segmented by store-front and mobile operations.",
-            "Document quantitative success metrics (uptime, setup time, operator flow speed).",
-            "Record out-of-scope features for later roadmap versions."
-          ],
-          "dependencies": [
-            "P1-001"
-          ],
-          "risks": [],
-          "notes": [
-            "Include KPIs such as max setup time for mobile events, targeted session stability, and operator efficiency goals.",
-            "Update PRD sections 1.4 and 17 accordingly.",
-            "Scope segmentation initiated; see project-docs/project-overview.md §1.4 and roadmap §17.",
-            "Scope + metrics finalized in project-docs/project-overview.md §§1.4–1.7 and roadmap §17. Future features parked under deferred backlog."
-          ],
-          "labels": [
-            "strategy",
-            "planning",
-            "mvp"
-          ]
-        },
-        {
-          "id": "P1-003",
-          "title": "Document hardware and network baseline for Pi + AC600M adapter",
-          "feature": "Platform",
-          "status": "COMPLETED",
-          "priority": "HIGH",
-          "estimatedHours": 6,
-          "actualHours": 5,
-          "assignee": "Morgan Blake",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Specify Raspberry Pi 5 performance envelope incl. expected concurrent streams.",
-            "Detail AC600M AP configuration parameters and channel planning.",
-            "List required peripherals for storefront and mobile deployments (power, audio, display)."
-          ],
-          "dependencies": [
-            "P1-002"
-          ],
-          "risks": [],
-          "notes": [
-            "Capture power requirements and expected battery options for mobile rig.",
-            "Align with hostapd/dnsmasq capabilities planned in Phase 2.",
-            "Hardware baseline captured in §2.5 with Pi 5, storage, Wi-Fi, power guidance."
-          ],
-          "labels": [
-            "hardware",
-            "networking",
-            "platform"
-          ]
-        },
-        {
-          "id": "P1-004",
-          "title": "Establish domain model and service context diagrams",
-          "feature": "Architecture",
-          "status": "COMPLETED",
-          "priority": "HIGH",
-          "estimatedHours": 10,
-          "actualHours": 6,
-          "assignee": "Riley Patel",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Produce domain model covering users, games, rooms, bookings, sessions, hints, cameras, discount/deposit flows.",
-            "Map bounded contexts for API, streaming, scheduling, and reporting services.",
-            "Upload diagrams/notes to project-docs/architecture/ (text outline acceptable for MVP planning)."
-          ],
-          "dependencies": [
-            "P1-001",
-            "P1-002"
-          ],
-          "risks": [],
-          "notes": [
-            "Include event flow from booking creation to session completion.",
-            "Call out integrations between platform base services and Fastify API.",
-            "Domain/service breakdown documented in §3.4 covering contexts and interactions."
-          ],
-          "labels": [
-            "architecture",
-            "planning",
-            "backend"
-          ]
-        },
-        {
-          "id": "P1-005",
-          "title": "Define UX strategy and DaisyUI theme tokens",
-          "feature": "Design",
-          "status": "COMPLETED",
-          "priority": "HIGH",
-          "estimatedHours": 8,
-          "actualHours": 5,
-          "assignee": "Jordan Lee",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Create DaisyUI custom theme with dark palette (#C43131, #00D5C8 accents).",
-            "Outline responsive layout guidelines for mobile-first dashboards.",
-            "Document component hierarchy for operator workflows."
-          ],
-          "dependencies": [
-            "P1-002"
-          ],
-          "risks": [],
-          "notes": [
-            "Reference DaisyUI v5.1.25 configuration and Tailwind 4 setup requirements.",
-            "Address accessibility targets (WCAG AA).",
-            "DaisyUI theme tokens + layout guidance added in §8.6; typography clarified."
-          ],
-          "labels": [
-            "design",
-            "ux",
-            "frontend"
-          ]
-        },
-        {
-          "id": "P1-006",
-          "title": "Map dual-repo architecture and delivery workflows",
-          "feature": "DevOps",
-          "status": "COMPLETED",
-          "priority": "MEDIUM",
-          "estimatedHours": 6,
-          "actualHours": 12,
-          "assignee": "Morgan Blake",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Document repository layouts for escapeplan-base and escapeplan-web.",
-            "Define CI/CD pipeline stages for image builds, API tests, and PWA deploy artifacts.",
-            "List branching strategy and release cadence assumptions."
-          ],
-          "dependencies": [
-            "P1-002"
-          ],
-          "risks": [],
-          "notes": [
-            "Include pnpm workspace boundaries and shared package approach.",
-            "Plan for semantic-release integration."
-          ],
-          "labels": [
-            "devops",
-            "planning",
-            "automation"
-          ]
-        },
-        {
           "id": "P1-007",
           "title": "Detail store-front vs mobile operations scenarios",
           "feature": "Operations",
@@ -306,38 +150,6 @@
           ]
         },
         {
-          "id": "P2-003",
-          "title": "Provision systemd services and worker supervision",
-          "feature": "Operations",
-          "status": "COMPLETED",
-          "priority": "HIGH",
-          "estimatedHours": 10,
-          "actualHours": 12,
-          "assignee": "Morgan Blake",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Define escapeplan-api.service, escapeplan-ffmpeg@.service, and dependencies on nginx.",
-            "Add watchdog/Restart parameters and health checks for each service.",
-            "Document manual start/stop procedures in runbook."
-          ],
-          "dependencies": [
-            "P2-001"
-          ],
-          "risks": [],
-          "notes": [
-            "Ensure ffmpeg units pick up camera environment variables at runtime.",
-            "Plan for templated units per camera slug.",
-            "Verify mDNS (`escapeplan.local`) and HTTPS cert health surfaced in maintenance dashboard.",
-            "2025-09-29: Systemd unit templates added for escapeplan-api, escapeplan-web, escapeplan-ffmpeg@, along with bootstrap services."
-          ],
-          "labels": [
-            "operations",
-            "platform",
-            "automation"
-          ]
-        },
-        {
           "id": "P2-004",
           "title": "Implement telemetry, logging, and health endpoints",
           "feature": "Observability",
@@ -398,38 +210,6 @@
             "operations",
             "platform"
           ]
-        },
-        {
-          "id": "P2-006",
-          "title": "Design OTA update and rollback strategy",
-          "feature": "DevOps",
-          "status": "COMPLETED",
-          "priority": "HIGH",
-          "estimatedHours": 8,
-          "actualHours": 14,
-          "assignee": "Morgan Blake",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Select update transport (e.g., USB package vs. local web interface).",
-            "Define versioning/rollback process for base image and application packages.",
-            "Update runbook with operator-friendly instructions."
-          ],
-          "dependencies": [
-            "P2-001",
-            "P2-005"
-          ],
-          "risks": [],
-          "notes": [
-            "Consider delta updates to minimize downtime.",
-            "Include verification steps before applying updates.",
-            "Include guidance for regenerating certificates when hostname changes; ensure rollback handles mDNS records."
-          ],
-          "labels": [
-            "devops",
-            "release",
-            "platform"
-          ]
         }
       ]
     },
@@ -473,40 +253,6 @@
           ]
         },
         {
-          "id": "P3-002",
-          "title": "Implement SQLite schema and Drizzle migrations",
-          "feature": "Persistence",
-          "status": "COMPLETED",
-          "priority": "CRITICAL",
-          "estimatedHours": 14,
-          "actualHours": 8,
-          "assignee": "Riley Patel",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Model all core tables with foreign keys and constraints per PRD section 3.",
-            "Generate migration scripts and automated migration runner.",
-            "Include indexes to support booking lookup and session timeline queries."
-          ],
-          "dependencies": [
-            "P3-001",
-            "P1-004"
-          ],
-          "risks": [],
-          "notes": [
-            "Ensure WAL mode configured and vacuum schedule documented.",
-            "Validate schema using unit tests against Drizzle.",
-            "Initial Drizzle migration folder scaffolding and runtime hook wired; TypeScript lint failing until allowImportingTsExtensions configured.",
-            "Rollback dev environment to host-specific node_modules to restore @rollup/rollup-linux-x64-gnu before running migration + seed tests.",
-            "2025-09-29: Seed pipeline now hydrates Pirate Mutiny data only, enforces Argon2id hashed credentials, and auto-creates network profile without mock sessions."
-          ],
-          "labels": [
-            "backend",
-            "persistence",
-            "database"
-          ]
-        },
-        {
           "id": "P3-003",
           "title": "Create seed data pipeline with realistic baseline data",
           "feature": "Persistence",
@@ -534,42 +280,6 @@
             "backend",
             "persistence",
             "operations"
-          ]
-        },
-        {
-          "id": "P3-004",
-          "title": "Deliver authentication and RBAC services",
-          "feature": "Auth",
-          "status": "COMPLETED",
-          "priority": "CRITICAL",
-          "estimatedHours": 12,
-          "actualHours": 14,
-          "assignee": "Riley Patel",
-          "createdDate": "2025-09-29",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Implement Argon2id password hashing and session cookie issuance.",
-            "Provide user management endpoints with role assignments and password reset flow.",
-            "Add middleware enforcing RBAC matrix for Admin, Manager, Game Master, Customer."
-          ],
-          "dependencies": [
-            "P3-002",
-            "P3-003"
-          ],
-          "risks": [],
-          "notes": [
-            "Include rate limiting and account lockouts for repeated failures.",
-            "Support offline password reset using admin console.",
-            "2025-09-29: Fastify + Drizzle now run Better Auth for session storage; bespoke bearer token helpers removed.",
-            "2025-09-29: SvelteKit console consumes Better Auth cookies/username client; logout and session refresh handled by provider.",
-            "2025-09-29: Operators can now PATCH /users/me to update display name, email, avatar, and bio; admin user endpoints accept the new profile fields.",
-            "2025-09-29: Vitest suite seeds database via /src/db/seed.ts before buildServer() to keep auth fixtures deterministic.",
-            "2025-09-29: Trimmed legacy roles/permissions and mapped Better Auth additional fields into SQLite adapter."
-          ],
-          "labels": [
-            "backend",
-            "security",
-            "auth"
           ]
         },
         {
@@ -1078,94 +788,6 @@
           ]
         },
         {
-          "id": "P3-017",
-          "title": "Implement storage visualization and asset management",
-          "feature": "Admin Console",
-          "status": "COMPLETED",
-          "priority": "MEDIUM",
-          "estimatedHours": 16,
-          "actualHours": 0,
-          "assignee": "Codex",
-          "createdDate": "2025-09-30",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Build storage overview dashboard with donut chart visualization showing used/reserved/available space.",
-            "Create asset library with grid/list toggle views and responsive layouts.",
-            "Implement asset upload with drag-drop zone and progress indicators per file.",
-            "Add asset detail modal with usage tracking showing which games/puzzles/hints use the asset.",
-            "Build backup management UI with download/restore/delete actions and retention policy settings.",
-            "Implement log viewer with live tail capability and filtering by service/severity.",
-            "Show storage breakdown by category: Database, Assets, HLS cache, Backups, Logs, System."
-          ],
-          "dependencies": [
-            "P3-002",
-            "P3-005"
-          ],
-          "risks": [],
-          "notes": [
-            "Asset upload limits: 5MB for images, 10MB for audio, 50MB for video.",
-            "Auto-convert images to WebP for storage efficiency.",
-            "Warn user before deleting assets that are in use by games/hints.",
-            "Backup retention default: keep last 7 backups with configurable policy.",
-            "Storage categories: SQLite .db, assets (images/audio/video), HLS cache, backup archives, logs, system (OS/packages).",
-            "Asset library: grid view (2 cols mobile, 3 tablet, 4 desktop) and list view (table with thumbnail/name/type/size/used by).",
-            "Asset upload: multi-file support, progress bars, error handling with diagnostic messages.",
-            "Asset detail modal: full preview (image viewer/audio player/video player), metadata, usage report.",
-            "Backup list: timestamp, type (auto/manual), size, status, actions (download/restore/delete).",
-            "Log viewer: service selector (API/ffmpeg/nginx/systemd), date range, severity filter, live tail toggle.",
-            "Donut chart with segments color-coded: used (blue), reserved (yellow), available (green).",
-            "2025-10-01 (SESSION_37): Storage Management page fully implemented at /admin/storage with Overview, Asset Library, and Backups tabs. 297 lines of production code. Radial progress chart, asset upload component, and backup management UI all functional. TODO.json status was incorrectly set to NOT_STARTED - corrected to COMPLETED."
-          ],
-          "labels": [
-            "web",
-            "admin",
-            "operations",
-            "storage"
-          ]
-        },
-        {
-          "id": "P3-018",
-          "title": "Create standard ConfirmDialog component",
-          "feature": "UI Components",
-          "status": "COMPLETED",
-          "priority": "CRITICAL",
-          "estimatedHours": 6,
-          "actualHours": 0,
-          "assignee": "Codex",
-          "createdDate": "2025-09-30",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Create ConfirmDialog.svelte component with variants: info, warning, danger with appropriate color schemes.",
-            "Support type-to-confirm pattern for destructive actions requiring user to type entity name.",
-            "Mobile-first layout: full-screen on <640px, centered modal on desktop with max-width constraints.",
-            "Provide promise-based API for easy integration with async/await patterns.",
-            "Support custom content slots for complex confirmations beyond simple text.",
-            "Ensure 44×44px minimum touch targets on mobile for all interactive elements."
-          ],
-          "dependencies": [
-            "P4-002"
-          ],
-          "risks": [],
-          "notes": [
-            "Use DaisyUI modal-bottom sm:modal-middle pattern for responsive behavior.",
-            "Danger actions: red button positioned in safe thumb zone on mobile (bottom-right).",
-            "Stack buttons vertically on mobile with cancel button on top for safety.",
-            "Auto-focus on cancel button for keyboard accessibility.",
-            "Variants: info (blue), warning (yellow), danger (red) with matching button colors.",
-            "Type-to-confirm: show input field for destructive actions (delete, hard delete), validate typed value matches.",
-            "Promise-based API example: await confirmDialog.open({ title, message, variant: 'danger' }).",
-            "Custom slots: allow passing rich content (lists, images) in confirmation body.",
-            "Mobile: full-screen modal with header, scrollable body, fixed footer with actions.",
-            "Desktop: centered overlay (max-width: 500px) with backdrop blur.",
-            "2025-10-01: ConfirmDialogHost + promise-based API implemented with variants, typed confirm, mobile layout—meets acceptance criteria."
-          ],
-          "labels": [
-            "web",
-            "ui_components",
-            "ux"
-          ]
-        },
-        {
           "id": "P3-019",
           "title": "Add UUID support to rooms, puzzles, hints, cameras",
           "feature": "Database",
@@ -1234,42 +856,6 @@
             "operations",
             "infra",
             "backup"
-          ]
-        },
-        {
-          "id": "P3-013",
-          "title": "Implement structured logging and audit trail (Winston)",
-          "feature": "Security",
-          "status": "COMPLETED",
-          "priority": "HIGH",
-          "estimatedHours": 12,
-          "actualHours": 14,
-          "assignee": "Claude",
-          "createdDate": "2025-09-29",
-          "completedDate": "2025-10-01",
-          "dueDate": null,
-          "acceptanceCriteria": [
-            "Adopt Winston (or equivalent) for structured Fastify logs with rotation.",
-            "Persist admin/audit events for critical actions (user changes, network tweaks).",
-            "Expose logs through API for admin console consumption."
-          ],
-          "dependencies": [
-            "P3-004"
-          ],
-          "risks": [
-            "Log volume on Pi devices must stay within storage limits."
-          ],
-          "notes": [
-            "Coordinate with Better Auth integration so audit trail covers provider webhooks.",
-            "2025-10-01 Session 29-33: Implemented Winston v3.18.3 with daily rotation (14d retention), system_logs table with indexes, alert rules engine, and 4 REST API endpoints.",
-            "2025-10-01 Session 40: Removed legacy recent_alert field (8 files), fixed all TypeScript errors (10 errors), verified 100% backend compliance.",
-            "Backend 100% complete. Frontend UI pending: will be integrated into /admin/system tabs per DASHBOARD_SYSTEM.md (Tab 3: Alerts, Tab 4: Logs)."
-          ],
-          "labels": [
-            "security",
-            "observability",
-            "auth",
-            "completed"
           ]
         },
         {
@@ -1735,10 +1321,10 @@
           "id": "P4-NAV-001",
           "title": "Update navigation sidebar with new admin pages",
           "feature": "UI Components",
-          "status": "NOT_STARTED",
+          "status": "COMPLETED",
           "priority": "MEDIUM",
           "estimatedHours": 2,
-          "actualHours": 0,
+          "actualHours": 2,
           "assignee": "CLAUDE",
           "createdDate": "2025-10-01",
           "dueDate": null,
@@ -1761,12 +1347,93 @@
             "Implements Phase 7 of DASHBOARD_SYSTEM.md specification",
             "File: apps/escapeplan-web/src/routes/(app)/+layout.svelte",
             "New permissions: canViewRoles, canViewCameras, canManageCameras, canManageSystemSettings",
-            "Icons: Use appropriate SVG paths for Camera and System Dashboard links"
+            "Icons: Use appropriate SVG paths for Camera and System Dashboard links",
+            "2025-10-01 (SESSION_39): Sidebar navigation updated. Replaced Network Control link with System Dashboard link. Added permission checks for canViewSystemLogs and canManageAlerts. Link visible if user has ANY system permission."
           ],
           "labels": [
             "frontend",
             "navigation",
             "rbac"
+          ]
+        },
+        {
+          "id": "P4-UI-001",
+          "title": "Create reusable DataTable component with responsive breakpoints",
+          "feature": "UI Components",
+          "status": "COMPLETED",
+          "priority": "HIGH",
+          "estimatedHours": 4,
+          "actualHours": 4,
+          "assignee": "CLAUDE",
+          "createdDate": "2025-10-01",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Generic TypeScript component with <T> parameter",
+            "Snippet-based customization (mobileCard, desktopCell)",
+            "Responsive breakpoints: sm (640px), md (768px), lg (1024px)",
+            "Loading states and empty states",
+            "Keyed {#each} blocks for performance",
+            "Mobile card layout and desktop table layout"
+          ],
+          "dependencies": [],
+          "risks": [],
+          "notes": [
+            "2025-10-01 (SESSION_39): Created DataTable.svelte component (91 lines)",
+            "Uses Svelte 5 snippets for flexible customization",
+            "Ready for refactoring Users, Games, and Bookings tables",
+            "File: apps/escapeplan-web/src/lib/components/DataTable.svelte"
+          ],
+          "labels": [
+            "frontend",
+            "component",
+            "reusable",
+            "responsive"
+          ]
+        },
+        {
+          "id": "P4-DASH-001",
+          "title": "Build unified System Dashboard with 5 tabs (Health, Network, Alerts, Logs, Storage)",
+          "feature": "Admin Panel",
+          "status": "COMPLETED",
+          "priority": "CRITICAL",
+          "estimatedHours": 20,
+          "actualHours": 18,
+          "assignee": "CLAUDE",
+          "createdDate": "2025-10-01",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Create /admin/system main page with tab navigation",
+            "Implement URL hash-based tab switching",
+            "Create Health tab with system monitoring",
+            "Migrate Network tab from /admin/network",
+            "Migrate Alerts tab from /admin/system/alerts",
+            "Migrate Logs tab from /admin/system/logs",
+            "Migrate Storage tab from /admin/storage",
+            "Implement permission-based tab visibility",
+            "Add URL redirects for old paths"
+          ],
+          "dependencies": [
+            "P3-RBAC-001",
+            "P3-RBAC-002"
+          ],
+          "risks": [],
+          "notes": [
+            "2025-10-01 (SESSION_39): Completed unified System Dashboard",
+            "Created 10 new files: main page, server load, 5 tab components, DataTable",
+            "Modified 3 files: sidebar nav, URL redirects, documentation",
+            "Tab navigation uses URL hash (#health, #network, #alerts, #logs, #storage)",
+            "Health tab uses mock data - needs real API endpoint",
+            "Network tab read-only - edit form to be added later",
+            "Storage tab fully integrated with AssetBrowser and AssetUpload",
+            "All backend APIs working (Session 40 logging/alerts)",
+            "Files: apps/escapeplan-web/src/routes/(app)/admin/system/*.svelte"
+          ],
+          "labels": [
+            "frontend",
+            "admin",
+            "dashboard",
+            "tabs",
+            "migration"
           ]
         }
       ]

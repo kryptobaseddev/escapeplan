@@ -181,7 +181,7 @@ LEFT JOIN rooms r ON r.game_id = g.id
 LEFT JOIN game_puzzles gp ON gp.game_id = g.id
 GROUP BY g.id, r.id;
 ```
-**Result:** `Pirate Mutany | Main | 9` ✅
+**Result:** `Pirate Mutiny | Main | 9` ✅
 
 ### Drizzle ORM Type Safety Test ✅
 

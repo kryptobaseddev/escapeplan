@@ -16,7 +16,7 @@
 
 ### ✅ Primary Tasks
 - [x] **P3-002 hardening**: Replaced legacy seed data with real Pirate Mutiny content and Argon2id-hashed `admin/escapeplan` credential.
-  - Technical details: rewrote `runMigrations()` to materialise required tables/columns, purged fake bookings/sessions/alerts, seeded network profile + puzzle/room metadata directly from `project-docs/pirate-mutany.txt`.
+  - Technical details: rewrote `runMigrations()` to materialise required tables/columns, purged fake bookings/sessions/alerts, seeded network profile + puzzle/room metadata directly from `project-docs/pirate-mutiny.txt`.
   - Files modified: `apps/escapeplan-api/src/db/client.ts`, `apps/escapeplan-api/src/db/seed.ts`.
   - Tests: extended `server.test.ts` to build its own session/timer fixtures.
 

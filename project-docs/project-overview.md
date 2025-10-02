@@ -355,7 +355,7 @@ CREATE INDEX idx_sessions_status ON game_sessions(status);
 
 * Roles: `admin`, `manager`, `game_master`, `customer`.
 * Default credentials: `admin` / `escapeplan` (Argon2id-hashed, rotation endpoint available).
-* Games: Pirate Mutiny only — hydrated from `project-docs/pirate-mutany.txt` with canonical puzzles, narrative, and room metadata.
+* Games: Pirate Mutiny only — hydrated from `project-docs/pirate-mutiny.txt` with canonical puzzles, narrative, and room metadata.
 * Rooms: `Harbor Hold` storefront bay mapped to Pirate Mutiny; more rooms added via admin console (no mock placeholders).
 * Network: Primary profile `escapeplan_net` created with default broadcast metadata for appliance Wi-Fi controls.
 * Bookings/sessions/alerts: **not** seeded; all runtime data created by operators or automated tests to keep production data genuine.

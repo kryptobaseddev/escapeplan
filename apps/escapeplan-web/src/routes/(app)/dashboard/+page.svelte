@@ -79,7 +79,7 @@
 
   const dismissAlert = async (alertId: string) => {
     try {
-      await apiFetch(`/api/admin/alerts/${alertId}/dismiss`, {
+      await apiFetch(fetch, `/api/admin/alerts/${alertId}/dismiss`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });

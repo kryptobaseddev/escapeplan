@@ -93,6 +93,7 @@ export function initializeSchema() {
       price_per_player_cents INTEGER NOT NULL DEFAULT 0,
       resources_required INTEGER NOT NULL DEFAULT 1,
       validation_notes TEXT,
+      default_volume INTEGER NOT NULL DEFAULT 80,
       media_config TEXT,
       pricing_config TEXT,
       booking_rules_config TEXT,
@@ -127,6 +128,27 @@ export function initializeSchema() {
       media_asset_meta TEXT,
       slug TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS game_milestones (
+      id TEXT PRIMARY KEY,
+      game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      name TEXT NOT NULL,
+      media_type TEXT,
+      content TEXT,
+      asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
+      volume_level INTEGER NOT NULL DEFAULT 80,
+      display_order INTEGER NOT NULL DEFAULT 0,
+      trigger_type TEXT NOT NULL,
+      trigger_config TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_game_milestones_game ON game_milestones(game_id);
+    CREATE INDEX IF NOT EXISTS idx_game_milestones_type ON game_milestones(type);
+    CREATE INDEX IF NOT EXISTS idx_game_milestones_enabled ON game_milestones(enabled);
 
     -- ============================================================================
     -- BOOKINGS & SESSIONS
@@ -174,20 +196,45 @@ export function initializeSchema() {
     CREATE TABLE IF NOT EXISTS session_puzzles (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      puzzle_id TEXT,
       title TEXT NOT NULL,
+      description TEXT,
+      solution TEXT,
       status TEXT NOT NULL,
-      display_order INTEGER NOT NULL
+      display_order INTEGER NOT NULL,
+      hints TEXT
     );
 
     CREATE TABLE IF NOT EXISTS session_hints (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      puzzle_id TEXT,
       type TEXT NOT NULL,
       message TEXT NOT NULL,
       asset_url TEXT,
+      volume_level INTEGER,
       delivered_by TEXT NOT NULL,
       delivered_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS session_milestones (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+      milestone_id TEXT NOT NULL REFERENCES game_milestones(id),
+      milestone_type TEXT NOT NULL,
+      milestone_name TEXT NOT NULL,
+      media_type TEXT,
+      content TEXT,
+      asset_url TEXT,
+      volume_level INTEGER,
+      triggered_at TEXT NOT NULL,
+      triggered_by TEXT REFERENCES operators(id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_session_milestones_session ON session_milestones(session_id);
+    CREATE INDEX IF NOT EXISTS idx_session_milestones_milestone ON session_milestones(milestone_id);
+    CREATE INDEX IF NOT EXISTS idx_session_milestones_triggered ON session_milestones(triggered_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_session_milestone_unique ON session_milestones(session_id, milestone_id);
 
     CREATE TABLE IF NOT EXISTS timer_slugs (
       slug TEXT PRIMARY KEY,
@@ -211,6 +258,7 @@ export function initializeSchema() {
       game_id TEXT REFERENCES games(id) ON DELETE CASCADE,
       puzzle_id TEXT,
       hint_order INTEGER,
+      default_volume INTEGER NOT NULL DEFAULT 80,
       is_reusable INTEGER NOT NULL DEFAULT 0,
       uploaded_by TEXT NOT NULL REFERENCES operators(id),
       uploaded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

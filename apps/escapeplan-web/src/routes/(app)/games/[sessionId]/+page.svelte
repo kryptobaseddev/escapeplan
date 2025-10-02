@@ -73,20 +73,25 @@
     dispatchCommand(command);
   }
 
-  async function handlePuzzle(event: SubmitEvent) {
-    event.preventDefault();
-    const formElement = event.currentTarget as HTMLFormElement;
-    const formData = new FormData(formElement);
-    const puzzleId = formData.get('puzzleId');
-    const status = formData.get('status');
-
-    if (typeof puzzleId !== 'string' || typeof status !== 'string') {
+  async function handlePuzzleStatusChange(puzzleId: string, status: string) {
+    if (!puzzleId || !status) {
       puzzleFormError = 'Puzzle and status required.';
       return;
     }
 
     puzzleFormError = null;
     await dispatchCommand('mark_puzzle', { puzzleId, status });
+  }
+
+  async function sendPuzzleHint(puzzleId: string, hint: { content: string; type: string; assetUrl?: string; volumeLevel?: number }) {
+    hintFormError = null;
+    await dispatchCommand('send_hint', {
+      message: hint.content,
+      medium: hint.type,
+      assetUrl: hint.assetUrl,
+      volumeLevel: hint.volumeLevel || session.gameDefaultVolume || 80,
+      puzzleId
+    });
   }
 
   async function handleHint(event: SubmitEvent) {
@@ -274,17 +279,145 @@
         <div class="mt-5 space-y-3">
           {#each session.puzzles as puzzle}
             <article
-              class={`rounded-xl border border-white/10 bg-base-100/60 p-4 transition ${puzzle.status === 'completed' ? 'border-success/40 bg-success/10' : puzzle.status === 'in_progress' ? 'border-info/40 bg-info/10' : ''}`}
+              class={`rounded-xl border p-4 transition ${
+                puzzle.status === 'completed'
+                  ? 'border-success/40 bg-success/10'
+                  : puzzle.status === 'in_progress'
+                    ? 'border-info/40 bg-info/10'
+                    : 'border-white/10 bg-base-100/60'
+              }`}
             >
+              <!-- Header -->
               <header class="flex flex-wrap items-center justify-between gap-2">
                 <h3 class="font-semibold text-base-content">{puzzle.title}</h3>
-                <span class="badge badge-outline badge-sm uppercase tracking-[0.25em] text-base-content/60">{puzzle.status.replace('_', ' ')}</span>
+                <span
+                  class={`badge badge-sm uppercase tracking-[0.25em] ${
+                    puzzle.status === 'completed'
+                      ? 'badge-success'
+                      : puzzle.status === 'in_progress'
+                        ? 'badge-info'
+                        : 'badge-ghost'
+                  }`}
+                >
+                  {puzzle.status.replace('_', ' ')}
+                </span>
               </header>
-              <form class="mt-4 flex flex-wrap gap-2 text-xs" onsubmit={handlePuzzle}>
-                <input type="hidden" name="puzzleId" value={puzzle.id} />
-                <button class="btn btn-xs btn-ghost border border-white/10" type="submit" name="status" value="in_progress">Mark in progress</button>
-                <button class="btn btn-xs btn-primary" type="submit" name="status" value="completed">Mark complete</button>
-              </form>
+
+              <!-- Description -->
+              {#if puzzle.description}
+                <p class="mt-2 text-sm text-base-content/70">{puzzle.description}</p>
+              {/if}
+
+              <!-- Solution -->
+              {#if puzzle.solution}
+                <details class="mt-3 collapse collapse-arrow bg-base-200/50 rounded-lg">
+                  <summary class="collapse-title text-sm font-medium min-h-0 py-2">
+                    Show Solution
+                  </summary>
+                  <div class="collapse-content">
+                    <p class="text-sm text-base-content/90 font-mono bg-base-300/50 p-2 rounded">
+                      {puzzle.solution}
+                    </p>
+                  </div>
+                </details>
+              {/if}
+
+              <!-- Status Controls -->
+              <div class="mt-4 flex flex-wrap gap-2">
+                {#if puzzle.status === 'available'}
+                  <button
+                    class="btn btn-sm btn-info gap-1"
+                    type="button"
+                    onclick={() => handlePuzzleStatusChange(puzzle.id, 'in_progress')}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                    </svg>
+                    Start Puzzle
+                  </button>
+                {:else if puzzle.status === 'in_progress'}
+                  <button
+                    class="btn btn-sm btn-success gap-1"
+                    type="button"
+                    onclick={() => handlePuzzleStatusChange(puzzle.id, 'completed')}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                    Mark Complete
+                  </button>
+                  <button
+                    class="btn btn-sm btn-ghost border border-white/10 gap-1"
+                    type="button"
+                    onclick={() => handlePuzzleStatusChange(puzzle.id, 'available')}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+                    </svg>
+                    Reset
+                  </button>
+                {:else if puzzle.status === 'completed'}
+                  <div class="flex items-center gap-2">
+                    <span class="badge badge-success gap-1">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                      </svg>
+                      Completed
+                    </span>
+                    <button
+                      class="btn btn-xs btn-ghost"
+                      type="button"
+                      onclick={() => handlePuzzleStatusChange(puzzle.id, 'in_progress')}
+                    >
+                      Undo
+                    </button>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Quick-Send Hints -->
+              {#if puzzle.hints && puzzle.hints.length > 0}
+                <div class="mt-4 pt-4 border-t border-white/10">
+                  <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2">Quick Send Hints:</h4>
+                  <div class="flex flex-wrap gap-2">
+                    {#each puzzle.hints.sort((a: any, b: any) => a.order - b.order) as hint}
+                      <button
+                        type="button"
+                        class={`btn btn-xs gap-1 ${
+                          hint.type === 'text'
+                            ? 'btn-primary'
+                            : hint.type === 'image'
+                              ? 'btn-info'
+                              : hint.type === 'audio'
+                                ? 'btn-secondary'
+                                : 'btn-accent'
+                        }`}
+                        onclick={() => sendPuzzleHint(puzzle.id, hint)}
+                        title={hint.content}
+                      >
+                        {#if hint.type === 'text'}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd" />
+                          </svg>
+                        {:else if hint.type === 'image'}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm12 12H4l4-8 3 6 2-4 3 6z" clip-rule="evenodd" />
+                          </svg>
+                        {:else if hint.type === 'audio'}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414zm-2.829 2.828a1 1 0 011.415 0A5.983 5.983 0 0115 10a5.984 5.984 0 01-1.757 4.243 1 1 0 01-1.415-1.415A3.984 3.984 0 0013 10a3.983 3.983 0 00-1.172-2.828 1 1 0 010-1.415z" clip-rule="evenodd" />
+                          </svg>
+                        {:else}
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path d="M2 6a2 2 0 012-2h6a2 2 0 012 2v8a2 2 0 01-2 2H4a2 2 0 01-2-2V6zM14.553 7.106A1 1 0 0014 8v4a1 1 0 00.553.894l2 1A1 1 0 0018 13V7a1 1 0 00-1.447-.894l-2 1z" />
+                          </svg>
+                        {/if}
+                        Hint {hint.order}
+                      </button>
+                    {/each}
+                  </div>
+                </div>
+              {/if}
             </article>
           {/each}
         </div>

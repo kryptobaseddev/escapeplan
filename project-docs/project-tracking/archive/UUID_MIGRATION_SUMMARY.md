@@ -71,7 +71,7 @@ game_id: isReusable ? null : game.id
 ### 🚧 1. Update Seed Data
 **File:** `apps/escapeplan-api/src/db/seed.ts`
 
-**Current:** Uses hardcoded IDs like `'game-pirate-mutany'`
+**Current:** Uses hardcoded IDs like `'game-pirate-mutiny'`
 **Needed:** Generate proper UUIDs for test data
 
 **Example:**
@@ -80,9 +80,9 @@ import { randomUUID } from 'node:crypto';
 
 const pirateGameId = randomUUID();
 const pirateGame = {
-  id: pirateGameId,  // UUID instead of 'game-pirate-mutany'
-  slug: 'pirate-mutany',  // Slug stays the same for URLs
-  name: 'Pirate Mutany',
+  id: pirateGameId,  // UUID instead of 'game-pirate-mutiny'
+  slug: 'pirate-mutiny',  // Slug stays the same for URLs
+  name: 'Pirate Mutiny',
   // ...
 };
 ```

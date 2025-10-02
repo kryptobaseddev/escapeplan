@@ -37,7 +37,7 @@ describe('EscapePlan API', () => {
     expect(cookies).toBeDefined();
     const rawCookie = Array.isArray(cookies) ? cookies[0] : cookies;
     expect(rawCookie).toContain('better-auth.session_token');
-    sessionCookie = rawCookie.split(';')[0];
+    sessionCookie = rawCookie?.split(';')[0] ?? '';
   });
 
   test('returns dashboard data', async () => {
@@ -58,9 +58,9 @@ describe('EscapePlan API', () => {
       const now = new Date();
       const bookingId = `booking-${now.getTime()}`;
       const sessionId = `session-${now.getTime()}`;
-      const timerSlug = 'pirate-mutany-live';
+      const timerSlug = 'pirate-mutiny-live';
 
-      const game = sqlite.prepare(`SELECT id FROM games WHERE slug = ?`).get('pirate-mutany') as { id: string };
+      const game = sqlite.prepare(`SELECT id FROM games WHERE slug = ?`).get('pirate-mutiny') as { id: string };
       const room = sqlite.prepare(`SELECT id FROM rooms WHERE game_id = ? LIMIT 1`).get(game.id) as { id: string };
 
       sqlite.prepare(

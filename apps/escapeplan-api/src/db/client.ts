@@ -21,4 +21,4 @@ sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
 
 // Initialize Drizzle ORM with full schema for type-safe queries
-export const db = drizzle(sqlite, { schema });
+export const db = drizzle({ client: sqlite, schema });

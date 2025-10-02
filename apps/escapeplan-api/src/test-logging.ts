@@ -36,7 +36,7 @@ console.log(`✅ Alert created with ID: ${alertId}\n`);
 console.log('4️⃣ Testing alert rule evaluation (timer_paused event)...');
 try {
   evaluateAlertRules('timer_paused', {
-    gameName: 'Pirate Mutany',
+    gameName: 'Pirate Mutiny',
     roomName: 'Main',
     time: '15:32'
   });

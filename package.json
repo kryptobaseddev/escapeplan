@@ -3,10 +3,17 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.12.4",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourorg/escapeplan.git"
+  },
   "scripts": {
+    "dev": "pnpm --filter escapeplan-api dev & pnpm --filter escapeplan-web dev",
     "lint": "pnpm -r run lint",
     "build": "pnpm -r run build",
-    "test": "pnpm -r run test"
+    "build:deb": "pnpm run build && bash scripts/build-deb.sh",
+    "test": "pnpm -r run test",
+    "release": "pnpm run build:deb"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

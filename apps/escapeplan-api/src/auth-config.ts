@@ -4,7 +4,7 @@ import { admin, customSession, username } from 'better-auth/plugins';
 import argon2 from 'argon2';
 import type { BetterAuthOptions } from 'better-auth';
 import type { OperatorPermission, OperatorRole } from '@escapeplan/contracts';
-import { db } from './db/client.js';
+import { db, sqlite } from './db/client.js';
 import { operatorAccounts, operatorAuthSessions, operatorVerifications, operators } from './db/schema.js';
 import { normalizePermissions, normalizeRole } from './security.js';
 
@@ -49,6 +49,13 @@ function buildBaseOptions(): BetterAuthOptions {
           input: true,
           defaultValue: 'manager',
           fieldName: 'role'
+        },
+        roleId: {
+          type: 'string',
+          required: true,
+          input: true,
+          defaultValue: 'role-manager',
+          fieldName: 'role_id'
         },
         permissions: {
           type: 'string',
@@ -169,15 +176,18 @@ function buildBaseOptions(): BetterAuthOptions {
       customSession(async ({ user, session }) => {
         const enrichedUser = user as Record<string, unknown> & {
           role?: string;
+          roleId?: string;
+          role_id?: string;
           permissions?: unknown;
           archivedAt?: unknown;
           image?: unknown;
+          id?: string;
         };
 
-        const rawRole = typeof enrichedUser.role === 'string' ? enrichedUser.role : String(enrichedUser.role ?? '');
-        const role = normalizeRole(rawRole);
-        const storedPermissions =
-          typeof enrichedUser.permissions === 'string' ? enrichedUser.permissions : null;
+        const role = resolveSessionRole(enrichedUser);
+        const storedPermissions = typeof enrichedUser.permissions === 'string'
+          ? enrichedUser.permissions
+          : null;
         const mergedPermissions = normalizePermissions(role, storedPermissions ?? undefined);
 
         if (typeof enrichedUser.archivedAt === 'string' && enrichedUser.archivedAt) {
@@ -229,6 +239,62 @@ export function createAuth(overrides: Partial<BetterAuthOptions> = {}) {
 export type EscapePlanAuthInstance = ReturnType<typeof createAuth>;
 export type { OperatorRole, OperatorPermission };
 export { DEFAULT_BASE_URL, WEB_ORIGIN };
+
+function resolveSessionRole(user: Record<string, unknown>): OperatorRole {
+  const roleCandidates = [
+    typeof user.role === 'string' ? user.role : null,
+    typeof (user as { roleId?: string }).roleId === 'string' ? (user as { roleId?: string }).roleId! : null,
+    typeof (user as { role_id?: string }).role_id === 'string' ? (user as { role_id?: string }).role_id! : null
+  ].filter((value): value is string => Boolean(value && value.trim()));
+
+  for (const candidate of roleCandidates) {
+    const normalized = tryNormalizeRole(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  if (typeof user.id === 'string') {
+    const row = sqlite
+      .prepare(`SELECT r.name FROM operators o JOIN roles r ON o.role_id = r.id WHERE o.id = ? LIMIT 1`)
+      .get(user.id) as { name: string } | undefined;
+    if (row) {
+      const normalized = tryNormalizeRole(row.name);
+      if (normalized) {
+        return normalized;
+      }
+    }
+  }
+
+  throw new Error('Unsupported operator role: ');
+}
+
+function tryNormalizeRole(value: string | null | undefined): OperatorRole | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    return normalizeRole(trimmed);
+  } catch {
+    // continue to lookup fallbacks
+  }
+
+  const prefixed = trimmed.startsWith('role-') ? trimmed : `role-${trimmed}`;
+  const row = sqlite
+    .prepare(`SELECT name FROM roles WHERE id = ? OR name = ? LIMIT 1`)
+    .get(prefixed, trimmed) as { name: string } | undefined;
+
+  if (row) {
+    try {
+      return normalizeRole(row.name);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
 
 function serializeDates(value: unknown): unknown {
   if (value === null || value === undefined) {

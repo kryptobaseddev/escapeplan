@@ -130,7 +130,7 @@ game_id: isReusable ? null : game.id
 ### 3. ID Architecture Issue
 **Discovered:** Database uses mixed ID strategies instead of consistent UUIDs
 **Current System:**
-- Games: Prefixed slugs (`game-pirate-mutany`)
+- Games: Prefixed slugs (`game-pirate-mutiny`)
 - Assets: Proper UUIDs (`crypto.randomUUID()`)
 - Alerts: Nanoid (`alert-{nanoid(12)}`)
 - Rooms/Puzzles: Dual system (both `id` and `uuid` fields)
@@ -196,7 +196,7 @@ game_id: isReusable ? null : game.id
 ### 🚧 Remaining Work (Session 31)
 
 **Required before testing:**
-1. Update `seed.ts` to use UUIDs instead of `'game-pirate-mutany'`
+1. Update `seed.ts` to use UUIDs instead of `'game-pirate-mutiny'`
 2. Delete old database and run fresh seed, OR run migration script
 3. Optionally: Remove `uuid` columns from schema files (cleanup)
 

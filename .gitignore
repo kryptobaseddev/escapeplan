@@ -24,10 +24,3 @@ packages/contracts/dist/
 # OS files
 .DS_Store
 
-# External repositories handled separately
-
-# Platform build outputs
-platform/escapeplan-base/work/
-platform/escapeplan-base/deploy/
-platform/escapeplan-base/artifacts/
-platform/escapeplan-base/tools/

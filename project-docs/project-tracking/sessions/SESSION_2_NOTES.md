@@ -27,7 +27,7 @@
   - Quality metrics: linting and svelte-check pass.
 
 ### ✅ Secondary Tasks
-- [x] **Database seed baseline**: Added Drizzle schema and a better-sqlite3-backed seed script that loads `project-docs/pirate-mutany.txt` content plus default `admin/escapeplan` credentials.
+- [x] **Database seed baseline**: Added Drizzle schema and a better-sqlite3-backed seed script that loads `project-docs/pirate-mutiny.txt` content plus default `admin/escapeplan` credentials.
 - [x] **API surface**: Fastify routes moved under `/api`, username auth supported, data now streamed from SQLite instead of hard-coded mocks.
 
 ### 🔄 Partial Completions

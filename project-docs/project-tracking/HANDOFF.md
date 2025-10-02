@@ -14,7 +14,7 @@ Use this file to orient any contributor—human or AI—before they touch the pr
 
 ## Session Flow
 ### Start-of-session checklist
-1. Read the newest session note in `project-docs/project-tracking/sessions/` (currently: SESSION_31_NOTES.md).
+1. Read the newest session note in `project-docs/project-tracking/sessions/` and you can read more if needed
 2. Review active tasks in `TODO.json` for the current phase.
 3. Cross-check linked user stories to understand acceptance criteria (start with epic(s) tied to the current phase).
 4. Run baseline validation (the tracker **must** run with `project-docs/project-tracking/` as the working directory so it can locate the JSON files):

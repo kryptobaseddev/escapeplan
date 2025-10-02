@@ -8,7 +8,7 @@
 ### ID Patterns in Use
 
 1. **Prefixed Slug IDs** - Format: `{type}-{slug}`
-   - games: `game-pirate-mutany`
+   - games: `game-pirate-mutiny`
    - rooms: `room-main`
    - puzzles: `gpz-pirate-1`
 
@@ -93,7 +93,7 @@ Convert all entity tables to use proper UUIDs as primary keys:
 ```sql
 -- Before
 CREATE TABLE games (
-  id TEXT PRIMARY KEY,  -- Currently "game-pirate-mutany"
+  id TEXT PRIMARY KEY,  -- Currently "game-pirate-mutiny"
   slug TEXT NOT NULL UNIQUE,
   ...
 );
@@ -101,7 +101,7 @@ CREATE TABLE games (
 -- After
 CREATE TABLE games (
   id TEXT PRIMARY KEY,  -- UUID: "550e8400-e29b-41d4-a716-446655440000"
-  slug TEXT NOT NULL UNIQUE,  -- Still "pirate-mutany" for URLs
+  slug TEXT NOT NULL UNIQUE,  -- Still "pirate-mutiny" for URLs
   ...
 );
 ```
@@ -130,7 +130,7 @@ if (!game) {
 }
 
 // Then use game.id for FOREIGN KEY
-game_id: game.id  // "game-pirate-mutany", not "pirate-mutany"
+game_id: game.id  // "game-pirate-mutiny", not "pirate-mutiny"
 ```
 
 **Pros:**
@@ -167,10 +167,10 @@ ALTER TABLE game_puzzles DROP COLUMN uuid;
 
 ```javascript
 // Before (WRONG - causes FOREIGN KEY error)
-game_id: isReusable ? null : gameId,  // Uses slug "pirate-mutany"
+game_id: isReusable ? null : gameId,  // Uses slug "pirate-mutiny"
 
 // After (CORRECT - uses database ID)
-game_id: isReusable ? null : game.id,  // Uses "game-pirate-mutany"
+game_id: isReusable ? null : game.id,  // Uses "game-pirate-mutiny"
 ```
 
 This fix resolves the immediate upload error but doesn't address the architectural inconsistency.

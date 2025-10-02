@@ -1,29 +1,43 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { auth } from '../auth.ts';
-import { sqlite } from './client.ts';
-import { initializeSchema } from './init.ts';
-import { permissionsForRole } from '../security.ts';
+import { db as ormDb, sqlite } from './client.ts';
+import { permissionsForRole, resolveRoleId } from '../security.ts';
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 mkdirSync(`${rootDir}/../../data`, { recursive: true });
 
-// Initialize schema (idempotent - safe to call multiple times)
-initializeSchema();
+// Ensure migrations have been applied before seeding data
+const migrationsPath = resolve(rootDir, '../../drizzle');
+
+function ensureMigrationsApplied() {
+  migrate(ormDb, { migrationsFolder: migrationsPath });
+}
 
 const db = sqlite;
 
-// Generate stable UUIDs for seed data
+// Stable identifiers keep the seed idempotent across runs
 const pirateGameId = randomUUID();
-const roomMainId = randomUUID();
-const puzzleIds = Array.from({ length: 9 }, () => randomUUID());
+const roomMainId = 'room-pirate-main';
+const puzzleIds = [
+  'puzzle-pirate-intro-audio',
+  'puzzle-pirate-find-map',
+  'puzzle-pirate-skulls',
+  'puzzle-pirate-helms',
+  'puzzle-pirate-kraken',
+  'puzzle-pirate-swords',
+  'puzzle-pirate-map-chess',
+  'puzzle-pirate-dice',
+  'puzzle-pirate-music'
+];
 
 const pirateGame = {
   id: pirateGameId,
-  slug: 'pirate-mutany',
-  name: 'Pirate Mutany',
+  slug: 'pirate-mutiny',
+  name: 'Pirate Mutiny',
   description:
     "Break into the captain's quarters, recover the map, and claim the treasure before the crew returns.",
   story_intro:
@@ -36,7 +50,8 @@ const pirateGame = {
   max_players: 5,
   price_per_player_cents: 2000,
   resources_required: 1,
-  validation_notes: 'Enforce min/max participants, confirm resource availability, ensure room availability in booking window.'
+  validation_notes: 'Enforce min/max participants, confirm resource availability, ensure room availability in booking window.',
+  default_volume: 80
 };
 
 const piratePuzzles = [
@@ -118,15 +133,19 @@ const piratePuzzles = [
  * WARNING: Deletes all data from all tables.
  * Only use this when you explicitly want to reset the database.
  */
-export const clearAll = db.transaction(() => {
+export const clearAll = () => {
   const tables = [
     'session_hints',
+    'session_milestones',
     'session_puzzles',
     'timer_slugs',
     'sessions',
     'bookings',
+    'game_milestones',
     'game_puzzles',
     'rooms',
+    'asset_usage',
+    'assets',
     'games',
     'operator_auth_sessions',
     'operator_accounts',
@@ -137,33 +156,194 @@ export const clearAll = db.transaction(() => {
     'alerts',
     'system_logs'
   ];
-  for (const table of tables) {
-    try {
-      db.prepare(`DELETE FROM ${table}`).run();
-    } catch (error) {
-      if (error instanceof Error && error.message.includes('no such table')) {
-        continue;
+  db.exec('PRAGMA foreign_keys = OFF');
+  const run = db.transaction(() => {
+    for (const table of tables) {
+      try {
+        db.prepare(`DELETE FROM ${table}`).run();
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('no such table')) {
+          continue;
+        }
+        throw error;
       }
-      throw error;
     }
-  }
-});
+  });
+  run();
+  db.exec('PRAGMA foreign_keys = ON');
+};
 
 /**
  * Idempotent seed function - safe to run multiple times.
  * Only creates data that doesn't already exist.
  */
 export async function seedIdempotent() {
+  ensureMigrationsApplied();
+
+  // ============================================================================
+  // SEED DATABASE-DRIVEN RBAC (Roles, Permissions, Role-Permissions)
+  // ============================================================================
+
+  console.log('Seeding RBAC system...');
+
+  // Define permission labels and role mappings inline
+  const PERMISSION_LABELS: Record<string, string> = {
+    // Dashboard & Bookings
+    view_dashboard: 'View dashboard and status widgets',
+    view_bookings: 'View bookings calendar and manifests',
+    manage_bookings: 'Create, modify, and cancel bookings',
+    // Sessions & Games
+    view_sessions: 'View active sessions',
+    manage_sessions: 'Control live sessions and timers',
+    view_games: 'View game library and details',
+    manage_games: 'Edit game settings, puzzles, and rooms',
+    // Network
+    view_network: 'View network status and configuration',
+    manage_network: 'Modify network and WiFi settings',
+    // Users & RBAC
+    view_users: 'View operator list',
+    manage_users: 'Manage operator accounts',
+    view_roles: 'View roles and their permissions',
+    manage_roles: 'Create and modify custom roles',
+    view_permissions: 'View all available permissions',
+    manage_permissions: 'Assign permissions to roles',
+    archive_users: 'Archive and restore operator accounts',
+    // Assets & Storage
+    view_assets: 'View media assets',
+    manage_assets: 'Upload and manage media assets',
+    view_storage: 'View storage usage and metrics',
+    manage_storage: 'Delete assets and manage storage',
+    // Cameras
+    view_cameras: 'View camera feeds and status',
+    manage_cameras: 'Add, configure, and remove cameras',
+    // System & Logs
+    view_system_logs: 'View system logs and audit trail',
+    view_system_health: 'View system health and diagnostics',
+    manage_system_health: 'Restart services and manage system',
+    view_alert_rules: 'View alert rules',
+    manage_alert_rules: 'Configure alert rules and thresholds'
+  };
+
+  const ROLE_PERM_MAP: Record<string, string[]> = {
+    admin: Object.keys(PERMISSION_LABELS),
+    manager: [
+      'view_dashboard', 'view_bookings', 'manage_bookings',
+      'view_sessions', 'manage_sessions', 'view_games', 'manage_games',
+      'view_network',
+      'view_users', 'manage_users',
+      'view_assets', 'manage_assets', 'view_storage',
+      'view_cameras', 'manage_cameras',
+      'view_system_logs', 'view_system_health'
+    ],
+    game_master: [
+      'view_dashboard', 'view_bookings',
+      'view_sessions', 'manage_sessions', 'view_games',
+      'view_cameras',
+      'view_system_logs'
+    ],
+    customer: ['view_dashboard', 'view_bookings']
+  };
+
+  // 1. Seed 27 Permissions (idempotent)
+  const permissionCategories: Record<string, string> = {
+    view_dashboard: 'dashboard',
+    view_bookings: 'bookings',
+    manage_bookings: 'bookings',
+    view_sessions: 'sessions',
+    manage_sessions: 'sessions',
+    view_games: 'games',
+    manage_games: 'games',
+    view_network: 'network',
+    manage_network: 'network',
+    view_users: 'users',
+    manage_users: 'users',
+    view_roles: 'rbac',
+    manage_roles: 'rbac',
+    view_permissions: 'rbac',
+    manage_permissions: 'rbac',
+    archive_users: 'users',
+    view_assets: 'storage',
+    manage_assets: 'storage',
+    view_storage: 'storage',
+    manage_storage: 'storage',
+    view_cameras: 'cameras',
+    manage_cameras: 'cameras',
+    view_system_logs: 'system',
+    view_system_health: 'system',
+    manage_system_health: 'system',
+    view_alert_rules: 'system',
+    manage_alert_rules: 'system'
+  };
+
+  for (const [permName, permLabel] of Object.entries(PERMISSION_LABELS)) {
+    const existing = db.prepare('SELECT id FROM permissions WHERE name = ?').get(permName);
+    if (!existing) {
+      const permId = `perm-${permName}`;
+      db.prepare(`
+        INSERT INTO permissions (id, name, label, category, created_at)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `).run(permId, permName, permLabel, permissionCategories[permName] || 'system');
+      console.log(`  ✅ Created permission: ${permName}`);
+    }
+  }
+
+  // 2. Seed 4 System Roles (idempotent)
+  const systemRoles = [
+    { id: 'role-admin', name: 'admin', description: 'Full system access with all permissions' },
+    { id: 'role-manager', name: 'manager', description: 'Manage games, bookings, sessions, users, and cameras' },
+    { id: 'role-game-master', name: 'game_master', description: 'Run sessions, view games, and access cameras' },
+    { id: 'role-customer', name: 'customer', description: 'View dashboard and bookings only' }
+  ];
+
+  for (const role of systemRoles) {
+    const existing = db.prepare('SELECT id FROM roles WHERE name = ?').get(role.name);
+    if (!existing) {
+      db.prepare(`
+        INSERT INTO roles (id, name, description, is_system, created_at, updated_at)
+        VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).run(role.id, role.name, role.description);
+      console.log(`  ✅ Created role: ${role.name}`);
+    }
+  }
+
+  // 3. Seed Role-Permission Mappings (idempotent)
+  for (const [roleName, permissionNames] of Object.entries(ROLE_PERM_MAP)) {
+    const roleId = `role-${roleName.replace('_', '-')}`;
+
+    for (const permName of permissionNames) {
+      const permId = `perm-${permName}`;
+      const existing = db.prepare(`
+        SELECT id FROM role_permissions WHERE role_id = ? AND permission_id = ?
+      `).get(roleId, permId);
+
+      if (!existing) {
+        db.prepare(`
+          INSERT INTO role_permissions (id, role_id, permission_id, granted_at)
+          VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        `).run(randomUUID(), roleId, permId);
+      }
+    }
+    console.log(`  ✅ Mapped ${permissionNames.length} permissions to ${roleName}`);
+  }
+
+  console.log('✅ RBAC system seeded successfully\n');
+
+  // ============================================================================
+  // SEED ADMIN USER
+  // ============================================================================
+
   const authContext = await auth.$context;
   const adapter = authContext.internalAdapter;
 
   const adminEmail = 'admin@escapeplan.local';
   const adminPermissions = permissionsForRole('admin');
+  const adminRoleId = resolveRoleId('admin');
   const adminBio = 'Primary EscapePlan appliance administrator.';
   const adminBaseProfile = {
     name: 'System Administrator',
     username: 'admin',
     role: 'admin',
+    roleId: adminRoleId,
     bio: adminBio,
     mustResetPassword: false,
     emailVerified: true
@@ -182,7 +362,6 @@ export async function seedIdempotent() {
 
   const adminProfileUpdates = {
     ...adminBaseProfile,
-    permissions: adminPermissions,
     passwordHash: hashedPassword,
     image: JSON.stringify(defaultAvatarConfig) // Better Auth expects string, we stringify for compatibility
   };
@@ -198,6 +377,8 @@ export async function seedIdempotent() {
     adminId = adminUser.id;
 
     await adapter.updateUser(adminId, {
+      role: 'admin',
+      roleId: adminRoleId,
       permissions: adminPermissions
     });
 
@@ -211,40 +392,108 @@ export async function seedIdempotent() {
     console.log('Admin user already exists, updating password and permissions...');
     adminId = existingAdmin.user.id;
     await adapter.updatePassword(adminId, hashedPassword);
-    await adapter.updateUser(adminId, adminProfileUpdates);
+    await adapter.updateUser(adminId, {
+      ...adminProfileUpdates,
+      permissions: adminPermissions
+    });
   }
 
   // Seed game (idempotent)
-  const existingGame = db.prepare('SELECT id FROM games WHERE id = ?').get(pirateGame.id);
+  const existingGame = db
+    .prepare('SELECT id, slug FROM games WHERE slug IN (?, ?) LIMIT 1')
+    .get(pirateGame.slug, 'pirate-mutiny') as { id: string; slug: string } | undefined;
+
+  const gameId = existingGame?.id ?? pirateGame.id;
+  pirateGame.id = gameId as `${string}-${string}-${string}-${string}-${string}`;
+
   if (!existingGame) {
-    console.log('Creating Pirate Mutany game...');
+    console.log('Creating Pirate Mutiny game...');
     db.prepare(
-      `INSERT INTO games (id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories, min_players, max_players, price_per_player_cents, resources_required, validation_notes, created_at, updated_at)
-       VALUES (@id, @slug, @name, @description, @story_intro, @duration_minutes, @difficulty, @pricing_model, @category, @categories, @min_players, @max_players, @price_per_player_cents, @resources_required, @validation_notes, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+      `INSERT INTO games (
+         id, slug, name, description, story_intro, duration_minutes, difficulty,
+         pricing_model, category, categories, min_players, max_players,
+         price_per_player_cents, resources_required, validation_notes, default_volume,
+         created_at, updated_at
+       )
+       VALUES (
+         @id, @slug, @name, @description, @story_intro, @duration_minutes, @difficulty,
+         @pricing_model, @category, @categories, @min_players, @max_players,
+         @price_per_player_cents, @resources_required, @validation_notes, @default_volume,
+         CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+       )`
     ).run({
       ...pirateGame,
       category: 'Private'
     });
   } else {
-    console.log('Pirate Mutany game already exists, skipping...');
+    console.log('Pirate Mutiny game already exists, syncing metadata...');
+    if (existingGame.slug !== pirateGame.slug) {
+      db.prepare('UPDATE games SET slug = @slug WHERE id = @id').run({
+        id: pirateGame.id,
+        slug: pirateGame.slug
+      });
+    }
+    db.prepare(
+      `UPDATE games SET
+         name = @name,
+         description = @description,
+         story_intro = @story_intro,
+         duration_minutes = @duration_minutes,
+         difficulty = @difficulty,
+         pricing_model = @pricing_model,
+         category = @category,
+         categories = @categories,
+         min_players = @min_players,
+         max_players = @max_players,
+         price_per_player_cents = @price_per_player_cents,
+         resources_required = @resources_required,
+         validation_notes = @validation_notes,
+         default_volume = @default_volume,
+         updated_at = CURRENT_TIMESTAMP
+       WHERE id = @id`
+    ).run({
+      ...pirateGame,
+      category: 'Private'
+    });
   }
 
+  db.prepare('DELETE FROM games WHERE slug IN (@canonical, @legacy) AND id != @id').run({
+    canonical: pirateGame.slug,
+    legacy: 'pirate-mutiny',
+    id: pirateGame.id
+  });
+
   // Seed room (idempotent)
-  const existingRoom = db.prepare('SELECT id FROM rooms WHERE id = ?').get(roomMainId);
+  const existingRoom = db
+    .prepare('SELECT id FROM rooms WHERE game_id = ? AND name = ? LIMIT 1')
+    .get(pirateGame.id, 'Main') as { id: string } | undefined;
+
+  const roomId = existingRoom?.id ?? roomMainId;
+
   if (!existingRoom) {
     console.log('Creating Main room...');
     db.prepare(
       `INSERT INTO rooms (id, game_id, name, is_mobile_capable, theme_token)
        VALUES (@id, @game_id, @name, @is_mobile_capable, @theme_token)`
     ).run({
-      id: roomMainId,
+      id: roomId,
       game_id: pirateGame.id,
       name: 'Main',
       is_mobile_capable: 0,
       theme_token: 'escapeplan-pirate'
     });
   } else {
-    console.log('Main room already exists, skipping...');
+    console.log('Main room already exists, syncing metadata...');
+    db.prepare(
+      `UPDATE rooms SET
+         is_mobile_capable = @is_mobile_capable,
+         theme_token = @theme_token
+       WHERE id = @id`
+    ).run({
+      id: roomId,
+      is_mobile_capable: 0,
+      theme_token: 'escapeplan-pirate'
+    });
   }
 
   // Seed puzzles (idempotent)
