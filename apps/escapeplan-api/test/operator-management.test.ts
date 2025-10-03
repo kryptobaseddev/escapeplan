@@ -8,6 +8,18 @@ let server: FastifyInstance;
 let adminSessionCookie: string;
 let testOperatorId: string | null = null;
 
+function parseJsonField<T = unknown>(value: unknown): T | null {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
+    }
+  }
+  return value as T;
+}
+
 beforeAll(async () => {
   const { seedIdempotent } = await import('../src/db/seed.ts');
   await seedIdempotent();
@@ -71,8 +83,9 @@ describe('Operator Management with Better-Auth', () => {
 
     expect(operator.username).toBe(testUsername);
     expect(operator.role).toBe('manager');
-    expect(operator.avatarConfig).toBeDefined();
-    expect(operator.avatarConfig).toEqual(avatarConfig);
+    const operatorAvatar = parseJsonField(operator.avatarConfig);
+    expect(operatorAvatar).toBeDefined();
+    expect(operatorAvatar).toEqual(avatarConfig);
     expect(operator.bio).toBe('Test bio for operator');
 
     testOperatorId = operator.id;
@@ -109,7 +122,8 @@ describe('Operator Management with Better-Auth', () => {
     expect(response.statusCode).toBe(200);
     const operator = response.json() as OperatorSummary;
 
-    expect(operator.avatarConfig).toEqual(newAvatarConfig);
+    const operatorAvatar = parseJsonField(operator.avatarConfig);
+    expect(operatorAvatar).toEqual(newAvatarConfig);
 
     // Verify database persistence via Better-Auth adapter
     const dbRow = sqlite
@@ -198,7 +212,7 @@ describe('Operator Management with Better-Auth', () => {
 
     expect(adminRow.role).toBe('admin');
 
-    const permissions = JSON.parse(adminRow.permissions);
+    const permissions = parseJsonField<string[]>(adminRow.permissions) ?? [];
     expect(Array.isArray(permissions)).toBe(true);
     expect(permissions).toContain('manage_users');
     expect(permissions).toContain('manage_network');
@@ -212,7 +226,7 @@ describe('Operator Management with Better-Auth', () => {
 
     expect(adminRow.avatar_config).toBeDefined();
 
-    const avatarConfig = JSON.parse(adminRow.avatar_config!);
+    const avatarConfig = parseJsonField(adminRow.avatar_config);
     expect(avatarConfig).toHaveProperty('seed', 'admin');
     expect(avatarConfig).toHaveProperty('eyes');
     expect(avatarConfig).toHaveProperty('mouth');

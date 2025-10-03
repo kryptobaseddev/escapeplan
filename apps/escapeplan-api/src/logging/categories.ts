@@ -2,7 +2,7 @@
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 // Log categories
-export type LogCategory = 'session' | 'auth' | 'system' | 'network' | 'api';
+export type LogCategory = 'session' | 'auth' | 'system' | 'network' | 'api' | 'rbac';
 
 // Alert levels
 export type AlertLevel = 'info' | 'warning' | 'critical';

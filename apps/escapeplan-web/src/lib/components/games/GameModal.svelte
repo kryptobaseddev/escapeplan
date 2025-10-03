@@ -5,9 +5,13 @@
     GameDetails,
     GameHintDefinition,
     GameMediaConfig,
+    GameMilestone,
     GamePricingConfig,
     GamePuzzleDefinition,
     GameRoomDefinition,
+    MilestoneMediaType,
+    MilestoneTriggerType,
+    MilestoneType,
     SaveGameRequest
   } from '@escapeplan/contracts';
   import type { SubmitFunction } from '@sveltejs/kit';
@@ -15,6 +19,7 @@
   import HintModal from './HintModal.svelte';
   import AssetUpload from '../assets/AssetUpload.svelte';
   import AssetBrowser from '../assets/AssetBrowser.svelte';
+  import HelpTooltip from '../ui/HelpTooltip.svelte';
 
   type Mode = 'create' | 'edit';
 
@@ -37,7 +42,7 @@
   let dialogElement = $state<HTMLDialogElement | null>(null);
   let errorMessage = $state<string | null>(null);
   let initialised = $state(false);
-  type TabId = 'details' | 'media' | 'rooms' | 'puzzles' | 'pricing' | 'booking';
+  type TabId = 'details' | 'media' | 'rooms' | 'puzzles' | 'cameras' | 'pricing' | 'booking' | 'milestones';
 
   let activeTab = $state<TabId>('details');
 
@@ -46,15 +51,16 @@
     hints: EditableHint[];
   }
   interface EditableRoom extends GameRoomDefinition {}
-  interface EditableGame extends Omit<SaveGameRequest, 'rooms' | 'puzzles' | 'media' | 'pricing' | 'bookingRules'> {
+  interface EditableMilestone extends GameMilestone {}
+  interface EditableGame extends Omit<SaveGameRequest, 'rooms' | 'puzzles' | 'media' | 'pricing' | 'bookingRules' | 'milestones'> {
     rooms: EditableRoom[];
     puzzles: EditablePuzzle[];
     media: GameMediaConfig;
     pricing: GamePricingConfig;
     bookingRules: GameBookingRules;
+    milestones: EditableMilestone[];
   }
 
-  const defaultPricingModel: GamePricingConfig['model'] = 'per_person';
 
   let workingGame = $state<EditableGame>(createEmptyGame());
   let payloadJson = $state('');
@@ -68,6 +74,11 @@
   let editingHint = $state<{ puzzle: EditablePuzzle; hint: EditableHint | null } | null>(null);
   let activeHintTab = $state<Record<string, 'text' | 'image' | 'audio' | 'video'>>({});
 
+  // Milestone upload state
+  let milestoneFileInputs = $state<Record<string, HTMLInputElement | null>>({});
+  let milestoneUploading = $state<Record<string, boolean>>({});
+  let milestoneUploadErrors = $state<Record<string, string | null>>({});
+
   // Asset preview cache - maps asset IDs to asset objects for immediate preview
   let assetCache = $state<Record<string, { url: string; filename: string }>>({});
 
@@ -76,8 +87,10 @@
     { id: 'media', label: 'Images & Media' },
     { id: 'rooms', label: 'Rooms' },
     { id: 'puzzles', label: 'Puzzles & Hints' },
+    { id: 'cameras', label: 'Cameras' },
     { id: 'pricing', label: 'Pricing' },
-    { id: 'booking', label: 'Booking Rules' }
+    { id: 'booking', label: 'Booking Rules' },
+    { id: 'milestones', label: 'Milestones' }
   ];
 
   const difficultyOptions = [
@@ -131,18 +144,19 @@
       storyIntro: '',
       durationMinutes: 60,
       difficulty: 'Medium',
-      pricingModel: defaultPricingModel,
+      gameType: 'storefront',
       categories: [],
       minPlayers: 1,
       maxPlayers: 8,
-      pricePerPlayerCents: 0,
       resourcesRequired: 1,
       validationNotes: '',
+      defaultVolume: 80,
+      cameraIds: [],
       rooms: [],
       puzzles: [],
+      milestones: [],
       media: { galleryAssetIds: [] },
       pricing: {
-        model: defaultPricingModel,
         tiers: [],
         deposit: { required: false },
         discounts: []
@@ -167,28 +181,28 @@
       storyIntro: details.storyIntro ?? '',
       durationMinutes: details.durationMinutes,
       difficulty: details.difficulty,
-      pricingModel: details.pricingModel as GamePricingConfig['model'],
+      gameType: details.gameType,
       categories: [...(details.categories ?? [])],
       minPlayers: details.minPlayers,
       maxPlayers: details.maxPlayers,
-      pricePerPlayerCents: details.pricePerPlayerCents / 100,
       resourcesRequired: details.resourcesRequired,
       validationNotes: details.validationNotes ?? '',
+      defaultVolume: details.defaultVolume ?? 80,
+      cameraIds: [...(details.cameraIds ?? [])],
       rooms: details.rooms.map((room) => ({ ...room })),
       puzzles: details.puzzles.map((puzzle) => ({
         ...puzzle,
         hints: puzzle.hints ? puzzle.hints.map((hint) => ({ ...hint })) : []
       })),
+      milestones: details.milestones ? details.milestones.map((milestone) => ({ ...milestone })) : [],
       media: details.media ? { ...details.media, galleryAssetIds: [...(details.media.galleryAssetIds ?? [])] } : { galleryAssetIds: [] },
       pricing: details.pricing
         ? {
-            model: details.pricing.model,
             tiers: details.pricing.tiers ? details.pricing.tiers.map((tier) => ({ ...tier, priceCents: tier.priceCents / 100 })) : [],
             deposit: details.pricing.deposit ? { ...details.pricing.deposit, amountCents: details.pricing.deposit.amountCents ? details.pricing.deposit.amountCents / 100 : null } : undefined,
             discounts: details.pricing.discounts ? details.pricing.discounts.map((discount) => ({ ...discount, amountOffCents: discount.amountOffCents ? discount.amountOffCents / 100 : null })) : []
           }
         : {
-            model: defaultPricingModel,
             tiers: [],
             deposit: { required: false },
             discounts: []
@@ -272,6 +286,95 @@
       order: index + 1
     }));
     workingGame.puzzles = [...workingGame.puzzles]; // trigger Svelte reactivity
+  }
+
+  function createEmptyMilestone(): EditableMilestone {
+    return {
+      id: uid('milestone'),
+      gameId: '', // Will be set on save
+      type: 'intro',
+      name: 'Intro', // Default to Intro
+      mediaType: null,
+      content: null,
+      assetId: null,
+      volumeLevel: workingGame.defaultVolume || 80,
+      displayOrder: (workingGame.milestones.length ?? 0) + 1,
+      triggerType: 'manual',
+      triggerConfig: null,
+      enabled: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+  }
+
+  function addMilestone() {
+    workingGame.milestones = [...workingGame.milestones, createEmptyMilestone()];
+    applyMilestoneOrder();
+    updatePayload();
+  }
+
+  function deleteMilestone(index: number) {
+    workingGame.milestones = workingGame.milestones.filter((_, i) => i !== index);
+    applyMilestoneOrder();
+    updatePayload();
+  }
+
+  function moveMilestone(from: number, to: number) {
+    workingGame.milestones = moveItem(workingGame.milestones, from, to);
+    applyMilestoneOrder();
+    updatePayload();
+  }
+
+  function applyMilestoneOrder() {
+    workingGame.milestones = workingGame.milestones.map((milestone, index) => ({
+      ...milestone,
+      displayOrder: index + 1
+    }));
+  }
+
+  async function handleMilestoneFileUpload(milestone: EditableMilestone, event: Event) {
+    const target = event.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (!file) return;
+
+    // Need a saved game to upload assets
+    const gameId = game?.id || (mode === 'edit' ? workingGame.slug : null);
+    if (!gameId) {
+      milestoneUploadErrors[milestone.id] = 'Game must be saved before uploading milestone media';
+      return;
+    }
+
+    milestoneUploading[milestone.id] = true;
+    milestoneUploadErrors[milestone.id] = null;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const uploadUrl = `/api/assets/upload?gameId=${encodeURIComponent(gameId)}&assetType=milestone_media&mediaType=${milestone.mediaType}&milestoneId=${milestone.id}`;
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Upload failed' }));
+        throw new Error(errorData.message || `Upload failed with status ${response.status}`);
+      }
+
+      const result = await response.json();
+      milestone.assetId = result.asset.id;
+      milestoneUploadErrors[milestone.id] = null;
+      updatePayload();
+    } catch (error) {
+      console.error('Milestone asset upload failed:', error);
+      milestoneUploadErrors[milestone.id] = error instanceof Error ? error.message : 'Failed to upload file';
+      milestone.assetId = null;
+    } finally {
+      milestoneUploading[milestone.id] = false;
+    }
   }
 
   function resetState() {
@@ -620,13 +723,12 @@
 
     const pricing: GamePricingConfig | undefined = workingGame.pricing
       ? {
-          model: workingGame.pricing.model ?? defaultPricingModel,
           tiers: workingGame.pricing.tiers?.map((tier) => ({
+            ...tier,
             id: tier.id || uid('tier'),
-            label: tier.label,
             priceCents: Math.round((tier.priceCents ?? 0) * 100),
-            minPlayers: tier.minPlayers ?? null,
-            maxPlayers: tier.maxPlayers ?? null
+            basePriceCents: tier.basePriceCents ? Math.round(tier.basePriceCents * 100) : undefined,
+            additionalHourCents: tier.additionalHourCents ? Math.round(tier.additionalHourCents * 100) : undefined
           })) ?? [],
           deposit: workingGame.pricing.deposit
             ? {
@@ -661,6 +763,20 @@
         }
       : undefined;
 
+    const cleanMilestones = workingGame.milestones.map((milestone, index) => ({
+      ...(milestone.id ? { id: milestone.id } : {}),
+      type: milestone.type,
+      name: milestone.name.trim(),
+      mediaType: milestone.mediaType || null,
+      content: milestone.content?.trim() || null,
+      assetId: milestone.assetId || null,
+      volumeLevel: milestone.volumeLevel ?? 80,
+      displayOrder: milestone.displayOrder ?? index + 1,
+      triggerType: milestone.triggerType,
+      triggerConfig: milestone.triggerConfig || null,
+      enabled: milestone.enabled ?? true
+    }));
+
     const payload: SaveGameRequest = {
       slug: workingGame.slug.trim(),
       name: workingGame.name.trim(),
@@ -668,15 +784,17 @@
       storyIntro: workingGame.storyIntro?.trim() || undefined,
       durationMinutes: Number(workingGame.durationMinutes) || 60,
       difficulty: workingGame.difficulty.trim() || 'Medium',
-      pricingModel: workingGame.pricingModel ?? defaultPricingModel,
+      gameType: workingGame.gameType ?? 'storefront',
       categories: workingGame.categories.map((category) => category.trim()).filter(Boolean),
       minPlayers: Number(workingGame.minPlayers) || 1,
       maxPlayers: Number(workingGame.maxPlayers) || 1,
-      pricePerPlayerCents: Math.round((Number(workingGame.pricePerPlayerCents) || 0) * 100),
       resourcesRequired: Number(workingGame.resourcesRequired) || 1,
       validationNotes: workingGame.validationNotes?.trim() || undefined,
+      defaultVolume: workingGame.defaultVolume ?? 80,
+      cameraIds: workingGame.cameraIds ?? [],
       rooms: cleanRooms,
       puzzles: cleanPuzzles,
+      milestones: cleanMilestones,
       media,
       pricing,
       bookingRules
@@ -915,6 +1033,27 @@
                   <input class="input input-bordered" type="number" min="1" bind:value={workingGame.resourcesRequired} oninput={markDirty} />
                 </label>
               </div>
+              <label class="form-control">
+                <div class="label">
+                  <span class="label-text font-medium text-base">Default Audio Volume</span>
+                  <span class="label-text-alt text-base-content/60">
+                    Inherited by hints and milestones (can be overridden)
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  bind:value={workingGame.defaultVolume}
+                  class="range range-primary"
+                  oninput={markDirty}
+                />
+                <div class="flex justify-between text-xs px-2 mt-1">
+                  <span>Mute</span>
+                  <span class="font-medium text-primary">{workingGame.defaultVolume ?? 80}%</span>
+                  <span>Max</span>
+                </div>
+              </label>
               <label class="form-control">
                 <span class="label-text">Categories</span>
                 <div class="flex flex-wrap gap-2">
@@ -1421,6 +1560,40 @@
                 + Add puzzle
               </button>
             </div>
+          {:else if activeTab === 'cameras'}
+            <div class="space-y-4">
+              <div class="rounded-lg border border-white/10 bg-base-100/70 p-4">
+                <h3 class="text-sm font-semibold text-base-content mb-2">Associated Cameras</h3>
+                <p class="text-sm text-base-content/60 mb-4">
+                  Select cameras to display during this game's sessions
+                </p>
+
+                <div class="space-y-2">
+                  {#if !workingGame.cameraIds}
+                    <p class="text-sm text-base-content/60 italic">Loading cameras...</p>
+                  {:else if workingGame.cameraIds.length === 0}
+                    <div class="alert alert-info">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      <span>No cameras selected. Sessions will not have camera feeds.</span>
+                    </div>
+                  {:else}
+                    <div class="alert alert-success">
+                      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                      </svg>
+                      <span>{workingGame.cameraIds.length} camera(s) selected</span>
+                    </div>
+                  {/if}
+
+                  <div class="text-sm text-base-content/70 mt-4 p-3 bg-base-200/50 rounded-lg">
+                    <p class="font-medium mb-2">Note:</p>
+                    <p>Camera management and selection will be available in a future update. For now, cameras are associated automatically based on room configuration.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           {:else if activeTab === 'pricing'}
             <div class="space-y-4">
               <article class="grid gap-4 md:grid-cols-2">
@@ -1721,6 +1894,317 @@
                       >
                         Remove
                       </button>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
+              </section>
+            </div>
+
+          {:else if activeTab === 'milestones'}
+            <div class="space-y-4">
+              <div class="alert alert-info">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                </svg>
+                <div class="text-sm">
+                  <p class="font-semibold">Game Milestones</p>
+                  <p>Create special moments like intro videos, escape celebrations, or time-up messages that can be triggered automatically or manually during gameplay.</p>
+                </div>
+              </div>
+
+              <section class="rounded-xl border border-dashed border-white/10 bg-base-100/70 p-4">
+                <header class="mb-3 flex items-center justify-between gap-3">
+                  <h4 class="text-sm font-semibold text-base-content">Milestones ({workingGame.milestones.length})</h4>
+                  <button type="button" class="btn btn-xs btn-secondary" onclick={addMilestone}>
+                    + Add milestone
+                  </button>
+                </header>
+
+                {#if workingGame.milestones.length === 0}
+                  <p class="rounded-lg border border-white/5 bg-base-200/60 p-3 text-xs text-base-content/60">
+                    No milestones configured. Add milestones to create special moments during your game sessions.
+                  </p>
+                {/if}
+
+                <div class="space-y-3">
+                  {#each workingGame.milestones as milestone, index (milestone.id)}
+                    <div class="rounded-lg border border-white/10 bg-base-200/80 p-4">
+                      <div class="flex items-start justify-between gap-3 mb-4">
+                        <div class="flex-1">
+                          <div class="grid gap-3 md:grid-cols-2">
+                            <label class="form-control">
+                              <span class="label-text">Type *</span>
+                              <select
+                                class="select select-bordered select-sm"
+                                bind:value={milestone.type}
+                                onchange={(e) => {
+                                  const type = (e.currentTarget as HTMLSelectElement).value as MilestoneType;
+                                  milestone.type = type;
+                                  // Auto-fill name based on type (except custom)
+                                  if (type === 'intro') {
+                                    milestone.name = 'Intro';
+                                  } else if (type === 'escaped') {
+                                    milestone.name = 'Escaped';
+                                  } else if (type === 'failed') {
+                                    milestone.name = 'Failed';
+                                  }
+                                  // custom keeps whatever name user sets
+                                  markDirty();
+                                }}
+                              >
+                                <option value="intro">Intro</option>
+                                <option value="escaped">Escaped</option>
+                                <option value="failed">Failed</option>
+                                <option value="custom">Custom</option>
+                              </select>
+                            </label>
+                            <label class="form-control">
+                              <span class="label-text">Milestone name *</span>
+                              <input
+                                class="input input-bordered input-sm"
+                                type="text"
+                                bind:value={milestone.name}
+                                oninput={markDirty}
+                                placeholder={milestone.type === 'custom' ? 'Enter custom name' : milestone.name || 'Name'}
+                                required
+                                readonly={milestone.type !== 'custom'}
+                                class:input-disabled={milestone.type !== 'custom'}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                          <div class="flex flex-col gap-1">
+                            {#if index > 0}
+                              <button
+                                type="button"
+                                class="btn btn-xs btn-ghost"
+                                onclick={() => moveMilestone(index, index - 1)}
+                                title="Move up"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd" />
+                                </svg>
+                              </button>
+                            {/if}
+                            {#if index < workingGame.milestones.length - 1}
+                              <button
+                                type="button"
+                                class="btn btn-xs btn-ghost"
+                                onclick={() => moveMilestone(index, index + 1)}
+                                title="Move down"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                                </svg>
+                              </button>
+                            {/if}
+                          </div>
+                          <button
+                            type="button"
+                            class="btn btn-xs btn-ghost text-error"
+                            onclick={() => deleteMilestone(index)}
+                            title="Delete milestone"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                              <path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
+                      <label class="form-control mb-3">
+                        <span class="label-text">Content / Description</span>
+                        <textarea
+                          class="textarea textarea-bordered textarea-sm"
+                          rows={2}
+                          bind:value={milestone.content}
+                          oninput={markDirty}
+                          placeholder="Optional message or description for this milestone"
+                        ></textarea>
+                      </label>
+
+                      <div class="grid gap-3 md:grid-cols-2 mb-3">
+                        <label class="form-control">
+                          <span class="label-text">Media type</span>
+                          <select
+                            class="select select-bordered select-sm"
+                            value={milestone.mediaType ?? ''}
+                            onchange={(e) => {
+                              const val = (e.currentTarget as HTMLSelectElement).value;
+                              milestone.mediaType = val === '' ? null : (val as MilestoneMediaType);
+                              markDirty();
+                            }}
+                          >
+                            <option value="">None</option>
+                            <option value="text">Text</option>
+                            <option value="image">Image</option>
+                            <option value="audio">Audio</option>
+                            <option value="video">Video</option>
+                          </select>
+                        </label>
+
+                        {#if milestone.mediaType === 'audio' || milestone.mediaType === 'video'}
+                          <label class="form-control">
+                            <span class="label-text">Volume</span>
+                            <div class="flex items-center gap-2">
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                bind:value={milestone.volumeLevel}
+                                oninput={markDirty}
+                                class="range range-sm range-primary flex-1"
+                              />
+                              <span class="text-sm text-base-content/70 w-12 text-right">{milestone.volumeLevel}%</span>
+                            </div>
+                          </label>
+                        {/if}
+                      </div>
+
+                      {#if milestone.mediaType && milestone.mediaType !== 'text'}
+                        <div class="form-control mb-3">
+                          <span class="label-text">Media File</span>
+                          <input
+                            type="file"
+                            bind:this={milestoneFileInputs[milestone.id]}
+                            onchange={(e) => handleMilestoneFileUpload(milestone, e)}
+                            accept={milestone.mediaType === 'image' ? 'image/*' : milestone.mediaType === 'audio' ? 'audio/*' : 'video/*'}
+                            class="hidden"
+                          />
+
+                          <div class="mt-2">
+                            {#if !milestone.assetId}
+                              <button
+                                type="button"
+                                class="btn btn-outline btn-sm"
+                                onclick={() => milestoneFileInputs[milestone.id]?.click()}
+                                disabled={milestoneUploading[milestone.id]}
+                              >
+                                <svg class="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                  <path d="M5.5 13a3.5 3.5 0 01-.369-6.98 4 4 0 117.753-1.977A4.5 4.5 0 1113.5 13H11V9.413l1.293 1.293a1 1 0 001.414-1.414l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13H5.5z" />
+                                  <path d="M9 13h2v5a1 1 0 11-2 0v-5z" />
+                                </svg>
+                                Upload {milestone.mediaType}
+                              </button>
+                            {:else}
+                              <div class="flex items-center gap-2 rounded-lg border border-success/30 bg-success/10 px-3 py-2">
+                                <svg class="h-4 w-4 text-success" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                                </svg>
+                                <span class="text-sm text-success font-medium">Uploaded</span>
+                                <span class="text-xs text-base-content/60">ID: {milestone.assetId.slice(0, 8)}...</span>
+                                <button
+                                  type="button"
+                                  class="btn btn-xs btn-ghost ml-auto"
+                                  onclick={() => {
+                                    milestone.assetId = null;
+                                    if (milestoneFileInputs[milestone.id]) {
+                                      milestoneFileInputs[milestone.id]!.value = '';
+                                    }
+                                    markDirty();
+                                  }}
+                                >
+                                  Change
+                                </button>
+                              </div>
+                            {/if}
+                          </div>
+
+                          {#if milestoneUploadErrors[milestone.id]}
+                            <span class="label-text-alt text-error mt-1">{milestoneUploadErrors[milestone.id]}</span>
+                          {/if}
+                          {#if milestoneUploading[milestone.id]}
+                            <span class="label-text-alt text-info mt-1 flex items-center gap-2">
+                              <span class="loading loading-spinner loading-xs"></span>
+                              Uploading...
+                            </span>
+                          {/if}
+                        </div>
+                      {/if}
+
+                      <div class="divider my-3"></div>
+
+                      <div class="grid gap-3 md:grid-cols-2">
+                        <label class="form-control">
+                          <span class="label-text">Trigger type *</span>
+                          <select class="select select-bordered select-sm" bind:value={milestone.triggerType} onchange={markDirty}>
+                            <option value="manual">Manual (button in game runner)</option>
+                            <option value="timer">Timer-based (auto-trigger at time)</option>
+                            <option value="condition">Condition-based (auto-trigger on event)</option>
+                          </select>
+                        </label>
+
+                        <label class="form-control">
+                          <span class="label-text">Enabled</span>
+                          <div class="flex items-center gap-3 rounded-lg border border-white/10 bg-base-100/70 px-3 py-2">
+                            <input
+                              type="checkbox"
+                              class="toggle toggle-success toggle-sm"
+                              bind:checked={milestone.enabled}
+                              onchange={markDirty}
+                            />
+                            <span class="text-sm text-base-content/70">{milestone.enabled ? 'Active' : 'Disabled'}</span>
+                          </div>
+                        </label>
+                      </div>
+
+                      {#if milestone.triggerType === 'timer'}
+                        <div class="mt-3 grid gap-3 md:grid-cols-2">
+                          <label class="form-control">
+                            <span class="label-text">Trigger at (minutes)</span>
+                            <input
+                              class="input input-bordered input-sm"
+                              type="number"
+                              min="0"
+                              value={milestone.triggerConfig?.minutes ?? ''}
+                              oninput={(e) => {
+                                const val = Number((e.currentTarget as HTMLInputElement).value);
+                                milestone.triggerConfig = { ...milestone.triggerConfig, minutes: val || undefined };
+                                markDirty();
+                              }}
+                              placeholder="e.g., 5 = trigger at 5 min mark"
+                            />
+                          </label>
+                          <label class="form-control">
+                            <span class="label-text">Repeat interval (minutes)</span>
+                            <input
+                              class="input input-bordered input-sm"
+                              type="number"
+                              min="0"
+                              value={milestone.triggerConfig?.interval ?? ''}
+                              oninput={(e) => {
+                                const val = Number((e.currentTarget as HTMLInputElement).value);
+                                milestone.triggerConfig = { ...milestone.triggerConfig, interval: val || undefined };
+                                markDirty();
+                              }}
+                              placeholder="e.g., 10 = every 10 minutes"
+                            />
+                          </label>
+                        </div>
+                      {:else if milestone.triggerType === 'condition'}
+                        <div class="mt-3">
+                          <label class="form-control">
+                            <span class="label-text">Trigger after hints used</span>
+                            <input
+                              class="input input-bordered input-sm"
+                              type="number"
+                              min="0"
+                              value={milestone.triggerConfig?.hintsUsed ?? ''}
+                              oninput={(e) => {
+                                const val = Number((e.currentTarget as HTMLInputElement).value);
+                                milestone.triggerConfig = { ...milestone.triggerConfig, hintsUsed: val || undefined };
+                                markDirty();
+                              }}
+                              placeholder="e.g., 3 = trigger after 3 hints sent"
+                            />
+                          </label>
+                        </div>
+                      {/if}
+
+                      <div class="mt-3 rounded-lg bg-base-300/50 p-2 text-xs text-base-content/60">
+                        <strong>Order:</strong> #{milestone.displayOrder} | <strong>ID:</strong> {milestone.id}
                       </div>
                     </div>
                   {/each}

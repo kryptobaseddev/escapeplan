@@ -24,8 +24,11 @@ export const load: PageServerLoad = async (event) => {
 
 	const apiFetch = makeServerFetcher(event);
 
-	// Determine active tab from URL hash or default
-	const activeTab = url.hash.slice(1) || 'health';
+	const allowedTabs = new Set(['health', 'network', 'alerts', 'logs', 'storage']);
+	const requestedTab = url.searchParams.get('tab')?.toLowerCase() ?? '';
+	const activeTab = allowedTabs.has(requestedTab)
+		? (requestedTab as typeof requestedTab)
+		: 'health';
 
 	// Load data for all tabs in parallel
 	const [networkData, alertsData, logsData, storageData] = await Promise.allSettled([

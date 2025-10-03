@@ -113,17 +113,19 @@ export const games = sqliteTable('games', {
   story_intro: text('story_intro'),
   duration_minutes: integer('duration_minutes').notNull().default(60),
   difficulty: text('difficulty'),
-  pricing_model: text('pricing_model'),
+  game_type: text('game_type').notNull().default('storefront'), // 'storefront' | 'mobile'
+  pricing_model: text('pricing_model'), // DEPRECATED: Use pricing_config.tiers[].model instead
   category: text('category'),
   categories: text('categories', { mode: 'json' }), // JSON array
-  min_players: integer('min_players').notNull().default(1),
-  max_players: integer('max_players').notNull().default(1),
-  price_per_player_cents: integer('price_per_player_cents').notNull().default(0),
+  min_players: integer('min_players').notNull().default(1), // Room capacity minimum
+  max_players: integer('max_players').notNull().default(1), // Room capacity maximum
+  price_per_player_cents: integer('price_per_player_cents'), // DEPRECATED: Use pricing_config.tiers instead
   resources_required: integer('resources_required').notNull().default(1),
   validation_notes: text('validation_notes'),
   default_volume: integer('default_volume').notNull().default(80), // 0-100, game-wide default for all media
+  camera_ids: text('camera_ids', { mode: 'json' }).default(sql`'[]'`), // JSON array of camera IDs associated with this game
   media_config: text('media_config', { mode: 'json' }),
-  pricing_config: text('pricing_config', { mode: 'json' }),
+  pricing_config: text('pricing_config', { mode: 'json' }), // Enhanced: tiers with per-tier models
   booking_rules_config: text('booking_rules_config', { mode: 'json' }),
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -274,6 +276,44 @@ export const timerSlugs = sqliteTable('timer_slugs', {
 });
 
 // ============================================================================
+// DISCOUNT CODES
+// ============================================================================
+
+export const discountCodes = sqliteTable('discount_codes', {
+  id: text('id').primaryKey(),
+  code: text('code').notNull().unique(),
+  description: text('description'),
+  type: text('type').notNull(), // 'percent' | 'fixed_amount'
+  percent_off: integer('percent_off'), // 0-100
+  amount_off_cents: integer('amount_off_cents'),
+  valid_from: text('valid_from'),
+  valid_until: text('valid_until'),
+  max_uses: integer('max_uses'), // NULL = unlimited
+  current_uses: integer('current_uses').notNull().default(0),
+  applies_to: text('applies_to').notNull().default('all'), // 'all' | 'selected'
+  minimum_party_size: integer('minimum_party_size'),
+  notes: text('notes'),
+  created_by: text('created_by').notNull().references(() => operators.id),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  archived_at: text('archived_at')
+}, (table) => ({
+  codeIdx: index('idx_discount_codes_code').on(table.code),
+  activeIdx: index('idx_discount_codes_active').on(table.archived_at, table.valid_from, table.valid_until)
+}));
+
+export const discountCodeGames = sqliteTable('discount_code_games', {
+  id: text('id').primaryKey(),
+  discount_code_id: text('discount_code_id').notNull().references(() => discountCodes.id, { onDelete: 'cascade' }),
+  game_id: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  uniquePair: index('idx_discount_game_unique').on(table.discount_code_id, table.game_id),
+  codeIdx: index('idx_discount_game_code').on(table.discount_code_id),
+  gameIdx: index('idx_discount_game_game').on(table.game_id)
+}));
+
+// ============================================================================
 // ASSETS & STORAGE
 // ============================================================================
 
@@ -321,6 +361,57 @@ export const storageMetrics = sqliteTable('storage_metrics', {
   last_backup_at: text('last_backup_at'),
   recorded_at: text('recorded_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
+
+// System Health Snapshots - Real metrics from Node.js os module
+export const systemHealth = sqliteTable('system_health', {
+  id: text('id').primaryKey(),
+  cpu_usage_percent: integer('cpu_usage_percent').notNull(), // 0-100
+  memory_total_mb: integer('memory_total_mb').notNull(),
+  memory_used_mb: integer('memory_used_mb').notNull(),
+  disk_total_gb: integer('disk_total_gb').notNull(),
+  disk_used_gb: integer('disk_used_gb').notNull(),
+  uptime_seconds: integer('uptime_seconds').notNull(),
+  services_status: text('services_status', { mode: 'json' }).notNull(), // JSON: Array<{name, status, uptime, details}>
+  recorded_at: text('recorded_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  recordedIdx: index('idx_system_health_recorded').on(table.recorded_at)
+}));
+
+// Backup History - Track all backup operations
+export const backups = sqliteTable('backups', {
+  id: text('id').primaryKey(),
+  type: text('type').notNull(), // 'manual' | 'scheduled' | 'pre-update'
+  status: text('status').notNull(), // 'in_progress' | 'completed' | 'failed'
+  file_path: text('file_path'),
+  file_size_bytes: integer('file_size_bytes'),
+  includes: text('includes', { mode: 'json' }).notNull(), // JSON: { database, games, assets, logs }
+  destination: text('destination').notNull(), // 'local' | 'usb'
+  usb_device: text('usb_device'),
+  checksum_sha256: text('checksum_sha256'),
+  error_message: text('error_message'),
+  created_by: text('created_by').notNull().references(() => operators.id),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  completed_at: text('completed_at')
+}, (table) => ({
+  createdIdx: index('idx_backups_created').on(table.created_at),
+  statusIdx: index('idx_backups_status').on(table.status),
+  typeIdx: index('idx_backups_type').on(table.type)
+}));
+
+// USB Devices - Track connected USB drives for backups
+export const usbDevices = sqliteTable('usb_devices', {
+  id: text('id').primaryKey(),
+  device_path: text('device_path').notNull(), // /dev/sda1
+  mount_point: text('mount_point'), // /mnt/escapeplan-backup
+  label: text('label'),
+  total_space_gb: integer('total_space_gb'),
+  available_space_gb: integer('available_space_gb'),
+  is_mounted: integer('is_mounted', { mode: 'boolean' }).notNull().default(false),
+  last_seen: text('last_seen').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  devicePathIdx: index('idx_usb_devices_path').on(table.device_path),
+  mountedIdx: index('idx_usb_devices_mounted').on(table.is_mounted)
+}));
 
 // ============================================================================
 // NETWORK
@@ -405,6 +496,34 @@ export const alertRules = sqliteTable('alert_rules', {
 }));
 
 // ============================================================================
+// CAMERAS
+// ============================================================================
+
+export const cameras = sqliteTable('cameras', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  game_id: text('game_id').references(() => games.id, { onDelete: 'set null' }), // 1-to-1: camera can only be associated with one game
+  protocol: text('protocol').notNull(), // 'rtsp' | 'mjpeg' | 'onvif'
+  host: text('host').notNull(),
+  port: integer('port').notNull().default(554),
+  username: text('username'),
+  password_encrypted: text('password_encrypted'), // Encrypted with libsodium
+  stream_path: text('stream_path'),
+  resolution: text('resolution').default('720p'), // '480p' | '720p' | '1080p' | 'native'
+  frame_rate: integer('frame_rate').default(15),
+  transport: text('transport').default('tcp'), // 'tcp' | 'udp' | 'http'
+  status: text('status').default('offline'), // 'online' | 'offline' | 'testing' | 'error'
+  last_seen: text('last_seen'),
+  error_message: text('error_message'),
+  hls_streaming: integer('hls_streaming', { mode: 'boolean' }).default(false),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  gameIdIdx: index('idx_cameras_game').on(table.game_id),
+  statusIdx: index('idx_cameras_status').on(table.status)
+}));
+
+// ============================================================================
 // SCHEMA EXPORTS
 // ============================================================================
 
@@ -426,17 +545,29 @@ export const schema = {
   sessionHints,
   sessionMilestones,
   timerSlugs,
+  // Discount Codes
+  discountCodes,
+  discountCodeGames,
   // Assets & Storage
   assets,
   assetUsage,
   storageMetrics,
+  systemHealth,
+  backups,
+  usbDevices,
   // Network
   networkProfiles,
   networkHealth,
   // Logging & Alerting
   systemLogs,
   alerts,
-  alertRules
+  alertRules,
+  // Cameras
+  cameras,
+  // Database-driven RBAC
+  roles,
+  permissions,
+  rolePermissions
 };
 
 // Legacy export for Better Auth compatibility

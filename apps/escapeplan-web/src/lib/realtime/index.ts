@@ -26,8 +26,14 @@ interface InitialRealtimeState {
 }
 
 export function initializeRealtime(initial: InitialRealtimeState = {}) {
-  dashboardStore.set(initial.dashboard ?? null);
-  sessionsStore.set(initial.sessions ?? []);
+  // Only initialize stores if they're explicitly provided
+  // This prevents overwriting real-time updates when navigating between pages
+  if (initial.dashboard !== undefined) {
+    dashboardStore.set(initial.dashboard);
+  }
+  if (initial.sessions !== undefined) {
+    sessionsStore.set(initial.sessions);
+  }
   if (initial.bookings) {
     for (const calendar of initial.bookings) {
       upsertBookings(calendar);

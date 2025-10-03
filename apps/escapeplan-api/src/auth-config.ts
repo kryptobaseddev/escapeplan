@@ -5,7 +5,7 @@ import argon2 from 'argon2';
 import type { BetterAuthOptions } from 'better-auth';
 import type { OperatorPermission, OperatorRole } from '@escapeplan/contracts';
 import { db, sqlite } from './db/client.js';
-import { operatorAccounts, operatorAuthSessions, operatorVerifications, operators } from './db/schema.js';
+import { operatorAccounts, operatorAuthSessions, operatorVerifications, operators } from '@escapeplan/contracts';
 import { normalizePermissions, normalizeRole } from './security.js';
 
 const DEFAULT_BASE_URL = process.env.AUTH_BASE_URL ?? 'http://localhost:4000/api/auth';

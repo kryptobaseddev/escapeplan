@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import { eq, and, isNull, count, desc, sql } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { alerts, alertRules, sessionHints } from '../db/schema.js';
+import { alerts, alertRules, sessionHints } from '@escapeplan/contracts';
 import { logToDatabase } from './database.js';
 import type { AlertLevel, AlertCategory } from './categories.js';
 

@@ -31,6 +31,11 @@ export function getAssetSubPath(assetType: string, mediaType?: string): string {
       if (mediaType === 'audio') return 'audio/hint-media';
       if (mediaType === 'video') return 'video/hint-media';
       return 'images/hint-media'; // Default fallback
+    case 'milestone_media':
+      if (mediaType === 'image') return 'images/milestone-media';
+      if (mediaType === 'audio') return 'audio/milestone-media';
+      if (mediaType === 'video') return 'video/milestone-media';
+      return 'images/milestone-media'; // Default fallback
     default:
       throw new Error(`Unknown asset type: ${assetType}`);
   }
@@ -66,6 +71,11 @@ export function generateAssetFilename(params: {
   if (assetType === 'hint_media' && puzzleSlug && mediaType) {
     const orderStr = order ? `-${order}` : '';
     return `${gameSlug}-${puzzleSlug}-hint-${mediaType}${orderStr}-${uuid}.${extension}`;
+  }
+
+  // For milestone media
+  if (assetType === 'milestone_media' && mediaType) {
+    return `${gameSlug}-milestone-${mediaType}-${uuid}.${extension}`;
   }
 
   // For gallery (numbered)
@@ -104,7 +114,7 @@ export function getExtensionFromMime(mimeType: string): string {
  * Get allowed MIME types for asset type
  */
 export function getAllowedMimeTypes(assetType: string, mediaType?: string): string[] {
-  if (assetType === 'hint_media') {
+  if (assetType === 'hint_media' || assetType === 'milestone_media') {
     if (mediaType === 'image') {
       return ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     }
@@ -132,7 +142,7 @@ export function getMaxFileSize(assetType: string, mediaType?: string): number {
   const AUDIO_MAX = parseInt(process.env.MAX_AUDIO_SIZE_MB || '25', 10) * 1024 * 1024;
   const VIDEO_MAX = parseInt(process.env.MAX_VIDEO_SIZE_MB || '50', 10) * 1024 * 1024;
 
-  if (assetType === 'hint_media') {
+  if (assetType === 'hint_media' || assetType === 'milestone_media') {
     if (mediaType === 'image') return IMAGE_MAX;
     if (mediaType === 'audio') return AUDIO_MAX;
     if (mediaType === 'video') return VIDEO_MAX;

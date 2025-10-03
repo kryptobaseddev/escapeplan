@@ -27,6 +27,7 @@
   let partySize = $state(4);
   let durationMinutes = $state<number | string | null>(null);
   let notes = $state('');
+  let autoStartTimer = $state(true); // Auto-start timer by default
   let errorMessage = $state<string | null>(null);
   let submitting = $state(false);
   let occupiedRoomMap = $state(new Map<string, GameSessionDetails>());
@@ -169,7 +170,8 @@
       roomId: room.id,
       partySize: normalizedPartySize,
       durationMinutes: overrideMinutes && overrideMinutes > 0 ? overrideMinutes : undefined,
-      notes: notes.trim() ? notes.trim() : undefined
+      notes: notes.trim() ? notes.trim() : undefined,
+      autoStartTimer
     };
 
     submitting = true;
@@ -293,6 +295,22 @@
             placeholder="e.g., Walk-in birthday group"
           ></textarea>
         </label>
+
+        <div class="form-control">
+          <label class="label cursor-pointer justify-start gap-3">
+            <input
+              type="checkbox"
+              class="toggle toggle-primary"
+              bind:checked={autoStartTimer}
+            />
+            <div class="flex flex-col">
+              <span class="label-text font-medium">Auto-start timer</span>
+              <span class="label-text-alt text-xs text-base-content/60">
+                {autoStartTimer ? 'Timer will start immediately when session is created' : 'Timer will remain idle until manually started'}
+              </span>
+            </div>
+          </label>
+        </div>
 
         <footer class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={close}>Cancel</button>

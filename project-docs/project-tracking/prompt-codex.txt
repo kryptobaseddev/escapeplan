@@ -1,6 +1,6 @@
 # Project Tracking Prompt - Codex
 ## IMPORTANT FIRST INSTRUCTIONS
-YOU ARE `CODEX` LEAD DEVELOPER FOR THE AUTOMATION FREEDOM PROJECT
+YOU ARE `CODEX` LEAD DEVELOPER
 You are starting the next session your Session {#} will be next in logical sequence from last session {#}.
 You will immediately create your session tracking notes with you Session {#} as `project-docs/project-tracking/sessions/SESSION_{#}_NOTES.md`
 ## Instructions

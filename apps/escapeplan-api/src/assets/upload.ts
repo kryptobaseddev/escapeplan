@@ -1,5 +1,9 @@
 import path from 'node:path';
+import fs from 'node:fs/promises';
 import { sqlite } from '../db/client.js';
+import { db } from '../db/client.js';
+import { backups } from '@escapeplan/contracts';
+import { eq } from 'drizzle-orm';
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import {
   getAssetBasePath,
@@ -15,8 +19,9 @@ import { requireSession } from '../auth.js';
 
 export interface UploadAssetQuery {
   gameId: string;
-  assetType: 'thumbnail' | 'room_background' | 'gallery' | 'puzzle_media' | 'hint_media';
+  assetType: 'thumbnail' | 'room_background' | 'gallery' | 'puzzle_media' | 'hint_media' | 'milestone_media';
   puzzleId?: string;
+  milestoneId?: string;
   mediaType?: 'text' | 'image' | 'audio' | 'video';
   order?: number;
   isReusable?: boolean;
@@ -67,11 +72,11 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     });
   }
 
-  // Validate hint_media requires mediaType
-  if (assetType === 'hint_media' && !mediaType) {
+  // Validate hint_media and milestone_media require mediaType
+  if ((assetType === 'hint_media' || assetType === 'milestone_media') && !mediaType) {
     return reply.status(400).send({
       statusCode: 400,
-      message: 'mediaType is required for hint_media'
+      message: `mediaType is required for ${assetType}`
     });
   }
 
@@ -272,9 +277,115 @@ async function updateStorageMetrics() {
 }
 
 /**
+ * Scan filesystem for orphaned asset files (exist on disk but not in database)
+ */
+async function scanOrphanedFiles(): Promise<{ totalFiles: number; totalBytes: number }> {
+  const basePath = getAssetBasePath();
+
+  let orphanedFiles = 0;
+  let orphanedBytes = 0;
+
+  try {
+    // Get all assets from database
+    const dbAssets = sqlite.prepare('SELECT file_path, filename FROM assets').all() as Array<{ file_path: string; filename: string }>;
+    const dbFilePaths = new Set(dbAssets.map(a => a.file_path));
+
+    // Scan each asset subdirectory
+    const subdirs = ['images', 'audio', 'video'];
+    for (const subdir of subdirs) {
+      const dirPath = path.join(basePath, subdir);
+      try {
+        // Recursively scan subdirectories
+        const scanDir = async (dir: string, prefix: string = '') => {
+          const entries = await fs.readdir(dir, { withFileTypes: true });
+          for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            const relativePath = prefix ? path.join(prefix, entry.name) : entry.name;
+            const dbPath = path.join(subdir, relativePath);
+
+            if (entry.isDirectory()) {
+              await scanDir(fullPath, relativePath);
+            } else if (entry.isFile()) {
+              // Check if file exists in database
+              if (!dbFilePaths.has(dbPath)) {
+                const stats = await fs.stat(fullPath);
+                orphanedFiles++;
+                orphanedBytes += stats.size;
+              }
+            }
+          }
+        };
+
+        await scanDir(dirPath);
+      } catch (error) {
+        // Directory doesn't exist or can't be read, skip
+        console.warn(`Failed to scan ${dirPath}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('Failed to scan orphaned files:', error);
+  }
+
+  return { totalFiles: orphanedFiles, totalBytes: orphanedBytes };
+}
+
+/**
  * Get storage metrics
+ * Returns system disk usage + database size + backup metrics + asset-level metrics
  */
 export async function getStorageMetrics() {
+  // Get system disk usage
+  let systemDisk = {
+    totalBytes: 0,
+    usedBytes: 0,
+    availableBytes: 0
+  };
+
+  try {
+    const dataDir = path.resolve('./data');
+    const stats = await fs.statfs(dataDir);
+    const totalBytes = Number(stats.blocks) * Number(stats.bsize);
+    const availableBytes = Number(stats.bavail) * Number(stats.bsize);
+    const usedBytes = totalBytes - availableBytes;
+
+    systemDisk = {
+      totalBytes,
+      usedBytes,
+      availableBytes
+    };
+  } catch (error) {
+    console.error('Failed to get system disk stats:', error);
+    // Return fallback values on error
+    systemDisk = {
+      totalBytes: 68719476736, // 64 GB fallback
+      usedBytes: 0,
+      availableBytes: 68719476736
+    };
+  }
+
+  // Get database file sizes (active + backups)
+  let databaseActive = 0;
+  let databaseBackups = 0;
+  let backupCount = 0;
+
+  try {
+    const dbPath = path.resolve('./data/escapeplan.db');
+    const dbStats = await fs.stat(dbPath);
+    databaseActive = dbStats.size;
+  } catch (error) {
+    console.error('Failed to get database size:', error);
+  }
+
+  // Count completed backups
+  try {
+    const completedBackups = await db.select().from(backups).where(eq(backups.status, 'completed'));
+    backupCount = completedBackups.length;
+    databaseBackups = completedBackups.reduce((sum, b) => sum + (b.file_size_bytes || 0), 0);
+  } catch (error) {
+    console.error('Failed to get backup stats:', error);
+  }
+
+  // Get asset metrics
   const latest = sqlite.prepare('SELECT * FROM storage_metrics ORDER BY recorded_at DESC LIMIT 1').get() as {
     total_size_bytes: number;
     total_files: number;
@@ -285,66 +396,136 @@ export async function getStorageMetrics() {
   } | undefined;
 
   if (!latest) {
-    // No metrics yet, compute fresh
-    await updateStorageMetrics();
-    return getStorageMetrics();
+    // No metrics yet, compute fresh and store
+    try {
+      await updateStorageMetrics();
+      // Fetch the newly created record instead of recursing
+      const newLatest = sqlite.prepare('SELECT * FROM storage_metrics ORDER BY recorded_at DESC LIMIT 1').get() as typeof latest;
+      if (!newLatest) {
+        // Return minimal response if still no data
+        return {
+          total: systemDisk,
+          database: {
+            activeSizeBytes: databaseActive,
+            backupsSizeBytes: databaseBackups,
+            backupCount: backupCount
+          },
+          byType: {
+            images: { totalFiles: 0, totalBytes: 0 },
+            videos: { totalFiles: 0, totalBytes: 0 },
+            audio: { totalFiles: 0, totalBytes: 0 }
+          },
+          byGame: [],
+          lastBackupAt: null
+        };
+      }
+      // Continue with the new record
+      const byType = JSON.parse(newLatest.by_type);
+      const byGame = JSON.parse(newLatest.by_game);
+
+      return {
+        total: systemDisk,
+        database: {
+          activeSizeBytes: databaseActive,
+          backupsSizeBytes: databaseBackups,
+          backupCount: backupCount
+        },
+        byType: {
+          images: { totalFiles: byType.images?.count || 0, totalBytes: byType.images?.size || 0 },
+          videos: { totalFiles: byType.video?.count || 0, totalBytes: byType.video?.size || 0 },
+          audio: { totalFiles: byType.audio?.count || 0, totalBytes: byType.audio?.size || 0 }
+        },
+        byGame: [],
+        lastBackupAt: newLatest.last_backup_at
+      };
+    } catch (error) {
+      console.error('Failed to update storage metrics:', error);
+      // Return minimal response on error
+      return {
+        total: systemDisk,
+        database: {
+          activeSizeBytes: databaseActive,
+          backupsSizeBytes: databaseBackups,
+          backupCount: backupCount
+        },
+        byType: {
+          images: { totalFiles: 0, totalBytes: 0 },
+          videos: { totalFiles: 0, totalBytes: 0 },
+          audio: { totalFiles: 0, totalBytes: 0 }
+        },
+        byGame: [],
+        lastBackupAt: null
+      };
+    }
   }
 
   const byType = JSON.parse(latest.by_type);
   const byGame = JSON.parse(latest.by_game);
 
-  // Format bytes
-  const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-  };
-
-  // Get game names for by_game data
+  // Get game names for by_game data + count orphaned assets in database
   const gameIds = Object.keys(byGame);
-  const gamesData: Array<{ id: string; name: string; count: number; size: number; sizeFormatted: string }> = [];
+  const gamesData: Array<{ gameName: string | null; totalFiles: number; totalBytes: number }> = [];
+
+  // Count orphaned assets (no game_id in database)
+  const allAssets = sqlite.prepare('SELECT * FROM assets').all() as Array<{ game_id: string | null; size_bytes: number }>;
+  const orphanedDbAssets = allAssets.filter(a => !a.game_id);
+  const orphanedDbCount = orphanedDbAssets.length;
+  const orphanedDbSize = orphanedDbAssets.reduce((sum, a) => sum + a.size_bytes, 0);
 
   for (const gameId of gameIds) {
     const game = sqlite.prepare('SELECT name FROM games WHERE id = ?').get(gameId) as { name: string } | undefined;
-    if (game) {
-      gamesData.push({
-        id: gameId,
-        name: game.name,
-        count: byGame[gameId].count,
-        size: byGame[gameId].size,
-        sizeFormatted: formatBytes(byGame[gameId].size)
-      });
-    }
+    gamesData.push({
+      gameName: game?.name || null,
+      totalFiles: byGame[gameId].count,
+      totalBytes: byGame[gameId].size
+    });
   }
 
+  // Scan filesystem for orphaned files (not in database at all)
+  const orphanedFs = await scanOrphanedFiles();
+
+  // Add orphaned database assets if any exist
+  if (orphanedDbCount > 0) {
+    gamesData.push({
+      gameName: '(Unassigned Assets)',
+      totalFiles: orphanedDbCount,
+      totalBytes: orphanedDbSize
+    });
+  }
+
+  // Add orphaned filesystem files if any exist
+  if (orphanedFs.totalFiles > 0) {
+    gamesData.push({
+      gameName: '(Ghost Files - Not in DB)',
+      totalFiles: orphanedFs.totalFiles,
+      totalBytes: orphanedFs.totalBytes
+    });
+  }
+
+  // Return format for frontend (total = system disk, separate db and assets)
   return {
-    total: {
-      size: latest.total_size_bytes,
-      files: latest.total_files,
-      sizeFormatted: formatBytes(latest.total_size_bytes)
+    total: systemDisk,
+    database: {
+      activeSizeBytes: databaseActive,
+      backupsSizeBytes: databaseBackups,
+      backupCount: backupCount
     },
     byType: {
       images: {
-        count: byType.images?.count || 0,
-        size: byType.images?.size || 0,
-        sizeFormatted: formatBytes(byType.images?.size || 0)
+        totalFiles: byType.images?.count || 0,
+        totalBytes: byType.images?.size || 0
+      },
+      videos: {
+        totalFiles: byType.video?.count || 0,
+        totalBytes: byType.video?.size || 0
       },
       audio: {
-        count: byType.audio?.count || 0,
-        size: byType.audio?.size || 0,
-        sizeFormatted: formatBytes(byType.audio?.size || 0)
-      },
-      video: {
-        count: byType.video?.count || 0,
-        size: byType.video?.size || 0,
-        sizeFormatted: formatBytes(byType.video?.size || 0)
+        totalFiles: byType.audio?.count || 0,
+        totalBytes: byType.audio?.size || 0
       }
     },
     byGame: gamesData,
-    lastBackup: latest.last_backup_at,
-    recordedAt: latest.recorded_at
+    lastBackupAt: latest.last_backup_at
   };
 }
 

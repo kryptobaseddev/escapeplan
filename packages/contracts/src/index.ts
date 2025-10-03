@@ -1,8 +1,31 @@
+// Import Zod-inferred types for use in this file
+import type {
+  GameHintDefinition,
+  GamePuzzleDefinition,
+  GameRoomDefinition,
+  GameMediaConfig,
+  GamePricingConfig,
+  GameBookingRules,
+  SaveGameRequest
+} from './validation.js';
+
 export type NetworkHealth = 'online' | 'degraded' | 'offline';
 export type SessionStatus = 'upcoming' | 'running' | 'paused' | 'completed';
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'completed';
 
 export type OperatorRole = 'admin' | 'manager' | 'game_master' | 'customer';
+
+export type PermissionCategory =
+  | 'dashboard'
+  | 'bookings'
+  | 'sessions'
+  | 'games'
+  | 'network'
+  | 'users'
+  | 'rbac'
+  | 'storage'
+  | 'cameras'
+  | 'system';
 
 // DiceBear Bottts avatar configuration
 export interface BotttsAvatarConfig {
@@ -114,6 +137,7 @@ export interface QuickStartSessionRequest {
   partySize: number;
   durationMinutes?: number | null;
   notes?: string | null;
+  autoStartTimer?: boolean; // If true, timer starts immediately; if false/undefined, timer stays idle
 }
 
 export interface ChangeOwnPasswordRequest {
@@ -321,72 +345,12 @@ export interface CommandResponse {
   message?: string;
 }
 
-export interface GamePuzzleDefinition {
-  id: string;
-  title: string;
-  description?: string;
-  solution?: string;
-  mediaAsset?: string;
-  operatorActions?: string;
-  displayOrder: number;
-  hints?: GameHintDefinition[];
-  mediaMeta?: Record<string, unknown> | null;
-}
+// NOTE: Game-related types (GamePuzzleDefinition, GameRoomDefinition, GameMediaConfig, etc.)
+// are now inferred from Zod schemas in validation.ts and exported from there.
+// These old interface definitions have been removed to avoid conflicts with Zod types.
 
-export interface GameRoomDefinition {
-  id: string;
-  name: string;
-  description?: string;
-  slug?: string;
-  isMobileCapable: boolean;
-  themeToken?: string;
-  capacity?: number;
-}
-
-export interface GameMediaConfig {
-  thumbnailAssetId?: string | null;
-  roomScreenAssetId?: string | null;
-  galleryAssetIds: string[];
-}
-
-export type PricingModel = 'per_person' | 'per_session' | 'per_hour';
-
-export interface GamePricingTier {
-  id: string;
-  label: string;
-  priceCents: number;
-  minPlayers?: number | null;
-  maxPlayers?: number | null;
-}
-
-export interface GameDiscountRule {
-  code: string;
-  percentOff?: number | null;
-  amountOffCents?: number | null;
-  expiresAt?: string | null;
-  notes?: string | null;
-}
-
-export interface GamePricingConfig {
-  model: PricingModel;
-  tiers: GamePricingTier[];
-  deposit?: {
-    required: boolean;
-    type?: 'flat' | 'percent';
-    amountCents?: number | null;
-  };
-  discounts: GameDiscountRule[];
-}
-
-export interface GameBookingRules {
-  isMobile?: boolean;
-  locationNotes?: string | null;
-  travelBufferMinutes?: number | null;
-  equipmentChecklist: string[];
-  reservationStyle: 'public' | 'private';
-  cancellationPolicy?: string | null;
-  customFields?: Array<{ label: string; required: boolean }>;
-}
+export type PricingModel = 'per_person' | 'flat_rate' | 'dynamic';
+export type GameType = 'storefront' | 'mobile';
 
 export interface GameDetails {
   id: string;
@@ -396,14 +360,16 @@ export interface GameDetails {
   storyIntro?: string;
   durationMinutes: number;
   difficulty: string;
-  pricingModel: PricingModel;
+  gameType: GameType;
+  pricingModel?: PricingModel; // DEPRECATED: Use pricing.tiers[].model instead
   categories: string[];
-  minPlayers: number;
-  maxPlayers: number;
-  pricePerPlayerCents: number;
+  minPlayers: number; // Room capacity minimum
+  maxPlayers: number; // Room capacity maximum
+  pricePerPlayerCents?: number; // DEPRECATED: Use pricing.tiers instead
   resourcesRequired: number;
   validationNotes?: string;
   defaultVolume: number; // 0-100, game-wide default for all media
+  cameraIds: string[]; // Array of camera IDs associated with this game
   media?: GameMediaConfig;
   pricing?: GamePricingConfig;
   bookingRules?: GameBookingRules;
@@ -417,38 +383,9 @@ export interface GameDetails {
   rooms: GameRoomDefinition[];
 }
 
-export interface SaveGameRequest {
-  slug: string;
-  name: string;
-  description: string;
-  storyIntro?: string;
-  durationMinutes: number;
-  difficulty: string;
-  pricingModel: PricingModel;
-  categories: string[];
-  minPlayers: number;
-  maxPlayers: number;
-  pricePerPlayerCents: number;
-  resourcesRequired: number;
-  validationNotes?: string;
-  defaultVolume?: number; // 0-100, game-wide default volume
-  puzzles: GamePuzzleDefinition[];
-  rooms: GameRoomDefinition[];
-  media?: GameMediaConfig;
-  pricing?: GamePricingConfig;
-  bookingRules?: GameBookingRules;
-  milestones?: Omit<GameMilestone, 'id' | 'gameId' | 'createdAt' | 'updatedAt'>[]; // Milestone definitions
-}
+// NOTE: SaveGameRequest is now inferred from Zod in validation.ts
 
-export interface GameHintDefinition {
-  uuid: string;
-  type: HintMedium;
-  content: string;
-  assetUrl?: string;
-  volumeLevel?: number; // 0-100, overrides asset/game default
-  order: number;
-  countAsHint?: boolean;
-}
+// NOTE: GameHintDefinition is now inferred from Zod in validation.ts
 
 // Game Milestone types
 export type MilestoneType = 'intro' | 'escaped' | 'failed' | 'custom';
@@ -764,6 +701,120 @@ export interface GetPermissionsResponse {
 // All roles and permissions are stored in the database (roles, permissions, role_permissions tables)
 
 // ============================================================================
+// CAMERAS
+// ============================================================================
+
+export type CameraProtocol = 'rtsp' | 'mjpeg' | 'onvif';
+export type CameraResolution = '480p' | '720p' | '1080p' | 'native';
+export type CameraTransport = 'tcp' | 'udp' | 'http';
+export type CameraStatus = 'online' | 'offline' | 'testing' | 'error';
+
+export interface Camera {
+  id: string;
+  name: string;
+  gameId?: string | null; // 1-to-1 association with game
+  protocol: CameraProtocol;
+  host: string;
+  port: number;
+  username?: string | null;
+  passwordEncrypted?: string | null; // Never expose plain password
+  streamPath?: string | null;
+  resolution: CameraResolution;
+  frameRate: number;
+  transport: CameraTransport;
+  status: CameraStatus;
+  lastSeen?: string | null;
+  errorMessage?: string | null;
+  hlsStreaming: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CameraSummary {
+  id: string;
+  name: string;
+  gameId?: string | null;
+  gameName?: string | null; // Populated from join
+  protocol: CameraProtocol;
+  host: string;
+  port: number;
+  status: CameraStatus;
+  lastSeen?: string | null;
+  hlsStreaming: boolean;
+}
+
+export interface CreateCameraRequest {
+  name: string;
+  gameId?: string | null;
+  protocol: CameraProtocol;
+  host: string;
+  port?: number;
+  username?: string | null;
+  password?: string | null; // Plain password, will be encrypted server-side
+  streamPath?: string | null;
+  resolution?: CameraResolution;
+  frameRate?: number;
+  transport?: CameraTransport;
+}
+
+export interface UpdateCameraRequest {
+  name?: string;
+  gameId?: string | null; // Can reassign to different game
+  protocol?: CameraProtocol;
+  host?: string;
+  port?: number;
+  username?: string | null;
+  password?: string | null; // If provided, will be re-encrypted
+  streamPath?: string | null;
+  resolution?: CameraResolution;
+  frameRate?: number;
+  transport?: CameraTransport;
+}
+
+export interface TestCameraConnectionRequest {
+  protocol: CameraProtocol;
+  host: string;
+  port: number;
+  username?: string | null;
+  password?: string | null;
+  streamPath?: string | null;
+}
+
+export interface TestCameraConnectionResponse {
+  success: boolean;
+  previewUrl?: string; // 5-second clip URL if successful
+  errorMessage?: string;
+  diagnostics?: {
+    reachable: boolean;
+    authValid: boolean;
+    streamAvailable: boolean;
+    resolution?: string;
+    frameRate?: number;
+  };
+}
+
+export interface StartCameraStreamRequest {
+  cameraId: string;
+}
+
+export interface StopCameraStreamRequest {
+  cameraId: string;
+}
+
+export interface CameraStreamStatus {
+  cameraId: string;
+  streaming: boolean;
+  hlsUrl?: string;
+  bitrate?: number;
+  fps?: number;
+  errorMessage?: string;
+}
+
+export interface GetCamerasResponse {
+  cameras: CameraSummary[];
+}
+
+// ============================================================================
 // ROLE AND PERMISSION LABELS (for UI display)
 // ============================================================================
 
@@ -834,3 +885,13 @@ export const ROLE_PERMISSIONS: Record<OperatorRole, OperatorPermission[]> = {
     'view_dashboard', 'view_bookings'
   ]
 };
+
+// ============================================================================
+// DRIZZLE SCHEMA & ZOD VALIDATION
+// ============================================================================
+
+// Export Drizzle schema tables (for API database operations)
+export * from './schema.js';
+
+// Export Zod validation schemas and inferred types (for API request validation)
+export * from './validation.js';

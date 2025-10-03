@@ -24,10 +24,13 @@ const getAssetBasePath = () => {
 │   ├── room-backgrounds/     # Room display backgrounds
 │   ├── gallery/              # Booking gallery images
 │   ├── puzzle-media/         # Puzzle reference images
+│   ├── milestone-media/      # Milestone reference images
 │   └── hint-media/           # Hint images
 ├── audio/
+│   ├── milestone-media/      # Milestone audio files
 │   └── hint-media/           # Hint audio files
 └── video/
+    ├── milestone-media/      # Milestone reference videos
     └── hint-media/           # Hint video files
 ```
 
@@ -42,7 +45,7 @@ CREATE TABLE assets (
   mime_type TEXT NOT NULL,                -- e.g., 'image/jpeg', 'audio/mpeg'
   size_bytes INTEGER NOT NULL,
   asset_type TEXT NOT NULL,               -- 'thumbnail' | 'room_background' | 'gallery' |
-                                          -- 'puzzle_media' | 'hint_media'
+                                          -- 'puzzle_media' | 'hint_media' | 'milestone_media'
   media_type TEXT,                        -- For hint_media: 'text' | 'image' | 'audio' | 'video'
   file_path TEXT NOT NULL,                -- Relative: 'images/thumbnails/{filename}'
   game_id TEXT,                           -- REFERENCES games(id) - nullable for reusable assets
@@ -71,7 +74,7 @@ CREATE TABLE asset_usage (
   asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
   used_in_game_id TEXT REFERENCES games(id) ON DELETE CASCADE,
   used_in_puzzle_id TEXT REFERENCES game_puzzles(id) ON DELETE CASCADE,
-  usage_type TEXT NOT NULL,  -- 'thumbnail' | 'room_bg' | 'gallery' | 'puzzle' | 'hint'
+  usage_type TEXT NOT NULL,  -- 'thumbnail' | 'room_bg' | 'gallery' | 'puzzle' | 'hint' | 'milestone'
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 ```
@@ -150,9 +153,9 @@ POST /api/assets/upload
 
 Query params:
 - gameId: string (required)
-- assetType: 'thumbnail' | 'room_background' | 'gallery' | 'puzzle_media' | 'hint_media'
+- assetType: 'thumbnail' | 'room_background' | 'gallery' | 'puzzle_media' | 'hint_media' | 'milestone_media'
 - puzzleId?: string (required for puzzle/hint media)
-- mediaType?: 'text' | 'image' | 'audio' | 'video' (required for hint_media)
+- mediaType?: 'text' | 'image' | 'audio' | 'video' (required for hint_media/milestone_media)
 - order?: number (for hints)
 - isReusable?: boolean (default: false)
 
@@ -421,11 +424,23 @@ MAX_VIDEO_SIZE_MB=50
 
 ```typescript
 ✅ POST   /api/assets/upload              # Upload new asset
+✅ GET    /api/assets/:id                 # Get single asset by ID
 ✅ DELETE /api/assets/:id                 # Delete asset and file
-✅ GET    /api/assets/list                # List assets (with filters)
+✅ GET    /api/assets/list                # List assets (with filters) - RETURNS ARRAY
 ✅ POST   /api/assets/link                # Link reusable asset to game
-✅ GET    /api/admin/storage/metrics      # Get storage metrics
-🚧 POST   /api/admin/storage/backup       # Trigger manual backup (not implemented)
+✅ GET    /api/admin/storage/metrics      # Get storage metrics (enhanced with orphaned file scan)
+✅ POST   /api/admin/backups              # Trigger manual backup
+✅ GET    /api/admin/backups              # List backups
+✅ DELETE /api/admin/backups/:id          # Delete backup
+🚧 GET    /api/admin/usb-devices          # USB device scan (endpoint exists, not implemented)
+```
+
+**IMPORTANT**: `/api/assets/list` returns an array of assets directly, NOT `{ assets: [] }`.
+
+Frontend components must handle:
+```typescript
+const result = await apiFetch<AssetRecord[]>(fetch, '/assets/list?...');
+// result is AssetRecord[], not { assets: AssetRecord[] }
 ```
 
 ### Implementation Details
@@ -458,9 +473,64 @@ MAX_VIDEO_SIZE_MB=50
 - Requires authentication
 - Returns: `{ total: { size, files, sizeFormatted }, byType: {...}, byGame: [...], lastBackup, recordedAt }`
 
+## Storage Metrics & Monitoring
+
+### Enhanced Metrics (Session 47+)
+
+The storage metrics system now includes:
+
+1. **System Disk Usage** - Total/used/available bytes via `fs.statfs()`
+2. **Database Breakdown**:
+   - `activeSizeBytes` - Current size of escapeplan.db
+   - `backupsSizeBytes` - Combined size of all completed backups
+   - `backupCount` - Number of completed backup records
+3. **Asset Metrics by Type** (from database):
+   - Images: count + total bytes
+   - Audio: count + total bytes
+   - Video: count + total bytes
+4. **Asset Metrics by Game**:
+   - Per-game breakdown with file counts and sizes
+   - `(Unassigned Assets)` - Assets with `game_id = null`
+   - `(Ghost Files - Not in DB)` - Files in /assets/ that aren't in database
+5. **Orphaned File Detection**:
+   - Scans filesystem directories (images/, audio/, video/)
+   - Compares against database asset records
+   - Reports files that exist on disk but not in DB
+
+### API Response Format
+
+```typescript
+GET /api/admin/storage/metrics
+
+Response:
+{
+  total: {
+    totalBytes: number,
+    usedBytes: number,
+    availableBytes: number
+  },
+  database: {
+    activeSizeBytes: number,      // escapeplan.db size
+    backupsSizeBytes: number,      // Sum of all backup file sizes
+    backupCount: number            // Count of completed backups
+  },
+  byType: {
+    images: { totalFiles: number, totalBytes: number },
+    videos: { totalFiles: number, totalBytes: number },
+    audio: { totalFiles: number, totalBytes: number }
+  },
+  byGame: [
+    { gameName: string, totalFiles: number, totalBytes: number },
+    { gameName: "(Unassigned Assets)", ... },          // Assets without game_id
+    { gameName: "(Ghost Files - Not in DB)", ... }      // Files on disk not in DB
+  ],
+  lastBackupAt: string | null
+}
+```
+
 ## Implementation Status
 
-### ✅ Completed (Sessions 26 & 27)
+### ✅ Completed (Sessions 26, 27, 47)
 
 #### Session 26: Foundation
 1. **Database Schema** - `apps/escapeplan-api/src/db/client.ts`
@@ -542,7 +612,33 @@ MAX_VIDEO_SIZE_MB=50
    - ✅ Proper URL storage from backend
    - ✅ Integration with GameModal component
 
-### 🚧 Remaining Work (Next Session)
+#### Session 47: Storage Dashboard & Asset Library
+8. **Storage Dashboard Complete** - `apps/escapeplan-web/src/routes/(app)/admin/system/StorageTab.svelte`
+   - ✅ Three-tab interface (Overview, Asset Library, Backups)
+   - ✅ System disk usage display with radial progress
+   - ✅ Database breakdown (active + backups with counts)
+   - ✅ Asset breakdown by type (Images/Videos/Audio)
+   - ✅ Asset breakdown by game (including unassigned + ghost files)
+   - ✅ Manual backup trigger button with loading states
+   - ✅ Success/error messaging for backup operations
+   - ✅ Refresh metrics button
+
+9. **Asset Library Component** - `apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte`
+   - ✅ Grid display of all assets with thumbnails
+   - ✅ Search by filename functionality (debounced)
+   - ✅ Filter by asset type (Images/Audio/Video)
+   - ✅ Support for both camelCase and snake_case API fields
+   - ✅ Loading/error states
+   - ✅ Asset selection callback support
+   - ✅ Reusable badge display
+
+10. **Enhanced Storage Metrics** - `apps/escapeplan-api/src/assets/upload.ts`
+    - ✅ Filesystem scanning for orphaned files (not in DB)
+    - ✅ Database backup size calculation from backups table
+    - ✅ Backup count tracking
+    - ✅ Ghost file detection and reporting
+
+### 🚧 Remaining Work (Future)
 
 #### Frontend (Priority)
 1. **GameModal Media Tab** - Upload for thumbnails, room backgrounds, gallery
@@ -552,27 +648,28 @@ MAX_VIDEO_SIZE_MB=50
    - Support reusable asset selection
 
 2. **Asset Upload Component** - Reusable drag & drop component
-   - Drag & drop zone
-   - File picker
-   - Upload progress
+   - Drag & drop zone (currently basic file input)
+   - Enhanced upload progress
    - Preview on success
-   - Error handling
+   - Better error handling
 
-3. **Asset Selection UI** - Browse and link existing assets
-   - Tab: Current Game Assets
-   - Tab: Reusable Assets
-   - Preview grid
-   - Select/link functionality
+3. **Asset Management Actions**
+   - Delete asset button in Asset Library
+   - Download asset functionality
+   - Bulk asset operations
+   - Asset metadata editing
 
-4. **Storage Dashboard** - Admin metrics page
-   - Display metrics (total size, file count)
-   - Breakdown by type
-   - Breakdown by game
-   - Last backup status
+4. **Backup Management UI**
+   - Display backup list in Backups tab
+   - Restore backup functionality
+   - Download backup files
+   - Delete old backups
 
 #### Backend (Optional)
-5. **Manual Backup Trigger**
-   - `POST /api/admin/storage/backup` - Trigger manual backup job
+5. **USB Backup Support**
+   - Implement USB device detection (`GET /api/admin/usb-devices`)
+   - Support `destination: 'usb'` in backup creation
+   - Mount/unmount USB devices safely
 
 #### DevOps
 6. **Backup Automation**
@@ -599,9 +696,10 @@ For **operational configuration and usage**, see: `apps/escapeplan-api/docs/ASSE
 
 ## Current Status
 
-**Backend:** ✅ Complete
-**Frontend:** 🟡 Partial (hint upload works, game media uploads pending)
-**DevOps:** 🚧 Pending (backup automation not yet implemented)
+**Backend:** ✅ Complete (including orphaned file scanning)
+**Frontend:** ✅ Storage Dashboard Complete + Asset Library Functional
+**Backup System:** ✅ Manual Triggers Working
+**DevOps:** 🚧 Pending (automated backup scripts not yet implemented)
 
 ## Recent Updates
 
@@ -618,8 +716,17 @@ For **operational configuration and usage**, see: `apps/escapeplan-api/docs/ASSE
 - Success/error UI states
 - Fixed regex pattern bug in slug validation
 
+**Session 47 (2025-10-02):**
+- Implemented complete Storage Dashboard with three tabs
+- Fixed AssetBrowser to handle array response (not wrapped object)
+- Added asset type filter (Images/Audio/Video) with client-side filtering
+- Enhanced storage metrics with filesystem orphaned file scanning
+- Added database breakdown showing active DB + backups with counts
+- Wired up backup trigger button with loading/success/error states
+- Ghost file detection: Shows files on disk that aren't in database
+
 ## Known Issues
 
-1. **Game editing may show stale data** - Some users report issues editing games with hints. Clear browser cache if experiencing issues.
-2. **No environment variables yet** - File size limits are hardcoded (10MB images, 25MB audio, 50MB video)
-3. **No backup automation** - Manual backups must be performed via filesystem tools
+1. **No environment variables yet** - File size limits are hardcoded (10MB images, 25MB audio, 50MB video)
+2. **No backup automation** - Manual backups work but must be triggered via UI or API
+3. **Asset deletion requires manage_games permission** - Asset Library shows all assets but delete is restricted

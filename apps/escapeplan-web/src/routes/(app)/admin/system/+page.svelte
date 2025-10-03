@@ -12,23 +12,32 @@
 	let { data } = $props<{ data: PageData }>();
 
 	type TabKey = 'health' | 'network' | 'alerts' | 'logs' | 'storage';
+	const validTabs: TabKey[] = ['health', 'network', 'alerts', 'logs', 'storage'];
 
 	let activeTab = $state<TabKey>((data.activeTab as TabKey) || 'health');
 
-	// Sync tab state with URL hash
+	// Sync tab state with URL hash or query parameter
 	$effect(() => {
 		if (!browser) return;
 
 		const hash = window.location.hash.slice(1) as TabKey;
-		if (hash && ['health', 'network', 'alerts', 'logs', 'storage'].includes(hash)) {
+		if (hash && validTabs.includes(hash)) {
 			activeTab = hash;
+			return;
+		}
+
+		const paramsTab = new URL(window.location.href).searchParams.get('tab') as TabKey | null;
+		if (paramsTab && validTabs.includes(paramsTab)) {
+			activeTab = paramsTab;
 		}
 	});
 
 	function setTab(tab: TabKey) {
 		activeTab = tab;
 		if (browser) {
-			window.location.hash = tab;
+			const url = new URL(window.location.href);
+			url.searchParams.set('tab', tab);
+			window.history.replaceState(null, '', `${url.pathname}?${url.searchParams.toString()}#${tab}`);
 		}
 	}
 

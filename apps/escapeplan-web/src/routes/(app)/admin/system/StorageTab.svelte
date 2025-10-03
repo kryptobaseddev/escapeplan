@@ -11,6 +11,11 @@
 			usedBytes?: number;
 			availableBytes?: number;
 		};
+		database?: {
+			activeSizeBytes?: number;
+			backupsSizeBytes?: number;
+			backupCount?: number;
+		};
 		byType?: {
 			images?: { totalFiles: number; totalBytes: number };
 			videos?: { totalFiles: number; totalBytes: number };
@@ -34,6 +39,9 @@
 	let activeTab = $state<'overview' | 'library' | 'backups'>('overview');
 	let metrics = $state<StorageMetrics | null>(initialMetrics);
 	let refreshing = $state(false);
+	let backupInProgress = $state(false);
+	let backupError = $state<string | null>(null);
+	let backupSuccess = $state(false);
 
 	async function refreshMetrics() {
 		refreshing = true;
@@ -67,6 +75,48 @@
 			? Math.round((metrics.total.usedBytes / metrics.total.totalBytes) * 100)
 			: 0
 	);
+
+	async function triggerBackup() {
+		backupInProgress = true;
+		backupError = null;
+		backupSuccess = false;
+
+		try {
+			const response = await fetch('/api/admin/backups', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				credentials: 'include',
+				body: JSON.stringify({
+					type: 'manual',
+					includes: {
+						database: true,
+						games: true,
+						assets: false, // Large, optional
+						logs: false
+					},
+					destination: 'local'
+				})
+			});
+
+			if (!response.ok) {
+				const error = await response.json();
+				throw new Error(error.message || 'Backup failed');
+			}
+
+			backupSuccess = true;
+			// Refresh metrics after backup
+			await refreshMetrics();
+
+			// Clear success message after 3 seconds
+			setTimeout(() => {
+				backupSuccess = false;
+			}, 3000);
+		} catch (err) {
+			backupError = err instanceof Error ? err.message : 'Backup failed';
+		} finally {
+			backupInProgress = false;
+		}
+	}
 </script>
 
 <div class="space-y-6">
@@ -196,10 +246,67 @@
 				</div>
 			</div>
 
-			<!-- Breakdown by Type -->
+			<!-- Database Breakdown -->
+			{#if metrics?.database}
+				<div class="card bg-base-200 shadow-xl">
+					<div class="card-body">
+						<h2 class="card-title">Database Storage</h2>
+						<div class="grid gap-4 md:grid-cols-2">
+							<div class="stat bg-base-300/50 rounded-lg">
+								<div class="stat-figure text-info">
+									<svg
+										class="h-8 w-8"
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"
+										/>
+									</svg>
+								</div>
+								<div class="stat-title">Active Database</div>
+								<div class="stat-value text-xl">
+									{formatBytes(metrics.database.activeSizeBytes)}
+								</div>
+								<div class="stat-desc">escapeplan.db</div>
+							</div>
+							<div class="stat bg-base-300/50 rounded-lg">
+								<div class="stat-figure text-warning">
+									<svg
+										class="h-8 w-8"
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+										/>
+									</svg>
+								</div>
+								<div class="stat-title">Backups</div>
+								<div class="stat-value text-xl">
+									{formatBytes(metrics.database.backupsSizeBytes)}
+								</div>
+								<div class="stat-desc">{metrics.database.backupCount || 0} backups</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Asset Breakdown by Type -->
 			<div class="card bg-base-200 shadow-xl">
 				<div class="card-body">
-					<h2 class="card-title">Storage Breakdown</h2>
+					<h2 class="card-title">Asset Storage</h2>
 					<div class="grid gap-4 md:grid-cols-3">
 						{#if metrics?.byType}
 							<div class="stat bg-base-300/50 rounded-lg">
@@ -359,27 +466,79 @@
 		</div>
 	{:else if activeTab === 'backups'}
 		<div class="space-y-6">
+			<!-- Success/Error Messages -->
+			{#if backupSuccess}
+				<div class="alert alert-success">
+					<svg
+						class="h-6 w-6"
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+					<span>Backup created successfully!</span>
+				</div>
+			{/if}
+
+			{#if backupError}
+				<div class="alert alert-error">
+					<svg
+						class="h-6 w-6"
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+						/>
+					</svg>
+					<span>{backupError}</span>
+				</div>
+			{/if}
+
 			<div class="card bg-base-200 shadow-xl">
 				<div class="card-body">
 					<div class="flex items-center justify-between">
 						<h2 class="card-title">Backup Management</h2>
 						{#if canManage}
-							<button type="button" class="btn btn-primary btn-sm">
-								<svg
-									class="h-4 w-4"
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-								>
-									<path
-										stroke-linecap="round"
-										stroke-linejoin="round"
-										stroke-width="2"
-										d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-									/>
-								</svg>
-								Trigger Backup Now
+							<button
+								type="button"
+								class="btn btn-primary btn-sm"
+								class:loading={backupInProgress}
+								onclick={triggerBackup}
+								disabled={backupInProgress}
+							>
+								{#if backupInProgress}
+									<span class="loading loading-spinner loading-sm"></span>
+									Creating Backup...
+								{:else}
+									<svg
+										class="h-4 w-4"
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											stroke-width="2"
+											d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+										/>
+									</svg>
+									Trigger Backup Now
+								{/if}
 							</button>
 						{/if}
 					</div>

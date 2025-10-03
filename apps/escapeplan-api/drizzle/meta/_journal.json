@@ -22,6 +22,27 @@
       "when": 1759379013093,
       "tag": "0002_little_scourge",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1759382643564,
+      "tag": "0003_bumpy_jack_murdock",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1759434955040,
+      "tag": "0004_round_black_cat",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1759438402213,
+      "tag": "0005_workable_pepper_potts",
+      "breakpoints": true
     }
   ]
 }

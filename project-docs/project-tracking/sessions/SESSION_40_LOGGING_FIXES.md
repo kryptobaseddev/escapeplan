@@ -483,7 +483,7 @@ src/test-integration.ts:46 - argument count mismatch
 After initial commit review, corrected PricingModel to support all 3 business-appropriate options:
 
 **Changed:**
-- `packages/contracts/src/index.ts:321` - Updated: `'per_person' | 'per_session' | 'per_hour'` (was incorrectly `'per_person' | 'flat_rate'`)
+- `packages/contracts/src/index.ts:321` - Updated: `'per_person' | 'per_session' | 'per_hour'`
 - `apps/escapeplan-api/src/index.ts:150` - Updated validation: `['per_person', 'per_session', 'per_hour']`
 - `apps/escapeplan-api/src/state.ts:414` - Updated type assertion to match
 
@@ -492,7 +492,6 @@ After initial commit review, corrected PricingModel to support all 3 business-ap
 - `per_session` - Flat rate for entire group (e.g., $100/session)
 - `per_hour` - Hourly rate for extended sessions (e.g., $50/hour)
 
-These options better reflect escape room business models than generic `flat_rate`.
 
 ---
 

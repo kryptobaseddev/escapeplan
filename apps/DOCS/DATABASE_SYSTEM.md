@@ -44,7 +44,7 @@ EscapePlan uses a **single SQLite database** with **20 interconnected tables** m
 | Component | Technology | Version | Purpose |
 |-----------|-----------|---------|---------|
 | Database Engine | SQLite | 3.x | Embedded ACID database |
-| ORM | Drizzle ORM | 0.30.10 | Type-safe query builder |
+| ORM | Drizzle ORM | 0.44.5 | Type-safe query builder |
 | Connection | better-sqlite3 | Latest | Node.js SQLite driver |
 | Journal Mode | WAL | - | Write-Ahead Logging for concurrency |
 | Foreign Keys | ENABLED | - | Referential integrity enforced |
@@ -69,6 +69,7 @@ EscapePlan uses a **single SQLite database** with **20 interconnected tables** m
 ├─────────────────────────────────────────────────────────────┤
 │  operators, operator_auth_sessions,                         │
 │  operator_accounts, operator_verifications                  │
+│  roles, role_permissions, permissions                       │
 │  Purpose: Better Auth user management & sessions            │
 └─────────────────────────────────────────────────────────────┘
 
@@ -97,7 +98,7 @@ EscapePlan uses a **single SQLite database** with **20 interconnected tables** m
 ┌─────────────────────────────────────────────────────────────┐
 │                      NETWORK (2 tables)                     │
 ├─────────────────────────────────────────────────────────────┤
-│  network_profiles, network_health                           │
+│  network_profiles, network_health, cameras                  │
 │  Purpose: Wi-Fi AP configuration and status                 │
 └─────────────────────────────────────────────────────────────┘
 
@@ -295,7 +296,7 @@ assets (id)
   story_intro: text('story_intro'),
   duration_minutes: integer('duration_minutes').notNull().default(60),
   difficulty: text('difficulty'), // '1' to '5' (stars)
-  pricing_model: text('pricing_model'), // 'per_person' | 'flat_rate'
+  pricing_model: text('pricing_model'), // 'per_person' | 'per_session' | 'per_hour'
   category: text('category'), // DEPRECATED - singular
   categories: text('categories', { mode: 'json' }), // JSON array - SOURCE OF TRUTH
   min_players: integer('min_players').notNull().default(1),

@@ -7,28 +7,62 @@ import type {
   CreateOperatorRequest,
   OperatorSummary,
   ResetOperatorPasswordRequest,
-  UpdateOperatorRequest
+  UpdateOperatorRequest,
+  RoleWithPermissions,
+  PermissionSummary
 } from '$lib/api/types';
 
 export const load: PageServerLoad = async (event) => {
   const { locals, url } = event;
-  if (!locals.user || !locals.user.permissions?.includes('manage_users')) {
+
+  // Check if user has manage_users OR view_roles permission
+  const canManageUsers = locals.user?.permissions?.includes('manage_users') ?? false;
+  const canViewRoles = locals.user?.permissions?.includes('view_roles') ?? false;
+  const canManageRoles = locals.user?.permissions?.includes('manage_roles') ?? false;
+  const canViewPermissions = locals.user?.permissions?.includes('view_permissions') ?? false;
+  const canManagePermissions = locals.user?.permissions?.includes('manage_permissions') ?? false;
+
+  if (!canManageUsers && !canViewRoles) {
     throw error(403, 'Permission denied');
   }
 
   const fetcher = makeServerFetcher(event);
 
-  const searchParams = new URLSearchParams();
-  const search = url.searchParams.get('search')?.trim() ?? '';
-  const role = url.searchParams.get('role') ?? 'all';
-  const status = url.searchParams.get('status') ?? 'active';
+  // Load users list if user has manage_users permission
+  let users: OperatorSummary[] = [];
+  if (canManageUsers) {
+    const searchParams = new URLSearchParams();
+    const search = url.searchParams.get('search')?.trim() ?? '';
+    const role = url.searchParams.get('role') ?? 'all';
+    const status = url.searchParams.get('status') ?? 'active';
 
-  if (search) searchParams.set('search', search);
-  if (role && role !== 'all') searchParams.set('role', role);
-  if (status && status !== 'active') searchParams.set('status', status);
+    if (search) searchParams.set('search', search);
+    if (role && role !== 'all') searchParams.set('role', role);
+    if (status && status !== 'active') searchParams.set('status', status);
 
-  const queryString = searchParams.toString();
-  const users = await fetcher<OperatorSummary[]>(`/admin/users${queryString ? `?${queryString}` : ''}`);
+    const queryString = searchParams.toString();
+    users = await fetcher<OperatorSummary[]>(`/admin/users${queryString ? `?${queryString}` : ''}`);
+  }
+
+  // Load roles if user has view_roles permission
+  let rolesData: RoleWithPermissions[] = [];
+  if (canViewRoles) {
+    try {
+      rolesData = await fetcher<RoleWithPermissions[]>('/admin/roles');
+    } catch (err) {
+      console.error('Failed to load roles:', err);
+    }
+  }
+
+  // Load permissions if user has view_permissions permission
+  let permissionsData: PermissionSummary[] = [];
+  if (canViewPermissions) {
+    try {
+      permissionsData = await fetcher<PermissionSummary[]>('/admin/permissions');
+    } catch (err) {
+      console.error('Failed to load permissions:', err);
+    }
+  }
 
   event.depends('app:admin:users');
 
@@ -36,14 +70,23 @@ export const load: PageServerLoad = async (event) => {
     pageTitle: 'User Management',
     users,
     filters: {
-      search,
-      role,
-      status
+      search: url.searchParams.get('search')?.trim() ?? '',
+      role: url.searchParams.get('role') ?? 'all',
+      status: url.searchParams.get('status') ?? 'active'
     },
     roles: ['all', 'admin', 'manager', 'game_master', 'customer'] as const,
     statusOptions: ['active', 'archived', 'all'] as const,
     canAssignAdmin: locals.user?.role === 'admin',
-    currentUserId: locals.user?.id ?? null
+    currentUserId: locals.user?.id ?? null,
+    // RBAC data
+    rolesData,
+    permissionsData,
+    // RBAC permissions
+    canManageUsers,
+    canViewRoles,
+    canManageRoles,
+    canViewPermissions,
+    canManagePermissions
   };
 };
 

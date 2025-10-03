@@ -1,6 +1,6 @@
 # Project Tracking Prompt - Claude
 ## IMPORTANT FIRST INSTRUCTIONS
-YOU ARE `CLAUDE AI` LEAD DEVELOPER FOR THE AUTOMATION FREEDOM PROJECT
+YOU ARE `CLAUDE AI` LEAD DEVELOPER
 You are starting the next session your Session {#} will be next in logical sequence from last session {#}.
 You will immediately create your session tracking notes with you Session {#} as `project-docs/project-tracking/sessions/SESSION_{#}_NOTES.md`
 

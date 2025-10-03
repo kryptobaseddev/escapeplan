@@ -1,8 +1,8 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { PUBLIC_API_BASE_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 
-const API_BASE = (PUBLIC_API_BASE_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
+const API_BASE = (env.PUBLIC_API_BASE_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
 
 function parseSetCookie(header: string | null) {
   if (!header) return null;

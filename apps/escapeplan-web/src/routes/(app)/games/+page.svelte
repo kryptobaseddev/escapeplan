@@ -3,10 +3,11 @@
 <script lang="ts">
   import type { PageData } from './$types';
   import { onDestroy, onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
   import { formatTimer } from '$lib/utils/datetime';
   import QuickStartModal from '$lib/components/sessions/QuickStartModal.svelte';
   import type { GameSessionDetails, GameDetails } from '@escapeplan/contracts';
-  import { goto } from '$app/navigation';
   import { apiFetch } from '$lib/api/client';
   import type { CommandResponse } from '$lib/api/types';
   import { initializeRealtime } from '$lib/realtime';
@@ -14,15 +15,49 @@
 
   let { data } = $props<{ data: PageData }>();
 
-  let sessions = $state(data.sessions ?? []);
+  let canManageSessions = $derived($page.data.user?.permissions?.includes('manage_sessions') ?? false);
+
+  // Local state for this page - NOT using the global sessions store for filtered views
+  let allSessions = $state<GameSessionDetails[]>(data.sessions ?? []);
   let generatedAt = $state(data.generatedAt ?? null);
-  let games = $state(data.games ?? []);
+  let games = $state<GameDetails[]>(data.games ?? []);
   let quickStartOpen = $state(false);
   let toast = $state<{ type: 'success' | 'error'; message: string } | null>(null);
-  let statusFilter = $state(data.filters?.status ?? 'active');
-  let searchQuery = $state(data.filters?.search ?? '');
-  let sortBy = $state(data.filters?.sortBy ?? 'date');
-  let sortOrder = $state(data.filters?.sortOrder ?? 'desc');
+  let statusFilter = $state<string>('active');
+  let searchQuery = $state<string>('');
+  let sortBy = $state<'date' | 'game' | 'location'>('date');
+  let sortOrder = $state<'asc' | 'desc'>('desc');
+
+  // Client-side filtering and sorting
+  const matchesStatus = (session: GameSessionDetails) => {
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'active') return session.status === 'running' || session.status === 'paused';
+    return session.status === statusFilter;
+  };
+
+  const matchesSearch = (session: GameSessionDetails) => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return true;
+    const haystack = [session.gameName, session.roomName, session.id].join(' ').toLowerCase();
+    return haystack.includes(query);
+  };
+
+  const sessions = $derived(
+    [...allSessions]
+      .filter(matchesStatus)
+      .filter(matchesSearch)
+      .sort((a, b) => {
+        let comparison = 0;
+        if (sortBy === 'date') {
+          comparison = new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime();
+        } else if (sortBy === 'game') {
+          comparison = a.gameName.localeCompare(b.gameName);
+        } else if (sortBy === 'location') {
+          comparison = a.roomName.localeCompare(b.roomName);
+        }
+        return sortOrder === 'asc' ? comparison : -comparison;
+      })
+  );
 
   const setToast = (message: string, type: 'success' | 'error' = 'success') => {
     toast = { message, type };
@@ -36,8 +71,8 @@
   const handleQuickStartSuccess = (session: GameSessionDetails) => {
     quickStartOpen = false;
     setToast('Session started successfully.');
-    if (!sessions.some((existing: GameSessionDetails) => existing.id === session.id)) {
-      sessions = [session, ...sessions];
+    if (!allSessions.some((existing: GameSessionDetails) => existing.id === session.id)) {
+      allSessions = [session, ...allSessions];
     }
     goto(`/games/${session.id}`);
   };
@@ -110,32 +145,20 @@
     }
   }
 
-  function applyFilters() {
-    const params = new URLSearchParams();
-    if (statusFilter) params.set('status', statusFilter);
-    if (searchQuery) params.set('search', searchQuery);
-    if (sortBy) params.set('sortBy', sortBy);
-    if (sortOrder) params.set('sortOrder', sortOrder);
-    goto(`/games?${params.toString()}`);
-  }
-
   function clearSearch() {
     searchQuery = '';
-    applyFilters();
   }
 
+  let unsubSessions: (() => void) | null = null;
+
   onMount(() => {
-    // Initialize real-time updates
-    initializeRealtime({
-      dashboard: null,
-      sessions,
-      bookings: []
-    });
+    // Initialize real-time WebSocket connection (but don't sync session store)
+    initializeRealtime({});
 
     const handleKeydown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
-        if (games.length) {
+        if (canManageSessions && games.length > 0) {
           quickStartOpen = true;
         }
       }
@@ -143,21 +166,35 @@
 
     window.addEventListener('keydown', handleKeydown);
 
-    // Subscribe to real-time session updates
-    const unsubSessions = sessionsStore.subscribe((value) => {
-      sessions = [...value]; // Create new array reference to trigger reactivity
+    // Subscribe to real-time session updates and merge with local list
+    unsubSessions = sessionsStore.subscribe((storeSessions) => {
+      // Update allSessions with real-time data
+      allSessions = allSessions.map(session => {
+        const updated = storeSessions.find(s => s.id === session.id);
+        return updated || session;
+      });
+      // Also add any new sessions from the store that aren't in our list
+      storeSessions.forEach(storeSession => {
+        if (!allSessions.find(s => s.id === storeSession.id)) {
+          allSessions = [...allSessions, storeSession];
+        }
+      });
     });
 
     onDestroy(() => {
-      unsubSessions();
+      unsubSessions?.();
       window.removeEventListener('keydown', handleKeydown);
     });
   });
 
+  // Sync local state when page data changes
   $effect(() => {
-    sessions = data.sessions ?? [];
+    allSessions = data.sessions ?? [];
     generatedAt = data.generatedAt ?? null;
-    games = data.games ?? [];
+    // Only update games if we received data (don't clear on navigation)
+    if (data.games !== undefined && data.games !== null) {
+      games = data.games;
+    }
   });
 </script>
 
@@ -170,7 +207,7 @@
           Launch into rooms to manage timers, deliver hints, and monitor puzzle flow.
         </p>
       </div>
-      {#if games.length}
+      {#if canManageSessions && games.length > 0}
         <button class="btn btn-secondary w-full lg:w-auto" onclick={() => (quickStartOpen = true)}>
           + Quick start session
         </button>
@@ -181,31 +218,15 @@
       <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-center flex-1">
           <div class="form-control flex-1 max-w-xs">
-            <div class="input-group">
-              <input
-                type="text"
-                placeholder="Search by game, room, or booking..."
-                class="input input-bordered w-full bg-base-100/60 text-sm"
-                bind:value={searchQuery}
-                onkeydown={(e) => e.key === 'Enter' && applyFilters()}
-              />
-              {#if searchQuery}
-                <button class="btn btn-square btn-ghost" onclick={clearSearch} aria-label="Clear search">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              {:else}
-                <button class="btn btn-square btn-primary" onclick={applyFilters} aria-label="Search">
-                  <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </button>
-              {/if}
-            </div>
+            <input
+              type="text"
+              placeholder="Search by game, room, or booking..."
+              class="input input-bordered w-full bg-base-100/60 text-sm"
+              bind:value={searchQuery}
+            />
           </div>
 
-          <select class="select select-bordered bg-base-100/60 text-sm max-w-xs" bind:value={statusFilter} onchange={applyFilters}>
+          <select class="select select-bordered bg-base-100/60 text-sm max-w-xs" bind:value={statusFilter}>
             <option value="all">All Sessions</option>
             <option value="active">Active Only</option>
             <option value="running">Running</option>
@@ -216,14 +237,14 @@
         </div>
 
         <div class="flex items-center gap-2">
-          <select class="select select-bordered select-sm bg-base-100/60 text-xs" bind:value={sortBy} onchange={applyFilters}>
+          <select class="select select-bordered select-sm bg-base-100/60 text-xs" bind:value={sortBy}>
             <option value="date">Sort by Date</option>
             <option value="game">Sort by Game</option>
             <option value="location">Sort by Location</option>
           </select>
           <button
             class="btn btn-sm btn-ghost border border-white/10"
-            onclick={() => { sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; applyFilters(); }}
+            onclick={() => { sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; }}
             aria-label="Toggle sort order"
           >
             {#if sortOrder === 'desc'}
@@ -276,7 +297,9 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
-                  <a class="btn btn-sm btn-primary" href={`/games/${session.id}`}>Open runner</a>
+                  <a class="btn btn-sm btn-primary" href={`/games/${session.id}`} data-sveltekit-reload>
+                    Open runner
+                  </a>
                   <a class="btn btn-sm btn-ghost border border-white/10" href={`/bookings?focus=${session.id}`}>View booking</a>
                 </div>
 

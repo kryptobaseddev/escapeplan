@@ -22,25 +22,39 @@
   let puzzleFormError = $state(form?.puzzleError ?? null);
   let offlineNotice = $state<string | null>(null);
   let queuedCommands = $state(0);
+  let copySuccess = $state(false);
 
-  onMount(() => {
-    initializeRealtime({ sessions: [data.session] });
+  // Sync session from page data when it changes (navigation between different sessions)
+  $effect(() => {
+    session = data.session;
+    // Reset copy success when session changes
+    copySuccess = false;
+  });
+
+  // Subscribe to WebSocket updates for real-time timer updates
+  $effect(() => {
+    const currentSessionId = data.session.id;
 
     const unsubSessions = sessionsStore.subscribe((value) => {
-      const next = value.find((s) => s.id === data.session.id);
+      const next = value.find((s) => s.id === currentSessionId);
       if (next) {
         session = next;
       }
     });
 
     const unsubQueue = offlineCommandQueue.subscribe((queue) => {
-      queuedCommands = queue.filter((entry) => entry.sessionId === data.session.id).length;
+      queuedCommands = queue.filter((entry) => entry.sessionId === currentSessionId).length;
     });
 
-    onDestroy(() => {
+    return () => {
       unsubSessions();
       unsubQueue();
-    });
+    };
+  });
+
+  onMount(() => {
+    // Initialize real-time WebSocket connection
+    initializeRealtime({});
   });
 
   async function dispatchCommand(command: CommandRequest['command'], payload: Record<string, unknown> = {}) {
@@ -94,6 +108,10 @@
     });
   }
 
+  async function triggerMilestone(milestoneId: string) {
+    await dispatchCommand('trigger_milestone', { milestoneId });
+  }
+
   async function handleHint(event: SubmitEvent) {
     event.preventDefault();
     const formElement = event.currentTarget as HTMLFormElement;
@@ -110,8 +128,6 @@
     await dispatchCommand('send_hint', { message, medium });
     formElement.reset();
   }
-
-  let copySuccess = $state(false);
 
   function copyRoomDisplayUrl() {
     if (!browser) return;
@@ -177,7 +193,7 @@
         </div>
 
         <div class="flex items-center gap-1">
-          {#if session.timer.status === 'idle'}
+          {#if session.timer.status === 'idle' || session.timer.status === 'completed'}
             <button class="btn btn-sm btn-circle btn-primary" type="button" onclick={() => handleTimerAction('start_timer')} aria-label="Start timer">
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
@@ -380,7 +396,7 @@
                 <div class="mt-4 pt-4 border-t border-white/10">
                   <h4 class="text-xs font-semibold uppercase tracking-wider text-base-content/50 mb-2">Quick Send Hints:</h4>
                   <div class="flex flex-wrap gap-2">
-                    {#each puzzle.hints.sort((a: any, b: any) => a.order - b.order) as hint}
+                    {#each [...puzzle.hints].sort((a: any, b: any) => a.order - b.order) as hint}
                       <button
                         type="button"
                         class={`btn btn-xs gap-1 ${
@@ -468,6 +484,78 @@
           {/if}
         </div>
       </div>
+
+      {#if session.availableMilestones && session.availableMilestones.length > 0}
+        <div id="milestones" class="glass-panel border-white/10 bg-base-200/70 p-6">
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold text-base-content">Game Milestones</h2>
+            <span class="badge badge-outline border-white/10 text-xs uppercase tracking-[0.3em] text-base-content/50">
+              {session.availableMilestones.length} available
+            </span>
+          </div>
+          <div class="mt-5 grid grid-cols-2 gap-3">
+            {#each session.availableMilestones as milestone}
+              <button
+                type="button"
+                class={`card border transition hover:scale-105 ${
+                  milestone.type === 'intro'
+                    ? 'border-info/40 bg-info/10 hover:bg-info/20'
+                    : milestone.type === 'escaped'
+                      ? 'border-success/40 bg-success/10 hover:bg-success/20'
+                      : milestone.type === 'failed'
+                        ? 'border-error/40 bg-error/10 hover:bg-error/20'
+                        : 'border-warning/40 bg-warning/10 hover:bg-warning/20'
+                }`}
+                onclick={() => triggerMilestone(milestone.id)}
+              >
+                <div class="card-body p-4">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex-1">
+                      <h3 class="font-semibold text-base-content text-left">{milestone.name}</h3>
+                      {#if milestone.content}
+                        <p class="mt-1 text-xs text-base-content/70 text-left line-clamp-2">{milestone.content}</p>
+                      {/if}
+                    </div>
+                    <div class="flex-shrink-0">
+                      {#if milestone.type === 'intro'}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-info" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                        </svg>
+                      {:else if milestone.type === 'escaped'}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-success" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+                          <path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                        </svg>
+                      {:else if milestone.type === 'failed'}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-error" viewBox="0 0 20 20" fill="currentColor">
+                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                        </svg>
+                      {:else}
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-warning" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                      {/if}
+                    </div>
+                  </div>
+                  <div class="mt-2 flex flex-wrap gap-2">
+                    <span class="badge badge-xs badge-outline">{milestone.type}</span>
+                    {#if milestone.mediaType}
+                      <span class="badge badge-xs badge-outline">{milestone.mediaType}</span>
+                    {/if}
+                    {#if milestone.triggerType === 'manual'}
+                      <span class="badge badge-xs badge-ghost">Manual Trigger</span>
+                    {:else if milestone.triggerType === 'timer' && milestone.triggerConfig?.minutes}
+                      <span class="badge badge-xs badge-ghost">@ {milestone.triggerConfig.minutes} min</span>
+                    {:else if milestone.triggerType === 'condition' && milestone.triggerConfig?.hintsUsed}
+                      <span class="badge badge-xs badge-ghost">After {milestone.triggerConfig.hintsUsed} hints</span>
+                    {/if}
+                  </div>
+                </div>
+              </button>
+            {/each}
+          </div>
+        </div>
+      {/if}
     </section>
 
     <aside class="space-y-6">

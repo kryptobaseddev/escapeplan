@@ -363,7 +363,7 @@ export async function seedIdempotent() {
   const adminProfileUpdates = {
     ...adminBaseProfile,
     passwordHash: hashedPassword,
-    image: JSON.stringify(defaultAvatarConfig) // Better Auth expects string, we stringify for compatibility
+    image: JSON.stringify(defaultAvatarConfig) // Better Auth expects string
   };
 
   if (!existingAdmin) {
@@ -372,7 +372,7 @@ export async function seedIdempotent() {
       email: adminEmail,
       ...adminBaseProfile,
       passwordHash: hashedPassword,
-      image: JSON.stringify(defaultAvatarConfig) // Better Auth expects string, we stringify for compatibility
+      image: JSON.stringify(defaultAvatarConfig) // Better Auth expects string
     }) as any;
     adminId = adminUser.id;
 

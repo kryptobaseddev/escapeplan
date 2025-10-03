@@ -22,7 +22,10 @@
   const manifestLinkTag = pwaInfo?.webManifest?.linkTag ?? '';
 
   const canManageUsers = $derived(props.data.user?.permissions?.includes('manage_users') ?? false);
+  const canViewRoles = $derived(props.data.user?.permissions?.includes('view_roles') ?? false);
   const canManageGames = $derived(props.data.user?.permissions?.includes('manage_games') ?? false);
+  const canViewCameras = $derived(props.data.canViewCameras ?? false);
+  const canManageCameras = $derived(props.data.canManageCameras ?? false);
   const canViewNetwork = $derived(props.data.user?.permissions?.includes('view_network') ?? false);
   const canManageNetwork = $derived(props.data.user?.permissions?.includes('manage_network') ?? false);
   const canViewSystemLogs = $derived(props.data.user?.permissions?.includes('view_system_logs') ?? false);
@@ -93,12 +96,21 @@
           }
         ]
       : []),
-    ...(canManageUsers
+    ...(canManageUsers || canViewRoles
       ? [
           {
             href: '/admin/users',
             label: 'User Management',
             icon: 'M12 12a4 4 0 100-8 4 4 0 000 8zm7 7a6 6 0 10-14 0h2a4 4 0 118 0h2z'
+          }
+        ]
+      : []),
+    ...(canViewCameras || canManageCameras
+      ? [
+          {
+            href: '/admin/cameras',
+            label: 'Camera Management',
+            icon: 'M4 6.5h2L7 5h10l1 1.5h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2zm8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-2a2 2 0 1 1 0-4 2 2 0 0 1 0 4z'
           }
         ]
       : []),

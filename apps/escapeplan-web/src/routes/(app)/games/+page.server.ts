@@ -15,20 +15,10 @@ export const load: PageServerLoad = async (event) => {
   }
 
   const fetcher = makeServerFetcher(event);
-  const url = event.url;
-  const status = url.searchParams.get('status') || 'active';
-  const search = url.searchParams.get('search') || '';
-  const sortBy = (url.searchParams.get('sortBy') as 'date' | 'game' | 'location') || 'date';
-  const sortOrder = (url.searchParams.get('sortOrder') as 'asc' | 'desc') || 'desc';
 
   try {
-    const queryParams = new URLSearchParams({
-      ...(status && { status }),
-      ...(search && { search }),
-      sortBy,
-      sortOrder
-    });
-    const response = await fetcher<ActiveSessionsResponse>(`/sessions?${queryParams.toString()}`);
+    // Load all sessions for client-side filtering
+    const response = await fetcher<ActiveSessionsResponse>(`/sessions?status=all`);
     let games: GameDetails[] = [];
     try {
       games = await fetcher<GameDetails[]>('/admin/games');
@@ -39,8 +29,7 @@ export const load: PageServerLoad = async (event) => {
       pageTitle: 'Game Runner',
       sessions: response.sessions,
       generatedAt: response.generatedAt,
-      games,
-      filters: { status, search, sortBy, sortOrder }
+      games
     };
   } catch (error) {
     console.error('Failed to load sessions', error);
@@ -49,8 +38,7 @@ export const load: PageServerLoad = async (event) => {
       sessions: [],
       generatedAt: null,
       sessionsError: 'Unable to load sessions from API.',
-      games: [],
-      filters: { status, search, sortBy, sortOrder }
+      games: []
     };
   }
 };

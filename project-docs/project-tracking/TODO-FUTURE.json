@@ -1,0 +1,445 @@
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-10-02",
+  "projectName": "EscapePlan",
+  "projectVersion": "0.1.0",
+  "note": "Tasks deferred from main TODO.json - not blocking MVP",
+  "deferredTasks": [
+    {
+      "id": "P2-005",
+      "title": "Define security hardening and backup routines",
+      "feature": "Security",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 10,
+      "actualHours": 0,
+      "assignee": "Morgan Blake",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Document user accounts, SSH access policy, and firewall rules for offline network.",
+        "Implement automated SQLite backups with retention policy.",
+        "Add checksum/restore procedure to runbook."
+      ],
+      "dependencies": [
+        "P2-002",
+        "P2-003"
+      ],
+      "risks": [],
+      "notes": [
+        "Ensure backups include asset media and HLS state.",
+        "Plan for encrypted offload via USB drive.",
+        "Ship self-signed TLS bundle via cert-export CLI and document trust steps; leave SSH disabled by default."
+      ],
+      "labels": [
+        "security",
+        "operations",
+        "platform"
+      ],
+      "phase": "Platform Base Image & Automation"
+    },
+    {
+      "id": "P3-012",
+      "title": "Design backup and cron automation for EscapePlan appliance",
+      "feature": "Operations",
+      "status": "NOT_STARTED",
+      "priority": "MEDIUM",
+      "estimatedHours": 12,
+      "actualHours": 0,
+      "assignee": "Operations Team",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Document required cron jobs for database backups, cleanup, and log rotation.",
+        "Select storage target for backups (local + export path) with retention policy.",
+        "Provide scripts or systemd units ready for Phase 4 packaging."
+      ],
+      "dependencies": [
+        "P3-002"
+      ],
+      "risks": [
+        "Missing backups could jeopardize pilot deployments."
+      ],
+      "notes": [
+        "Coordinate with Better Auth session store to ensure auth data included in backups."
+      ],
+      "labels": [
+        "operations",
+        "infra",
+        "backup"
+      ],
+      "phase": "Backend Core Services"
+    },
+    {
+      "id": "P3-019",
+      "title": "Add UUID support to rooms, puzzles, hints, cameras",
+      "feature": "Database",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 10,
+      "actualHours": 0,
+      "assignee": "Riley Patel",
+      "createdDate": "2025-09-30",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Add uuid fields to rooms, puzzles, hints, cameras tables with unique constraints.",
+        "Create Drizzle migration to generate UUIDs for existing records using uuid v4.",
+        "Update FK constraints to use UUIDs where appropriate for external references.",
+        "Update API contracts to accept and return UUIDs for room/puzzle/hint/camera operations.",
+        "Add UUID validation middleware ensuring valid UUID format for API requests.",
+        "Update frontend routes and forms to use UUIDs instead of integer IDs."
+      ],
+      "dependencies": [
+        "P3-002"
+      ],
+      "risks": [],
+      "notes": [
+        "Keep integer IDs for internal use, UUIDs for external APIs and FK relationships.",
+        "Use uuid v4 generation (crypto.randomUUID() or equivalent).",
+        "Add indexes on UUID columns for query performance.",
+        "Document UUID usage patterns in API contracts package.",
+        "Migration strategy: generate UUIDs for existing records, add unique constraint, update FK references.",
+        "Affected tables: rooms, puzzles, hints, cameras (add uuid column alongside id).",
+        "API contract changes: room/puzzle/hint/camera endpoints use UUID in paths not integer IDs.",
+        "Frontend: update routes from /admin/rooms/:id to /admin/rooms/:uuid.",
+        "Validation: UUID format regex or library-based validation in Fastify middleware."
+      ],
+      "labels": [
+        "backend",
+        "database",
+        "uuid"
+      ],
+      "phase": "Backend Core Services"
+    },
+    {
+      "id": "P3-010",
+      "title": "Establish backend automated tests and CI gates",
+      "feature": "Quality",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 10,
+      "actualHours": 0,
+      "assignee": "Riley Patel",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Unit tests cover validation, pricing, booking conflict resolution, and RBAC guards.",
+        "Integration tests simulate booking-to-session lifecycle and camera control.",
+        "CI pipeline blocks merge on failures and publishes coverage metrics."
+      ],
+      "dependencies": [
+        "P3-001",
+        "P3-007"
+      ],
+      "risks": [],
+      "notes": [
+        "Use vitest or tap for Fastify; include SQLite in-memory harness.",
+        "Target >=80% statement coverage as per quality gate.",
+        "Fix failing pnpm test command by reinstalling dependencies on target host to pull Rollup/esbuild native binaries before wiring CI."
+      ],
+      "labels": [
+        "backend",
+        "qa",
+        "automation"
+      ],
+      "phase": "Backend Core Services"
+    },
+    {
+      "id": "P4-010",
+      "title": "Polish operator/admin UI & PWA experience",
+      "feature": "Operator Experience",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 14,
+      "actualHours": 0,
+      "assignee": "Design Team",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Refine admin navigation, tables, and forms using Svelte 5 runes + best practices.",
+        "Add inline validation and success/error feedback across user/game/network workflows.",
+        "Ensure PWA install/offline prompts behave consistently after updates."
+      ],
+      "dependencies": [
+        "P3-005"
+      ],
+      "risks": [
+        "Visual overhaul could regress accessibility if not tested."
+      ],
+      "notes": [
+        "Incorporate feedback from first pilot operators and align with Refine/Better-Auth components."
+      ],
+      "labels": [
+        "ui",
+        "ux",
+        "pwa"
+      ],
+      "phase": "Operator PWA Experience"
+    },
+    {
+      "id": "P4-007",
+      "title": "Create game and content administration UI",
+      "feature": "Content Management",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 14,
+      "actualHours": 0,
+      "assignee": "Jordan Lee",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "CRUD screens for games, rooms, puzzles, hints with media upload preview.",
+        "Support bulk sequencing of hints and puzzle dependencies.",
+        "Display asset usage warnings before deletions."
+      ],
+      "dependencies": [
+        "P3-005",
+        "P4-002"
+      ],
+      "risks": [],
+      "notes": [
+        "Leverage DaisyUI tables, modals, and forms for consistency.",
+        "Integrate with file storage status from backend."
+      ],
+      "labels": [
+        "frontend",
+        "content",
+        "ux"
+      ],
+      "phase": "Operator PWA Experience"
+    },
+    {
+      "id": "P4-002",
+      "title": "Define design system and reusable components",
+      "feature": "Design System",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 10,
+      "actualHours": 0,
+      "assignee": "Jordan Lee",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Create core components (buttons, cards, modals, tables) themed via DaisyUI tokens.",
+        "Establish typography and spacing scale documented in Storybook or docs page.",
+        "Provide accessibility checklist and testing approach."
+      ],
+      "dependencies": [
+        "P4-001"
+      ],
+      "risks": [],
+      "notes": [
+        "Consider using Skeleton's patterns where helpful but align with DaisyUI tokens.",
+        "Include dark-mode contrast snapshots."
+      ],
+      "labels": [
+        "frontend",
+        "design",
+        "ux"
+      ],
+      "phase": "Operator PWA Experience"
+    },
+    {
+      "id": "P5-006",
+      "title": "Add operator alerts for downtime and hint backlog",
+      "feature": "Operations",
+      "status": "NOT_STARTED",
+      "priority": "MEDIUM",
+      "estimatedHours": 8,
+      "actualHours": 0,
+      "assignee": "Casey Morgan",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Trigger local notifications when camera streams fail or timers paused unexpectedly.",
+        "Provide optional SMS/email gateway for when internet is available.",
+        "Log alerts for audit and postmortem review."
+      ],
+      "dependencies": [
+        "P2-004",
+        "P3-007"
+      ],
+      "risks": [],
+      "notes": [
+        "Ensure notifications work within offline network using browser notifications or local display.",
+        "Allow operators to acknowledge and mute alerts."
+      ],
+      "labels": [
+        "operations",
+        "observability",
+        "mobile_ops"
+      ],
+      "phase": "Mobile Operations & Analytics"
+    },
+    {
+      "id": "P5-005",
+      "title": "Implement reporting exports and backup automation",
+      "feature": "Operations",
+      "status": "NOT_STARTED",
+      "priority": "MEDIUM",
+      "estimatedHours": 8,
+      "actualHours": 0,
+      "assignee": "Casey Morgan",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Provide one-click export of bookings, sessions, and revenue summaries.",
+        "Automate compression and rotation of report archives.",
+        "Document restore workflow for audits."
+      ],
+      "dependencies": [
+        "P2-005",
+        "P5-004"
+      ],
+      "risks": [],
+      "notes": [
+        "Keep exports within local network and support USB transfer.",
+        "Include checksum validation on backup files."
+      ],
+      "labels": [
+        "operations",
+        "reporting",
+        "security"
+      ],
+      "phase": "Mobile Operations & Analytics"
+    },
+    {
+      "id": "P5-004",
+      "title": "Produce session analytics and daily run sheets",
+      "feature": "Analytics",
+      "status": "NOT_STARTED",
+      "priority": "MEDIUM",
+      "estimatedHours": 10,
+      "actualHours": 0,
+      "assignee": "Casey Morgan",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Generate dashboard widgets for throughput, hint usage, and completion rates.",
+        "Provide filtered daily reports for store and mobile operations.",
+        "Enable export to CSV/PDF for business review."
+      ],
+      "dependencies": [
+        "P3-009",
+        "P4-004"
+      ],
+      "risks": [],
+      "notes": [
+        "Leverage existing event logs and booking data.",
+        "Include occupancy forecast for upcoming days."
+      ],
+      "labels": [
+        "analytics",
+        "operations",
+        "reporting"
+      ],
+      "phase": "Mobile Operations & Analytics"
+    },
+    {
+      "id": "P5-003",
+      "title": "Design offline sync strategy for mobile deployments",
+      "feature": "Mobile Ops",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 14,
+      "actualHours": 0,
+      "assignee": "Casey Morgan",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Specify data subsets cached on devices prior to events.",
+        "Handle conflict resolution when reconnecting after offline operations.",
+        "Document sync workflow for staff including manual triggers."
+      ],
+      "dependencies": [
+        "P4-009",
+        "P3-007"
+      ],
+      "risks": [],
+      "notes": [
+        "Ensure sync handles media assets as needed without overloading storage.",
+        "Incorporate status indicators within UI."
+      ],
+      "labels": [
+        "mobile_ops",
+        "offline",
+        "architecture"
+      ],
+      "phase": "Mobile Operations & Analytics"
+    },
+    {
+      "id": "P5-002",
+      "title": "Build field event scheduling and routing tools",
+      "feature": "Mobile Ops",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 12,
+      "actualHours": 0,
+      "assignee": "Casey Morgan",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Enable assignment of staff, kits, and vehicles to mobile bookings.",
+        "Calculate travel buffers and detect route conflicts.",
+        "Provide day-of timeline printable/exportable for crews."
+      ],
+      "dependencies": [
+        "P3-006",
+        "P5-001"
+      ],
+      "risks": [],
+      "notes": [
+        "Allow manual override for special events.",
+        "Include map link generation for navigation apps."
+      ],
+      "labels": [
+        "mobile_ops",
+        "bookings",
+        "operations"
+      ],
+      "phase": "Mobile Operations & Analytics"
+    },
+    {
+      "id": "P5-001",
+      "title": "Implement mobile kit inventory and readiness module",
+      "feature": "Mobile Ops",
+      "status": "NOT_STARTED",
+      "priority": "HIGH",
+      "estimatedHours": 10,
+      "actualHours": 0,
+      "assignee": "Casey Morgan",
+      "createdDate": "2025-09-29",
+      "dueDate": null,
+      "acceptanceCriteria": [
+        "Track portable props, puzzles, and hardware assigned to each mobile kit.",
+        "Provide pre-departure checklist and status indicators.",
+        "Integrate with scheduling to flag shortages."
+      ],
+      "dependencies": [
+        "P1-007",
+        "P3-005"
+      ],
+      "risks": [],
+      "notes": [
+        "Include QR code scanning or manual entry for quick updates.",
+        "Support offline data entry with later sync."
+      ],
+      "labels": [
+        "mobile_ops",
+        "operations",
+        "inventory"
+      ],
+      "phase": "Mobile Operations & Analytics"
+    }
+  ],
+  "summary": {
+    "totalDeferred": 13,
+    "totalEstimatedHours": 142,
+    "byPhase": {
+      "Platform Base Image & Automation": 1,
+      "Backend Core Services": 3,
+      "Operator PWA Experience": 3,
+      "Mobile Operations & Analytics": 6
+    }
+  }
+}

@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import { eq, and, count, desc } from 'drizzle-orm';
 import { db } from '../db/client.js';
-import { systemLogs } from '../db/schema.js';
+import { systemLogs } from '@escapeplan/contracts';
 import logger from '../logger.js';
 import type { LogLevel, LogCategory, LogContext } from './categories.js';
 

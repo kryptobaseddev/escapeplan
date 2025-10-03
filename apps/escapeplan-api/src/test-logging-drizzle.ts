@@ -4,7 +4,7 @@
  */
 
 import { db, sqlite } from './db/client.js';
-import { systemLogs, alerts, alertRules, sessionHints, sessions, bookings, games, rooms, operators } from './db/schema.js';
+import { systemLogs, alerts, alertRules, sessionHints, sessions, bookings, games, rooms, operators } from '@escapeplan/contracts';
 import { eq, and, isNull, count, desc, like } from 'drizzle-orm';
 import { logToDatabase, queryLogs } from './logging/database.js';
 import {

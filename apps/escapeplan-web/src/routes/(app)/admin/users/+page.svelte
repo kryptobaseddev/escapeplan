@@ -8,6 +8,9 @@
   import ArchiveReasonContent from '$lib/components/ArchiveReasonContent.svelte';
   import PasswordResetModal from '$lib/components/PasswordResetModal.svelte';
   import UserModal from '$lib/components/UserModal.svelte';
+  import RoleModal from '$lib/components/RoleModal.svelte';
+  import RolesTab from '$lib/components/RolesTab.svelte';
+  import PermissionsTab from '$lib/components/PermissionsTab.svelte';
   import Avatar from '$lib/avatar/Avatar.svelte';
   import { formatDistanceToNow } from 'date-fns';
   import type { OperatorRole, OperatorSummary } from '@escapeplan/contracts';
@@ -16,7 +19,12 @@
 
   let { data } = $props<{ data: PageData }>();
 
+  // Determine default tab based on permissions
+  const defaultTab = data.canManageUsers ? 'users' : data.canViewRoles ? 'roles' : 'permissions';
+  let activeTab = $state<'users' | 'roles' | 'permissions'>(defaultTab);
+
   let createModalOpen = $state(false);
+  let createRoleModalOpen = $state(false);
   let editingUser = $state<OperatorSummary | null>(null);
   let resettingUser = $state<OperatorSummary | null>(null);
   let isSubmitting = $state(false);
@@ -251,14 +259,66 @@
     <div>
       <h1 class="section-heading">User Management</h1>
       <p class="mt-2 max-w-2xl text-sm text-base-content/60">
-        Create, update, archive, or remove operators.
+        Manage operators, roles, and permissions.
       </p>
     </div>
-    <button class="btn btn-primary w-full sm:w-auto" onclick={() => { feedback = null; createModalOpen = true; }}>
-      + Add user
-    </button>
+    {#if activeTab === 'users' && data.canManageUsers}
+      <button class="btn btn-primary w-full sm:w-auto" onclick={() => { feedback = null; createModalOpen = true; }}>
+        + Add user
+      </button>
+    {/if}
+    {#if activeTab === 'roles' && data.canManageRoles}
+      <button class="btn btn-primary w-full sm:w-auto" onclick={() => { feedback = null; createRoleModalOpen = true; }}>
+        + Create role
+      </button>
+    {/if}
   </header>
 
+  <!-- Tab Navigation -->
+  <div role="tablist" class="tabs tabs-boxed bg-base-200/70 p-1">
+    {#if data.canManageUsers}
+      <button
+        role="tab"
+        class="tab"
+        class:tab-active={activeTab === 'users'}
+        onclick={() => (activeTab = 'users')}
+      >
+        Users
+      </button>
+    {/if}
+    {#if data.canViewRoles}
+      <button
+        role="tab"
+        class="tab"
+        class:tab-active={activeTab === 'roles'}
+        onclick={() => (activeTab = 'roles')}
+      >
+        Roles
+      </button>
+    {/if}
+    {#if data.canViewPermissions}
+      <button
+        role="tab"
+        class="tab"
+        class:tab-active={activeTab === 'permissions'}
+        onclick={() => (activeTab = 'permissions')}
+      >
+        Permissions
+      </button>
+    {/if}
+  </div>
+
+  <!-- Feedback Messages -->
+  {#if feedback}
+    <div
+      class={`alert ${feedback.type === 'error' ? 'alert-error border-error/30 bg-error/10 text-error-content' : 'alert-success border-success/30 bg-success/10 text-success-content'}`}
+    >
+      <span>{feedback.message}</span>
+    </div>
+  {/if}
+
+  <!-- Users Tab -->
+  {#if activeTab === 'users' && data.canManageUsers}
   <div class="glass-panel border-white/10 bg-base-200/70 p-5 space-y-4 rounded-2xl">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div class="relative w-full sm:max-w-sm">
@@ -338,14 +398,6 @@
       </div>
     {/if}
   </div>
-
-  {#if feedback}
-    <div
-      class={`alert ${feedback.type === 'error' ? 'alert-error border-error/30 bg-error/10 text-error-content' : 'alert-success border-success/30 bg-success/10 text-success-content'}`}
-    >
-      <span>{feedback.message}</span>
-    </div>
-  {/if}
 
   {#if data.users.length === 0}
     <p class="rounded-2xl border border-dashed border-base-content/15 bg-base-100/60 px-6 py-10 text-center text-sm text-base-content/60">
@@ -521,6 +573,28 @@
       </div>
     </div>
   {/if}
+  {/if}
+  <!-- End Users Tab -->
+
+  <!-- Roles Tab -->
+  {#if activeTab === 'roles' && data.canViewRoles}
+    <RolesTab
+      roles={data.rolesData}
+      canManageRoles={data.canManageRoles}
+      canManagePermissions={data.canManagePermissions}
+      onfeedback={(msg) => (feedback = msg)}
+    />
+  {/if}
+
+  <!-- Permissions Tab -->
+  {#if activeTab === 'permissions' && data.canViewPermissions}
+    <PermissionsTab
+      roles={data.rolesData}
+      permissions={data.permissionsData}
+      canManagePermissions={data.canManagePermissions}
+      onfeedback={(msg) => (feedback = msg)}
+    />
+  {/if}
 </section>
 
 <UserModal
@@ -553,3 +627,13 @@
     onsuccess={handleResetSuccess}
   />
 {/if}
+
+<RoleModal
+  open={createRoleModalOpen}
+  onclose={() => (createRoleModalOpen = false)}
+  onsuccess={async () => {
+    createRoleModalOpen = false;
+    await refreshData();
+    feedback = { type: 'success', message: 'Role created successfully.' };
+  }}
+/>

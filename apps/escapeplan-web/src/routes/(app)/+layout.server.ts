@@ -8,6 +8,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 
   return {
     user: locals.user,
-    session: locals.session
+    session: locals.session,
+    canViewCameras: locals.user.permissions?.includes('view_cameras') ?? false,
+    canManageCameras: locals.user.permissions?.includes('manage_cameras') ?? false
   };
 };

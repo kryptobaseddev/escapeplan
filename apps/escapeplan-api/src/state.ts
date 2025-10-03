@@ -159,6 +159,7 @@ type GameRow = {
   story_intro: string | null;
   duration_minutes: number;
   difficulty: string;
+  game_type: string;
   pricing_model: string;
   category: string | null;
   categories: string | null;
@@ -168,6 +169,7 @@ type GameRow = {
   resources_required: number;
   validation_notes: string | null;
   default_volume: number;
+  camera_ids: string | null;
   media_config: string | null;
   pricing_config: string | null;
   booking_rules_config: string | null;
@@ -640,7 +642,8 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
     storyIntro: row.story_intro ?? undefined,
     durationMinutes: row.duration_minutes,
     difficulty: row.difficulty,
-    pricingModel: row.pricing_model as 'per_person' | 'per_session' | 'per_hour',
+    gameType: (row.game_type as import('@escapeplan/contracts').GameType) ?? 'storefront',
+    pricingModel: row.pricing_model as import('@escapeplan/contracts').PricingModel,
     categories: categories.length ? categories : row.category ? [row.category] : [],
     minPlayers: row.min_players,
     maxPlayers: row.max_players,
@@ -650,14 +653,13 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
     defaultVolume: row.default_volume,
     media: mediaConfig
       ? {
-          thumbnailAssetId: mediaConfig.thumbnailAssetId ?? null,
-          roomScreenAssetId: mediaConfig.roomScreenAssetId ?? null,
+          thumbnailAssetId: mediaConfig.thumbnailAssetId ?? undefined,
+          roomScreenAssetId: mediaConfig.roomScreenAssetId ?? undefined,
           galleryAssetIds: mediaConfig.galleryAssetIds ?? []
         }
       : undefined,
     pricing: pricingConfig
       ? {
-          model: pricingConfig.model ?? (row.pricing_model as GamePricingConfig['model']),
           tiers: pricingConfig.tiers ?? [],
           deposit: pricingConfig.deposit,
           discounts: pricingConfig.discounts ?? []
@@ -679,6 +681,7 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
     archivedAt: row.archived_at ?? undefined,
     archivedBy: row.archived_by ?? undefined,
     archivedReason: row.archived_reason ?? undefined,
+    cameraIds: row.camera_ids ? (JSON.parse(row.camera_ids) as string[]) : [],
     milestones,
     puzzles,
     rooms
@@ -751,7 +754,7 @@ function normalizePuzzleInput(puzzle: GamePuzzleDefinition, index: number): Game
     operatorActions: puzzle.operatorActions,
     displayOrder: puzzle.displayOrder ?? index + 1,
     hints: puzzle.hints ?? [],
-    mediaMeta: puzzle.mediaMeta ?? null
+    mediaMeta: puzzle.mediaMeta ?? undefined
   };
 }
 
@@ -931,11 +934,11 @@ export function createGame(payload: SaveGameRequest): GameDetails {
   const bookingRulesConfig = payload.bookingRules ? JSON.stringify(payload.bookingRules) : null;
   sqlite
     .prepare(
-      `INSERT INTO games (id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories,
+      `INSERT INTO games (id, slug, name, description, story_intro, duration_minutes, difficulty, game_type, pricing_model, category, categories,
                           min_players, max_players, price_per_player_cents, resources_required, validation_notes, default_volume,
                           media_config, pricing_config, booking_rules_config,
                           created_at, updated_at, archived_at, archived_by, archived_reason)
-       VALUES (@id, @slug, @name, @description, @story_intro, @duration_minutes, @difficulty, @pricing_model, @category, @categories,
+       VALUES (@id, @slug, @name, @description, @story_intro, @duration_minutes, @difficulty, @game_type, @pricing_model, @category, @categories,
                @min_players, @max_players, @price_per_player_cents, @resources_required, @validation_notes, @default_volume,
                @media_config, @pricing_config, @booking_rules_config,
                @created_at, @updated_at, NULL, NULL, NULL)`
@@ -948,12 +951,13 @@ export function createGame(payload: SaveGameRequest): GameDetails {
       story_intro: payload.storyIntro ?? null,
       duration_minutes: payload.durationMinutes,
       difficulty: payload.difficulty,
-      pricing_model: payload.pricingModel,
+      game_type: payload.gameType ?? 'storefront',
+      pricing_model: null, // DEPRECATED
       category: payload.categories?.[0] ?? null,
       categories,
       min_players: payload.minPlayers,
       max_players: payload.maxPlayers,
-      price_per_player_cents: payload.pricePerPlayerCents,
+      price_per_player_cents: null, // DEPRECATED
       resources_required: payload.resourcesRequired,
       validation_notes: payload.validationNotes ?? null,
       default_volume: payload.defaultVolume ?? 80,
@@ -1002,6 +1006,7 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
            story_intro = @story_intro,
            duration_minutes = @duration_minutes,
            difficulty = @difficulty,
+           game_type = @game_type,
            pricing_model = @pricing_model,
            category = @category,
            categories = @categories,
@@ -1025,12 +1030,13 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
       story_intro: payload.storyIntro ?? null,
       duration_minutes: payload.durationMinutes,
       difficulty: payload.difficulty,
-      pricing_model: payload.pricingModel,
+      game_type: payload.gameType ?? 'storefront',
+      pricing_model: null, // DEPRECATED
       category: payload.categories?.[0] ?? null,
       categories: JSON.stringify(payload.categories ?? []),
       min_players: payload.minPlayers,
       max_players: payload.maxPlayers,
-      price_per_player_cents: payload.pricePerPlayerCents,
+      price_per_player_cents: null, // DEPRECATED
       resources_required: payload.resourcesRequired,
       validation_notes: payload.validationNotes ?? null,
       default_volume: payload.defaultVolume ?? 80,
@@ -1148,8 +1154,8 @@ export async function createOperatorAccount(input: CreateOperatorRequest): Promi
   const trimmedName = input.name.trim();
   const trimmedBio = input.bio?.trim() ?? null;
   // Better-Auth uses 'image' field which maps to 'avatar_config' column with mode: 'json'
-  // We stringify it for Better Auth compatibility, our adapter will parse it back
-  const avatarImage = input.avatarConfig ? JSON.stringify(input.avatarConfig) : undefined;
+  // Drizzle will automatically JSON.stringify the object, so pass it directly
+  const avatarImage = input.avatarConfig ?? undefined;
 
   const hashedPassword = await context.password.hash(input.password);
 
@@ -1432,7 +1438,7 @@ export function listOperatorSummaries(filters: OperatorListFilters = {}): Operat
   if (filters.search && filters.search.trim().length) {
     const normalized = `%${filters.search.trim().toLowerCase()}%`;
     conditions.push(
-      '(LOWER(username) LIKE ? OR LOWER(name) LIKE ? OR LOWER(COALESCE(email, "")) LIKE ?)'
+      '(LOWER(username) LIKE ? OR LOWER(name) LIKE ? OR LOWER(COALESCE(email, \'\')) LIKE ?)'
     );
     params.push(normalized, normalized, normalized);
   }
@@ -1908,6 +1914,9 @@ export function quickStartSession(
       contact_phone: 'N/A'
     });
 
+  // Determine initial timer status based on autoStartTimer flag
+  const initialTimerStatus = payload.autoStartTimer === true ? 'running' : 'idle';
+
   sqlite
     .prepare(
       `INSERT INTO sessions (
@@ -1915,7 +1924,7 @@ export function quickStartSession(
          started_at, scheduled_end, hints_used, stream_thumbnail_url,
          background_audio_track, background_audio_is_playing, crew_primary, crew_support
        ) VALUES (
-         @id, @booking_id, 'running', @timer_total_seconds, @timer_total_seconds, 0, 'running',
+         @id, @booking_id, 'running', @timer_total_seconds, @timer_total_seconds, 0, @timer_status,
          @started_at, @scheduled_end, 0, NULL, NULL, 0, @crew_primary, NULL
        )`
     )
@@ -1923,6 +1932,7 @@ export function quickStartSession(
       id: sessionId,
       booking_id: bookingId,
       timer_total_seconds: totalSeconds,
+      timer_status: initialTimerStatus,
       started_at: nowIso,
       scheduled_end: scheduledEndIso,
       crew_primary: crewPrimary
@@ -1941,7 +1951,7 @@ export function quickStartSession(
       puzzle.title,
       puzzle.description,
       puzzle.solution,
-      index === 0 ? 'available' : 'locked',
+      'available', // All puzzles are available from the start (no gating)
       puzzle.display_order ?? index + 1,
       puzzle.hints // Already a JSON string from database
     );
@@ -2307,6 +2317,302 @@ function tickTimers() {
   } catch (error) {
     console.error("[Timer Ticker] Error:", error);
   }
+}
+
+// ============================================================================
+// RBAC MANAGEMENT
+// ============================================================================
+
+/**
+ * List all roles with their permission counts
+ */
+export function listRoles(): import('@escapeplan/contracts').RoleWithPermissions[] {
+  const roles = sqlite.prepare(`
+    SELECT
+      r.id,
+      r.name,
+      r.description,
+      r.is_system as isSystem,
+      r.created_at as createdAt,
+      r.updated_at as updatedAt
+    FROM roles r
+    ORDER BY r.is_system DESC, r.name ASC
+  `).all() as Array<{
+    id: string;
+    name: string;
+    description: string | null;
+    isSystem: number;
+    createdAt: string;
+    updatedAt: string;
+  }>;
+
+  return roles.map(role => {
+    const permissions = sqlite.prepare(`
+      SELECT p.id, p.name, p.label, p.category, p.description, p.created_at as createdAt
+      FROM permissions p
+      INNER JOIN role_permissions rp ON p.id = rp.permission_id
+      WHERE rp.role_id = ?
+      ORDER BY p.category, p.name
+    `).all(role.id) as Array<{
+      id: string;
+      name: string;
+      label: string;
+      category: string;
+      description: string | null;
+      createdAt: string;
+    }>;
+
+    return {
+      id: role.id,
+      name: role.name,
+      description: role.description,
+      isSystem: Boolean(role.isSystem),
+      createdAt: role.createdAt,
+      updatedAt: role.updatedAt,
+      permissions: permissions.map(p => ({
+        ...p,
+        name: p.name as import('@escapeplan/contracts').OperatorPermission,
+        category: p.category as import('@escapeplan/contracts').PermissionCategory
+      }))
+    };
+  });
+}
+
+/**
+ * Get a single role with its permissions
+ */
+export function getRoleById(roleId: string): import('@escapeplan/contracts').RoleWithPermissions | null {
+  const role = sqlite.prepare(`
+    SELECT
+      r.id,
+      r.name,
+      r.description,
+      r.is_system as isSystem,
+      r.created_at as createdAt,
+      r.updated_at as updatedAt
+    FROM roles r
+    WHERE r.id = ?
+  `).get(roleId) as {
+    id: string;
+    name: string;
+    description: string | null;
+    isSystem: number;
+    createdAt: string;
+    updatedAt: string;
+  } | undefined;
+
+  if (!role) {
+    return null;
+  }
+
+  const permissions = sqlite.prepare(`
+    SELECT p.id, p.name, p.label, p.category, p.description, p.created_at as createdAt
+    FROM permissions p
+    INNER JOIN role_permissions rp ON p.id = rp.permission_id
+    WHERE rp.role_id = ?
+    ORDER BY p.category, p.name
+  `).all(roleId) as Array<{
+    id: string;
+    name: string;
+    label: string;
+    category: string;
+    description: string | null;
+    createdAt: string;
+  }>;
+
+  return {
+    id: role.id,
+    name: role.name,
+    description: role.description,
+    isSystem: Boolean(role.isSystem),
+    createdAt: role.createdAt,
+    updatedAt: role.updatedAt,
+    permissions: permissions.map(p => ({
+      ...p,
+      name: p.name as import('@escapeplan/contracts').OperatorPermission,
+      category: p.category as import('@escapeplan/contracts').PermissionCategory
+    }))
+  };
+}
+
+/**
+ * Create a new custom role
+ */
+export function createRole(data: import('@escapeplan/contracts').CreateRoleRequest): import('@escapeplan/contracts').RoleWithPermissions {
+  const roleId = randomUUID();
+  const now = new Date().toISOString();
+
+  // Insert role
+  sqlite.prepare(`
+    INSERT INTO roles (id, name, description, is_system, created_at, updated_at)
+    VALUES (?, ?, ?, 0, ?, ?)
+  `).run(roleId, data.name, data.description ?? null, now, now);
+
+  // Insert permissions if provided
+  if (data.permissionIds && data.permissionIds.length > 0) {
+    const insertPermStmt = sqlite.prepare(`
+      INSERT INTO role_permissions (id, role_id, permission_id, granted_at)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    for (const permissionId of data.permissionIds) {
+      insertPermStmt.run(randomUUID(), roleId, permissionId, now);
+    }
+  }
+
+  logToDatabase('info', 'rbac', `Created custom role: ${data.name}`, { roleId, roleName: data.name });
+
+  const created = getRoleById(roleId);
+  if (!created) {
+    throw new Error('Failed to retrieve created role');
+  }
+
+  return created;
+}
+
+/**
+ * Update a role's metadata (name, description)
+ */
+export function updateRole(roleId: string, data: import('@escapeplan/contracts').UpdateRoleRequest): import('@escapeplan/contracts').RoleWithPermissions {
+  const existing = getRoleById(roleId);
+  if (!existing) {
+    throw new Error('Role not found');
+  }
+
+  if (existing.isSystem) {
+    throw new Error('Cannot modify system roles');
+  }
+
+  const now = new Date().toISOString();
+  const name = data.name ?? existing.name;
+  const description = data.description !== undefined ? data.description : existing.description;
+
+  sqlite.prepare(`
+    UPDATE roles
+    SET name = ?, description = ?, updated_at = ?
+    WHERE id = ?
+  `).run(name, description, now, roleId);
+
+  logToDatabase('info', 'rbac', `Updated role: ${name}`, { roleId, changes: data });
+
+  const updated = getRoleById(roleId);
+  if (!updated) {
+    throw new Error('Failed to retrieve updated role');
+  }
+
+  return updated;
+}
+
+/**
+ * Update a role's permissions
+ */
+export function updateRolePermissions(roleId: string, data: import('@escapeplan/contracts').UpdateRolePermissionsRequest, grantedBy?: string): import('@escapeplan/contracts').RoleWithPermissions {
+  const existing = getRoleById(roleId);
+  if (!existing) {
+    throw new Error('Role not found');
+  }
+
+  if (existing.isSystem) {
+    throw new Error('Cannot modify permissions for system roles');
+  }
+
+  const now = new Date().toISOString();
+
+  // Transaction: delete existing permissions, then insert new ones
+  sqlite.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
+
+  if (data.permissionIds && data.permissionIds.length > 0) {
+    const insertStmt = sqlite.prepare(`
+      INSERT INTO role_permissions (id, role_id, permission_id, granted_at, granted_by)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    for (const permissionId of data.permissionIds) {
+      insertStmt.run(randomUUID(), roleId, permissionId, now, grantedBy ?? null);
+    }
+  }
+
+  // Update role's updated_at timestamp
+  sqlite.prepare('UPDATE roles SET updated_at = ? WHERE id = ?').run(now, roleId);
+
+  logToDatabase('info', 'rbac', `Updated permissions for role: ${existing.name}`, {
+    roleId,
+    permissionCount: data.permissionIds?.length ?? 0,
+    grantedBy
+  });
+
+  const updated = getRoleById(roleId);
+  if (!updated) {
+    throw new Error('Failed to retrieve updated role');
+  }
+
+  return updated;
+}
+
+/**
+ * Delete a custom role
+ */
+export function deleteRole(roleId: string): void {
+  const existing = getRoleById(roleId);
+  if (!existing) {
+    throw new Error('Role not found');
+  }
+
+  if (existing.isSystem) {
+    throw new Error('Cannot delete system roles');
+  }
+
+  // Check if any operators are using this role
+  const operatorsUsingRole = sqlite.prepare('SELECT COUNT(*) as count FROM operators WHERE role_id = ?').get(roleId) as { count: number };
+  if (operatorsUsingRole.count > 0) {
+    throw new Error(`Cannot delete role: ${operatorsUsingRole.count} operator(s) are assigned to this role`);
+  }
+
+  sqlite.prepare('DELETE FROM roles WHERE id = ?').run(roleId);
+
+  logToDatabase('info', 'rbac', `Deleted custom role: ${existing.name}`, { roleId });
+}
+
+/**
+ * List all permissions
+ */
+export function listPermissions(): import('@escapeplan/contracts').PermissionSummary[] {
+  const permissions = sqlite.prepare(`
+    SELECT
+      p.id,
+      p.name,
+      p.label,
+      p.category,
+      p.description,
+      p.created_at as createdAt,
+      (SELECT COUNT(*) FROM role_permissions WHERE permission_id = p.id) as assignedToRoles
+    FROM permissions p
+    ORDER BY p.category, p.name
+  `).all() as Array<{
+    id: string;
+    name: string;
+    label: string;
+    category: string;
+    description: string | null;
+    createdAt: string;
+    assignedToRoles: number;
+  }>;
+
+  return permissions.map(p => ({
+    ...p,
+    name: p.name as import('@escapeplan/contracts').OperatorPermission,
+    category: p.category as import('@escapeplan/contracts').PermissionCategory
+  }));
+}
+
+/**
+ * Get permission matrix (all roles with all permissions)
+ */
+export function getPermissionMatrix(): import('@escapeplan/contracts').GetPermissionsResponse & import('@escapeplan/contracts').GetRolesResponse {
+  return {
+    permissions: listPermissions(),
+    roles: listRoles()
+  };
 }
 
 // Start the ticker - runs every 1000ms (1 second)

@@ -276,7 +276,9 @@
                     </div>
 
                     <div class="flex flex-wrap items-center gap-2">
-                      <a class="btn btn-sm btn-primary" href={`/games/${session.id}`}>Open runner</a>
+                      <a class="btn btn-sm btn-primary" href={`/games/${session.id}`} data-sveltekit-reload>
+                        Open runner
+                      </a>
                       <a class="btn btn-sm btn-ghost border border-white/10" href={`/bookings?focus=${session.id}`}>View booking</a>
                     </div>
 

@@ -2,7 +2,7 @@
   import type { GameDetails, GameHintDefinition, GameMilestone } from '@escapeplan/contracts';
   import { onMount } from 'svelte';
 
-  type TabId = 'details' | 'media' | 'rooms' | 'puzzles' | 'pricing' | 'booking' | 'milestones';
+  type TabId = 'details' | 'media' | 'rooms' | 'puzzles' | 'pricing' | 'booking' | 'milestones' | 'cameras';
 
   let {
     open = $bindable(false),
@@ -29,7 +29,8 @@
     { id: 'puzzles', label: 'Puzzles & Hints', count: game?.puzzles?.length || 0 },
     { id: 'pricing', label: 'Pricing' },
     { id: 'booking', label: 'Booking Rules' },
-    { id: 'milestones', label: 'Milestones', count: game?.milestones?.length || 0 }
+    { id: 'milestones', label: 'Milestones', count: game?.milestones?.length || 0 },
+    { id: 'cameras', label: 'Cameras', count: game?.cameraIds?.length || 0 }
   ]);
 
   const difficultyStars = $derived.by(() => {
@@ -66,12 +67,24 @@
 
   function stopAllMedia() {
     Object.values(audioPlayers).forEach(player => {
-      player.pause();
-      player.currentTime = 0;
+      if (player && typeof player.pause === 'function') {
+        try {
+          player.pause();
+          player.currentTime = 0;
+        } catch (e) {
+          console.warn('Failed to pause audio:', e);
+        }
+      }
     });
     Object.values(videoPlayers).forEach(player => {
-      player.pause();
-      player.currentTime = 0;
+      if (player && typeof player.pause === 'function') {
+        try {
+          player.pause();
+          player.currentTime = 0;
+        } catch (e) {
+          console.warn('Failed to pause video:', e);
+        }
+      }
     });
     playingMedia = null;
   }
@@ -522,15 +535,77 @@
                         {/if}
                       {/if}
                       {#if milestone.mediaType === 'audio' || milestone.mediaType === 'video'}
-                        <div class="flex items-center gap-1">
-                          <span class="text-base-content/50">Vol:</span>
-                          <span>{milestone.volumeLevel}%</span>
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs text-base-content/50">Volume:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={milestone.volumeLevel || game?.defaultVolume || 80}
+                            disabled
+                            class="range range-xs range-primary w-20"
+                          />
+                          <span class="text-xs text-base-content/70">
+                            {milestone.volumeLevel || game?.defaultVolume || 80}%
+                          </span>
                         </div>
                       {/if}
                     </div>
                   </div>
                 </div>
               {/each}
+            {/if}
+          </div>
+
+        {:else if activeTab === 'cameras'}
+          <div class="space-y-4">
+            {#if !game.cameraIds || game.cameraIds.length === 0}
+              <div class="alert">
+                <span>No cameras associated with this game</span>
+              </div>
+              <p class="text-sm text-base-content/60">
+                Cameras can be associated from the <a href="/admin/cameras" class="link link-primary">Camera Management</a> page.
+              </p>
+            {:else}
+              <div class="alert alert-info">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+                </svg>
+                <div>
+                  <p class="font-semibold">Camera Association</p>
+                  <p class="text-sm">
+                    This game has {game.cameraIds.length} camera{game.cameraIds.length === 1 ? '' : 's'} associated.
+                    Manage cameras from the <a href="/admin/cameras" class="link link-primary">Camera Management</a> page.
+                  </p>
+                </div>
+              </div>
+
+              <div class="space-y-2">
+                {#each game.cameraIds as cameraId}
+                  <div class="card bg-base-100 border border-white/10">
+                    <div class="card-body p-4">
+                      <div class="flex items-center gap-3">
+                        <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-base-300">
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 24 24"
+                            class="w-5 h-5 text-base-content/50"
+                          >
+                            <path
+                              fill="currentColor"
+                              d="M4 6.5h2L7 5h10l1 1.5h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-10a2 2 0 0 1 2-2zm8 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0-2a2 2 0 1 1 0-4 2 2 0 0 1 0 4z"
+                            />
+                          </svg>
+                        </div>
+                        <div>
+                          <p class="font-mono text-sm text-base-content/70">{cameraId}</p>
+                          <p class="text-xs text-base-content/50">Camera ID</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                {/each}
+              </div>
             {/if}
           </div>
         {/if}

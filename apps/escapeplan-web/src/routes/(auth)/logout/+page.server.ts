@@ -1,8 +1,8 @@
 import { redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { PUBLIC_API_BASE_URL } from '$env/static/public';
+import { env } from '$env/dynamic/public';
 
-const API_BASE = (PUBLIC_API_BASE_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
+const API_BASE = (env.PUBLIC_API_BASE_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
 
 export const actions: Actions = {
   default: async (event) => {

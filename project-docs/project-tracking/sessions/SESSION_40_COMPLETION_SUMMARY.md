@@ -59,7 +59,7 @@ Completed **100% of backend** for the Logging & Alerting System and resolved **a
 
 ```typescript
 // Before (generic)
-export type PricingModel = 'per_person' | 'flat_rate';
+export type PricingModel = 'per_person' | 'per_session' | 'per_hour';
 
 // After (business-specific)
 export type PricingModel = 'per_person' | 'per_session' | 'per_hour';

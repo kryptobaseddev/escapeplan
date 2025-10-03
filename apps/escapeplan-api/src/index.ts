@@ -11,7 +11,25 @@ import type {
   OperatorRole,
   SaveGameRequest,
   ApplyNetworkConfigRequest,
-  ApplyNetworkConfigResponse
+  ApplyNetworkConfigResponse,
+  CreateOperatorRequest,
+  UpdateOperatorRequest,
+  QuickStartSessionRequest,
+  CreateRoleRequest,
+  UpdateRoleRequest,
+  CreateCameraRequest,
+  UpdateCameraRequest
+} from '@escapeplan/contracts';
+import {
+  saveGameSchema,
+  createOperatorSchema,
+  updateOperatorSchema,
+  quickStartSchema,
+  sessionCommandSchema,
+  createRoleSchema,
+  updateRoleSchema,
+  createCameraSchema,
+  updateCameraSchema
 } from '@escapeplan/contracts';
 import {
   applyCommand,
@@ -44,11 +62,19 @@ import {
   scanWiFiNetworks,
   connectToWiFi,
   getWiFiClientStatus,
-  disconnectFromWiFi
+  disconnectFromWiFi,
+  listRoles,
+  getRoleById,
+  createRole,
+  updateRole,
+  updateRolePermissions,
+  deleteRole,
+  listPermissions,
+  getPermissionMatrix
 } from './state.js';
 import { auth, requireSession } from './auth.js';
 import { db, sqlite } from './db/client.js';
-import { operators, alertRules, systemLogs } from './db/schema.js';
+import { operators, alertRules, systemLogs, cameras, games } from '@escapeplan/contracts';
 import { eq, and, like, count, desc } from 'drizzle-orm';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
@@ -62,39 +88,6 @@ const operatorRoleValues = ['admin', 'manager', 'game_master', 'customer'] as co
 
 const operatorRoleFilterValues = [...operatorRoleValues, 'all'] as const;
 const userStatusFilterValues = ['active', 'archived', 'all'] as const;
-
-const avatarConfigSchema = z.object({
-  seed: z.string(),
-  backgroundType: z.array(z.string()).optional(),
-  backgroundColor: z.array(z.string()).optional(),
-  baseColor: z.array(z.string()).optional(),
-  eyes: z.array(z.string()).optional(),
-  face: z.array(z.string()).optional(),
-  mouth: z.array(z.string()).optional(),
-  sides: z.array(z.string()).optional(),
-  texture: z.array(z.string()).optional(),
-  top: z.array(z.string()).optional()
-});
-
-const createUserSchema = z.object({
-  username: z.string().min(2),
-  name: z.string().min(1),
-  role: z.enum(operatorRoleValues),
-  password: z.string().min(12),
-  email: z.string().email().optional().or(z.literal('')),
-  avatarConfig: avatarConfigSchema.optional(),
-  bio: z.string().max(500).optional(),
-  mustResetPassword: z.boolean().optional()
-});
-
-const updateUserSchema = z.object({
-  name: z.string().min(1).optional(),
-  role: z.enum(operatorRoleValues).optional(),
-  email: z.string().email().optional(),
-  avatarConfig: avatarConfigSchema.optional().or(z.literal(null)),
-  bio: z.string().max(500).optional().or(z.literal(null)),
-  mustResetPassword: z.boolean().optional()
-});
 
 const resetPasswordSchema = z.object({
   password: z.string().min(12),
@@ -114,125 +107,24 @@ const changePasswordSchema = z.object({
   newPassword: z.string().min(12)
 });
 
+const avatarConfigSchema = z.object({
+  seed: z.string(),
+  backgroundType: z.array(z.string()).optional(),
+  backgroundColor: z.array(z.string()).optional(),
+  baseColor: z.array(z.string()).optional(),
+  eyes: z.array(z.string()).optional(),
+  face: z.array(z.string()).optional(),
+  mouth: z.array(z.string()).optional(),
+  sides: z.array(z.string()).optional(),
+  texture: z.array(z.string()).optional(),
+  top: z.array(z.string()).optional()
+});
+
 const updateOwnProfileSchema = z.object({
   name: z.string().min(1),
   email: z.string().email().optional().or(z.literal(null)),
   avatarConfig: avatarConfigSchema.optional().or(z.literal(null)),
   bio: z.string().max(500).optional().or(z.literal(null))
-});
-
-const hintSchema = z.object({
-  uuid: z.string().min(1),
-  type: z.enum(['text', 'image', 'audio', 'video']),
-  content: z.string(),  // Allow empty strings for media hints (content is in assetUrl)
-  assetUrl: z.string().optional(),
-  order: z.number().int().nonnegative(),
-  countAsHint: z.boolean().optional()
-});
-
-const puzzleSchema = z.object({
-  id: z.string().optional(),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  solution: z.string().optional(),
-  mediaAsset: z.string().optional(),
-  operatorActions: z.string().optional(),
-  displayOrder: z.number().int().nonnegative().optional(),
-  hints: z.array(hintSchema).optional().default([]),
-  mediaMeta: z.record(z.unknown()).optional()
-});
-
-const roomSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1),
-  description: z.string().optional(),
-  slug: z.string().regex(/^[a-z0-9-]+$/).optional(),
-  isMobileCapable: z.boolean(),
-  themeToken: z.string().optional(),
-  capacity: z.number().int().positive().optional()
-});
-
-const pricingModelValues = ['per_person', 'per_session', 'per_hour'] as const;
-
-const mediaConfigSchema = z.object({
-  thumbnailAssetId: z.string().optional().nullable(),
-  roomScreenAssetId: z.string().optional().nullable(),
-  galleryAssetIds: z.array(z.string()).default([])
-});
-
-const pricingTierSchema = z.object({
-  id: z.string().min(1),
-  label: z.string().min(1),
-  priceCents: z.number().int().nonnegative(),
-  minPlayers: z.number().int().positive().optional().nullable(),
-  maxPlayers: z.number().int().positive().optional().nullable()
-});
-
-const pricingDiscountSchema = z.object({
-  code: z.string().min(1),
-  percentOff: z.number().min(0).max(100).optional().nullable(),
-  amountOffCents: z.number().int().nonnegative().optional().nullable(),
-  expiresAt: z.string().optional().nullable(),
-  notes: z.string().max(200).optional().nullable()
-});
-
-const pricingConfigSchema = z.object({
-  model: z.enum(pricingModelValues).default('per_person'),
-  tiers: z.array(pricingTierSchema).default([]),
-  deposit: z
-    .object({
-      required: z.boolean(),
-      type: z.enum(['flat', 'percent']).optional(),
-      amountCents: z.number().int().nonnegative().optional().nullable()
-    })
-    .optional(),
-  discounts: z.array(pricingDiscountSchema).default([])
-});
-
-const bookingRulesSchema = z.object({
-  isMobile: z.boolean().optional(),
-  locationNotes: z.string().max(500).optional().nullable(),
-  travelBufferMinutes: z.number().int().min(0).max(600).optional().nullable(),
-  equipmentChecklist: z.array(z.string().min(1)).default([]),
-  reservationStyle: z.enum(['public', 'private']).default('public'),
-  cancellationPolicy: z.string().max(2000).optional().nullable(),
-  customFields: z
-    .array(
-      z.object({
-        label: z.string().min(1).max(120),
-        required: z.boolean()
-      })
-    )
-    .default([])
-});
-
-const saveGameSchema = z.object({
-  slug: z.string().regex(/^[a-z0-9-]+$/),
-  name: z.string().min(1),
-  description: z.string().min(1),
-  storyIntro: z.string().optional(),
-  durationMinutes: z.number().int().positive(),
-  difficulty: z.string().min(1),
-  pricingModel: z.enum(pricingModelValues),
-  categories: z.array(z.string().min(1)).optional().default([]),
-  minPlayers: z.number().int().positive(),
-  maxPlayers: z.number().int().positive(),
-  pricePerPlayerCents: z.number().int().nonnegative(),
-  resourcesRequired: z.number().int().positive(),
-  validationNotes: z.string().optional(),
-  puzzles: z.array(puzzleSchema).optional().default([]),
-  rooms: z.array(roomSchema).optional().default([]),
-  media: mediaConfigSchema.optional(),
-  pricing: pricingConfigSchema.optional(),
-  bookingRules: bookingRulesSchema.optional()
-});
-
-const quickStartSchema = z.object({
-  gameId: z.string().min(1),
-  roomId: z.string().min(1),
-  partySize: z.number().int().positive(),
-  durationMinutes: z.number().int().min(5).max(240).optional(),
-  notes: z.string().max(500).optional().nullable()
 });
 
 const networkUpdateSchema = z.object({
@@ -452,7 +344,7 @@ export async function buildServer() {
       const session = await ensureAuth(request, reply);
       if (!session) return;
       if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
-      const parsed = createUserSchema.safeParse(request.body);
+      const parsed = createOperatorSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
@@ -473,7 +365,7 @@ export async function buildServer() {
       if (!session) return;
       if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
       const { id } = request.params as { id: string };
-      const parsed = updateUserSchema.safeParse(request.body);
+      const parsed = updateOperatorSchema.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
@@ -553,6 +445,122 @@ export async function buildServer() {
       }
     });
 
+    // ========================================================================
+    // ROLES & PERMISSIONS MANAGEMENT
+    // ========================================================================
+
+    api.get('/admin/roles', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_roles')) return;
+      return listRoles();
+    });
+
+    api.post('/admin/roles', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_roles')) return;
+
+      const parsed = createRoleSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        const created = createRole(parsed.data);
+        return created;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to create role');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/roles/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_roles')) return;
+
+      const { id } = request.params as { id: string };
+      const role = getRoleById(id);
+      if (!role) {
+        return reply.status(404).send({ statusCode: 404, message: 'Role not found' });
+      }
+      return role;
+    });
+
+    api.patch('/admin/roles/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_roles')) return;
+
+      const { id } = request.params as { id: string };
+      const parsed = updateRoleSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        const updated = updateRole(id, parsed.data);
+        return updated;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to update role');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.delete('/admin/roles/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_roles')) return;
+
+      const { id } = request.params as { id: string };
+      try {
+        deleteRole(id);
+        reply.status(204).send();
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to delete role');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.patch('/admin/roles/:id/permissions', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_permissions')) return;
+
+      const updatePermissionsSchema = z.object({
+        permissionIds: z.array(z.string())
+      });
+
+      const { id } = request.params as { id: string };
+      const parsed = updatePermissionsSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        const updated = updateRolePermissions(id, parsed.data, session.user.id);
+        return updated;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to update role permissions');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/permissions', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_permissions')) return;
+      return listPermissions();
+    });
+
+    api.get('/admin/permissions/matrix', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_permissions')) return;
+      return getPermissionMatrix();
+    });
+
     api.post('/users/me/password', async (request, reply) => {
       const session = await ensureAuth(request, reply);
       if (!session) return;
@@ -624,29 +632,8 @@ export async function buildServer() {
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
-      const data = parsed.data;
-      const payload: SaveGameRequest = {
-        slug: data.slug,
-        name: data.name,
-        description: data.description,
-        storyIntro: data.storyIntro,
-        durationMinutes: data.durationMinutes,
-        difficulty: data.difficulty,
-        pricingModel: data.pricingModel,
-        categories: data.categories ?? [],
-        minPlayers: data.minPlayers,
-        maxPlayers: data.maxPlayers,
-        pricePerPlayerCents: data.pricePerPlayerCents,
-        resourcesRequired: data.resourcesRequired,
-        validationNotes: data.validationNotes,
-        puzzles: (data.puzzles ?? []).map((puzzle, index) => ({ ...puzzle, id: puzzle.id ?? '', displayOrder: puzzle.displayOrder ?? index + 1 })),
-        rooms: (data.rooms ?? []).map((room) => ({ ...room, id: room.id ?? '' })),
-        media: data.media,
-        pricing: data.pricing,
-        bookingRules: data.bookingRules
-      };
       try {
-        const created = createGame(payload);
+        const created = createGame(parsed.data);
         return created;
       } catch (error) {
         request.log.error({ err: error }, 'Failed to create game');
@@ -661,32 +648,10 @@ export async function buildServer() {
       const { id } = request.params as { id: string };
       const parsed = saveGameSchema.safeParse(request.body);
       if (!parsed.success) {
-        console.log('❌ Game validation failed:', JSON.stringify(parsed.error.flatten(), null, 2));
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
-      const data = parsed.data;
-      const payload: SaveGameRequest = {
-        slug: data.slug,
-        name: data.name,
-        description: data.description,
-        storyIntro: data.storyIntro,
-        durationMinutes: data.durationMinutes,
-        difficulty: data.difficulty,
-        pricingModel: data.pricingModel,
-        categories: data.categories ?? [],
-        minPlayers: data.minPlayers,
-        maxPlayers: data.maxPlayers,
-        pricePerPlayerCents: data.pricePerPlayerCents,
-        resourcesRequired: data.resourcesRequired,
-        validationNotes: data.validationNotes,
-        puzzles: (data.puzzles ?? []).map((puzzle, index) => ({ ...puzzle, id: puzzle.id ?? '', displayOrder: puzzle.displayOrder ?? index + 1 })),
-        rooms: (data.rooms ?? []).map((room) => ({ ...room, id: room.id ?? '' })),
-        media: data.media,
-        pricing: data.pricing,
-        bookingRules: data.bookingRules
-      };
       try {
-        const updated = updateGame(id, payload);
+        const updated = updateGame(id, parsed.data);
         return updated;
       } catch (error) {
         request.log.error({ err: error }, 'Failed to update game');
@@ -843,6 +808,250 @@ export async function buildServer() {
         return disconnectFromWiFi();
       } catch (error) {
         request.log.error({ err: error }, 'WiFi disconnection failed');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // =========================================================================
+    // Camera Management Routes
+    // =========================================================================
+
+    // Get all cameras
+    api.get('/admin/cameras', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_cameras')) return;
+
+      const camerasWithGames = db.select({
+        id: cameras.id,
+        name: cameras.name,
+        gameId: cameras.game_id,
+        gameName: games.name,
+        protocol: cameras.protocol,
+        host: cameras.host,
+        port: cameras.port,
+        status: cameras.status,
+        lastSeen: cameras.last_seen,
+        hlsStreaming: cameras.hls_streaming,
+      })
+        .from(cameras)
+        .leftJoin(games, eq(cameras.game_id, games.id))
+        .all();
+
+      return { cameras: camerasWithGames };
+    });
+
+    // Create camera
+    api.post('/admin/cameras', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_cameras')) return;
+
+      const parsed = createCameraSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      const { encryptPassword } = await import('./cameras/encryption.js');
+      const { nanoid } = await import('nanoid');
+
+      const passwordEncrypted = parsed.data.password ? encryptPassword(parsed.data.password) : null;
+
+      try {
+        // If gameId provided, verify game exists
+        if (parsed.data.gameId) {
+          const game = db.select().from(games).where(eq(games.id, parsed.data.gameId)).get();
+          if (!game) {
+            return reply.status(404).send({ statusCode: 404, message: 'Game not found' });
+          }
+        }
+
+        const cameraId = nanoid();
+
+        // Create camera
+        db.insert(cameras).values({
+          id: cameraId,
+          name: parsed.data.name,
+          game_id: parsed.data.gameId || null,
+          protocol: parsed.data.protocol,
+          host: parsed.data.host,
+          port: parsed.data.port,
+          username: parsed.data.username || null,
+          password_encrypted: passwordEncrypted,
+          stream_path: parsed.data.streamPath || null,
+          resolution: parsed.data.resolution,
+          frame_rate: parsed.data.frameRate,
+          transport: parsed.data.transport,
+          status: 'offline',
+          hls_streaming: false,
+        }).run();
+
+        // If associated with game, update game's camera_ids array
+        if (parsed.data.gameId) {
+          const game = db.select().from(games).where(eq(games.id, parsed.data.gameId)).get();
+          if (game) {
+            const cameraIds = Array.isArray(game.camera_ids) ? game.camera_ids : [];
+            if (!cameraIds.includes(cameraId)) {
+              cameraIds.push(cameraId);
+              db.update(games)
+                .set({ camera_ids: cameraIds })
+                .where(eq(games.id, parsed.data.gameId))
+                .run();
+            }
+          }
+        }
+
+        const created = db.select().from(cameras).where(eq(cameras.id, cameraId)).get();
+        return reply.status(201).send(created);
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to create camera');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Update camera
+    api.patch('/admin/cameras/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_cameras')) return;
+
+      const { id } = request.params as { id: string };
+
+      const parsed = updateCameraSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        const camera = db.select().from(cameras).where(eq(cameras.id, id)).get();
+        if (!camera) {
+          return reply.status(404).send({ statusCode: 404, message: 'Camera not found' });
+        }
+
+        const { encryptPassword } = await import('./cameras/encryption.js');
+
+        const updates: any = {};
+        if (parsed.data.name !== undefined) updates.name = parsed.data.name;
+        if (parsed.data.protocol !== undefined) updates.protocol = parsed.data.protocol;
+        if (parsed.data.host !== undefined) updates.host = parsed.data.host;
+        if (parsed.data.port !== undefined) updates.port = parsed.data.port;
+        if (parsed.data.username !== undefined) updates.username = parsed.data.username || null;
+        if (parsed.data.password !== undefined) updates.password_encrypted = parsed.data.password ? encryptPassword(parsed.data.password) : null;
+        if (parsed.data.streamPath !== undefined) updates.stream_path = parsed.data.streamPath || null;
+        if (parsed.data.resolution !== undefined) updates.resolution = parsed.data.resolution;
+        if (parsed.data.frameRate !== undefined) updates.frame_rate = parsed.data.frameRate;
+        if (parsed.data.transport !== undefined) updates.transport = parsed.data.transport;
+
+        // Handle game association change
+        if (parsed.data.gameId !== undefined) {
+          const oldGameId = camera.game_id;
+          const newGameId = parsed.data.gameId;
+
+          // Remove from old game's camera_ids
+          if (oldGameId && oldGameId !== newGameId) {
+            const oldGame = db.select().from(games).where(eq(games.id, oldGameId)).get();
+            if (oldGame) {
+              const cameraIds = Array.isArray(oldGame.camera_ids) ? oldGame.camera_ids.filter((cid: string) => cid !== id) : [];
+              db.update(games)
+                .set({ camera_ids: cameraIds })
+                .where(eq(games.id, oldGameId))
+                .run();
+            }
+          }
+
+          // Add to new game's camera_ids
+          if (newGameId && newGameId !== oldGameId) {
+            const newGame = db.select().from(games).where(eq(games.id, newGameId)).get();
+            if (!newGame) {
+              return reply.status(404).send({ statusCode: 404, message: 'Game not found' });
+            }
+            const cameraIds = Array.isArray(newGame.camera_ids) ? newGame.camera_ids : [];
+            if (!cameraIds.includes(id)) {
+              cameraIds.push(id);
+              db.update(games)
+                .set({ camera_ids: cameraIds })
+                .where(eq(games.id, newGameId))
+                .run();
+            }
+          }
+
+          updates.game_id = newGameId || null;
+        }
+
+        db.update(cameras)
+          .set(updates)
+          .where(eq(cameras.id, id))
+          .run();
+
+        const updated = db.select().from(cameras).where(eq(cameras.id, id)).get();
+        return updated;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to update camera');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Delete camera
+    api.delete('/admin/cameras/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_cameras')) return;
+
+      const { id } = request.params as { id: string };
+
+      try {
+        const camera = db.select().from(cameras).where(eq(cameras.id, id)).get();
+        if (!camera) {
+          return reply.status(404).send({ statusCode: 404, message: 'Camera not found' });
+        }
+
+        // Remove from game's camera_ids if associated
+        if (camera.game_id) {
+          const game = db.select().from(games).where(eq(games.id, camera.game_id)).get();
+          if (game) {
+            const cameraIds = Array.isArray(game.camera_ids) ? game.camera_ids.filter((cid: string) => cid !== id) : [];
+            db.update(games)
+              .set({ camera_ids: cameraIds })
+              .where(eq(games.id, camera.game_id))
+              .run();
+          }
+        }
+
+        db.delete(cameras).where(eq(cameras.id, id)).run();
+
+        return reply.status(204).send();
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to delete camera');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Test camera connection
+    api.post('/admin/cameras/test-connection', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_cameras')) return;
+
+      const schema = z.object({
+        protocol: z.enum(['rtsp', 'mjpeg', 'onvif']),
+        host: z.string().min(1),
+        port: z.number().int().positive(),
+        username: z.string().optional().nullable(),
+        password: z.string().optional().nullable(),
+        streamPath: z.string().optional().nullable(),
+      });
+
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        const { testCameraConnection } = await import('./cameras/connection.js');
+        const result = await testCameraConnection(parsed.data);
+        return result;
+      } catch (error) {
+        request.log.error({ err: error }, 'Camera connection test failed');
         return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
       }
     });
@@ -1073,6 +1282,93 @@ export async function buildServer() {
       }
     });
 
+    // ============================================================================
+    // SYSTEM HEALTH & BACKUPS
+    // ============================================================================
+
+    api.get('/admin/system/health', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_system_health')) return;
+
+      const { getCurrentSystemHealth } = await import('./system/health.js');
+      try {
+        return await getCurrentSystemHealth(io);
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to get system health');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.post('/admin/backups', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_storage')) return;
+
+      const { createBackupSchema } = await import('@escapeplan/contracts');
+      const parsed = createBackupSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      const { createBackup } = await import('./system/backup.js');
+      try {
+        const backup = await createBackup({
+          ...parsed.data,
+          createdBy: session.user.id
+        });
+        return backup;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to create backup');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/backups', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_storage')) return;
+
+      const { destination } = request.query as { destination?: 'local' | 'usb' };
+      const { listBackups } = await import('./system/backup.js');
+      try {
+        return await listBackups(destination);
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to list backups');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.delete('/admin/backups/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_storage')) return;
+
+      const { id } = request.params as { id: string };
+      const { deleteBackup } = await import('./system/backup.js');
+      try {
+        await deleteBackup(id);
+        return { success: true };
+      } catch (error) {
+        request.log.error({ err: error, backupId: id }, 'Failed to delete backup');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/usb-devices', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_storage')) return;
+
+      const { scanUSBDevices } = await import('./system/usb.js');
+      try {
+        return await scanUSBDevices();
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to scan USB devices');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
     api.get('/bookings', async (request, reply) => {
       const session = await ensureAuth(request, reply);
       if (!session) return;
@@ -1142,13 +1438,13 @@ export async function buildServer() {
       if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_sessions')) return;
 
       const { sessionId } = request.params as { sessionId: string };
-      const command = request.body as CommandRequest;
-      if (!command?.command) {
-        return reply.status(400).send({ statusCode: 400, message: 'Command payload required' });
+      const parsed = sessionCommandSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
 
       try {
-        const result = applyCommand(sessionId, command);
+        const result = applyCommand(sessionId, parsed.data);
         return result;
       } catch (error) {
         request.log.error({ err: error }, 'Failed to apply command');

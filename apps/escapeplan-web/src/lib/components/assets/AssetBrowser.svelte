@@ -23,6 +23,7 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let searchQuery = $state('');
+  let filterType = $state<'all' | 'images' | 'audio' | 'video'>('all');
 
   async function loadAssets() {
     loading = true;
@@ -36,13 +37,26 @@
       if (isReusable !== undefined) queryParams.append('isReusable', String(isReusable));
       if (searchQuery) queryParams.append('search', searchQuery);
 
-      const result = await apiFetch<{ assets: any[] }>(
+      const result = await apiFetch<any[]>(
         fetch,
         `/assets/list?${queryParams.toString()}`,
         { credentials: 'include' }
       );
 
-      assets = result.assets || [];
+      let allAssets = Array.isArray(result) ? result : [];
+
+      // Client-side filtering by type (images/audio/video based on mime type)
+      if (filterType !== 'all') {
+        allAssets = allAssets.filter(asset => {
+          const mimeType = asset.mimeType || asset.mime_type || '';
+          if (filterType === 'images') return mimeType.startsWith('image/');
+          if (filterType === 'audio') return mimeType.startsWith('audio/');
+          if (filterType === 'video') return mimeType.startsWith('video/');
+          return true;
+        });
+      }
+
+      assets = allAssets;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load assets';
       assets = [];
@@ -60,15 +74,22 @@
   }
 
   function getAssetTypeIcon(asset: any): string {
-    const type = asset.media_type || asset.asset_type;
-    if (type?.includes('image')) {
+    const mimeType = asset.mimeType || asset.mime_type;
+    if (mimeType?.includes('image')) {
       return 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z';
-    } else if (type?.includes('audio')) {
+    } else if (mimeType?.includes('audio')) {
       return 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3';
-    } else if (type?.includes('video')) {
+    } else if (mimeType?.includes('video')) {
       return 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z';
     }
     return 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z';
+  }
+
+  function getMediaTypeFromMime(mime: string): string {
+    if (mime.includes('image')) return 'image';
+    if (mime.includes('audio')) return 'audio';
+    if (mime.includes('video')) return 'video';
+    return 'file';
   }
 
   function formatFileSize(bytes: number): string {
@@ -95,6 +116,12 @@
 
     return () => clearTimeout(timeout);
   });
+
+  // Reload when filter type changes
+  $effect(() => {
+    filterType;
+    loadAssets();
+  });
 </script>
 
 <div class="space-y-4">
@@ -106,6 +133,12 @@
         class="input input-bordered flex-1"
         bind:value={searchQuery}
       />
+      <select class="select select-bordered" bind:value={filterType} onchange={loadAssets}>
+        <option value="all">All Types</option>
+        <option value="images">Images</option>
+        <option value="audio">Audio</option>
+        <option value="video">Video</option>
+      </select>
       <button type="button" class="btn btn-secondary" onclick={loadAssets}>
         <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -148,10 +181,10 @@
           onclick={() => handleSelect(asset)}
         >
           <figure class="relative h-40 bg-base-200">
-            {#if asset.media_type === 'image'}
+            {#if (asset.mimeType || asset.mime_type || '').startsWith('image/')}
               <img
                 src={getAssetUrl(asset)}
-                alt={asset.original_filename}
+                alt={asset.originalFilename || asset.original_filename}
                 class="h-full w-full object-cover"
                 loading="lazy"
               />
@@ -162,19 +195,19 @@
                 </svg>
               </div>
             {/if}
-            {#if asset.is_reusable}
+            {#if asset.isReusable || asset.is_reusable}
               <div class="badge badge-secondary absolute right-2 top-2 badge-sm">
                 Reusable
               </div>
             {/if}
           </figure>
           <div class="card-body p-3">
-            <h3 class="truncate text-sm font-medium text-base-content" title={asset.original_filename}>
-              {asset.original_filename}
+            <h3 class="truncate text-sm font-medium text-base-content" title={asset.originalFilename || asset.original_filename}>
+              {asset.originalFilename || asset.original_filename}
             </h3>
             <div class="flex items-center justify-between text-xs text-base-content/60">
-              <span>{formatFileSize(asset.size_bytes)}</span>
-              <span class="badge badge-ghost badge-xs">{asset.asset_type}</span>
+              <span>{formatFileSize(asset.sizeBytes || asset.size_bytes)}</span>
+              <span class="badge badge-ghost badge-xs">{asset.assetType || asset.asset_type}</span>
             </div>
           </div>
         </button>
