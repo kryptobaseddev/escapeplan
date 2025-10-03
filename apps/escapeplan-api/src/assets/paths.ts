@@ -164,3 +164,36 @@ export async function ensureAssetDirectory(assetType: string, mediaType?: string
 
   return fullPath;
 }
+
+/**
+ * Get the base path for backups
+ * - Development: {project}/apps/escapeplan-api/data/backups
+ * - Production: /var/backups/escapeplan
+ */
+export function getBackupBasePath(): string {
+  const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production';
+  return isDev
+    ? path.join(process.cwd(), 'data', 'backups')
+    : '/var/backups/escapeplan';
+}
+
+/**
+ * Get the database file path
+ * - Development: {project}/apps/escapeplan-api/data/escapeplan.db
+ * - Production: /var/lib/escapeplan/data/escapeplan.db
+ */
+export function getDatabasePath(): string {
+  const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production';
+  return isDev
+    ? path.join(process.cwd(), 'data', 'escapeplan.db')
+    : '/var/lib/escapeplan/data/escapeplan.db';
+}
+
+/**
+ * Ensure backup directory exists
+ */
+export async function ensureBackupDirectory(): Promise<string> {
+  const backupPath = getBackupBasePath();
+  await fs.mkdir(backupPath, { recursive: true });
+  return backupPath;
+}

@@ -22,6 +22,7 @@ import { backups, games, assets, systemLogs } from '@escapeplan/contracts';
 import { eq, and, gte, desc } from 'drizzle-orm';
 import { monotonicFactory } from 'ulid';
 import type { BackupIncludes, BackupResponse } from '@escapeplan/contracts';
+import { getBackupBasePath, getDatabasePath, getAssetBasePath, ensureBackupDirectory } from '../assets/paths.js';
 
 const ulid = monotonicFactory();
 
@@ -29,11 +30,16 @@ const ulid = monotonicFactory();
 // CONFIGURATION
 // ============================================================================
 
-const BACKUP_DIR_LOCAL = '/var/backups/escapeplan';
 const BACKUP_DIR_USB = '/mnt/escapeplan-backup';
-const DB_FILE_PATH = './data/escapeplan.db';
-const ASSETS_DIR = './data/assets';
 const MAX_BACKUPS = 7; // Keep last 7 backups
+
+// Get environment-aware paths
+function getBackupDir(destination: 'local' | 'usb'): string {
+  return destination === 'usb' ? BACKUP_DIR_USB : getBackupBasePath();
+}
+
+const DB_FILE_PATH = getDatabasePath();
+const ASSETS_DIR = getAssetBasePath();
 
 // ============================================================================
 // BACKUP CREATION
@@ -143,12 +149,16 @@ export async function createBackup(options: BackupOptions): Promise<BackupRespon
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupFileName = `escapeplan-backup-${timestamp}.tar.gz`;
 
-  // Determine backup directory
-  const backupDir = options.destination === 'usb' ? BACKUP_DIR_USB : BACKUP_DIR_LOCAL;
+  // Determine backup directory (environment-aware)
+  const backupDir = getBackupDir(options.destination);
   const backupFilePath = path.join(backupDir, backupFileName);
 
   // Ensure backup directory exists
-  await fs.mkdir(backupDir, { recursive: true });
+  if (options.destination === 'local') {
+    await ensureBackupDirectory();
+  } else {
+    await fs.mkdir(backupDir, { recursive: true });
+  }
 
   // Create backup record (in_progress)
   const backupRecord = {

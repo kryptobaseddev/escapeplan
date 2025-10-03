@@ -150,8 +150,12 @@ export function loadEnvironment(): AppEnvironment {
     dataDir: process.env.ESCAPEPLAN_DATA_DIR || resolve(process.cwd(), 'data'),
     assetDir: process.env.ESCAPEPLAN_ASSET_DIR || resolve(process.cwd(), 'data/assets'),
 
-    // Backup
-    backupDir: process.env.ESCAPEPLAN_BACKUP_DIR || '/var/backups/escapeplan',
+    // Backup (development-aware)
+    backupDir: process.env.ESCAPEPLAN_BACKUP_DIR || (
+      nodeEnv === 'production'
+        ? '/var/backups/escapeplan'
+        : resolve(process.cwd(), 'data/backups')
+    ),
     backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS || 7)
   };
 }
