@@ -1,0 +1,157 @@
+ Phase 2: Pricing Tab Rebuild Agent
+
+  Primary File: @escapeplan-app/project-docs/project-tracking/PHASE2_PRICING_TAB_AGENT_PROMPT.md
+
+  What it includes:
+  - ✅ Mission statement (rebuild pricing tab with 8 components)
+  - ✅ Required reading list (9 files including base instructions)
+  - ✅ Critical DO/DON'T rules
+  - ✅ Tech stack requirements (Svelte 5 + DaisyUI standards)
+  - ✅ Folder structure (create tabs/ and pricing/ subdirectories)
+  - ✅ Step-by-step execution workflow (5 phases)
+  - ✅ 35-item validation checklist
+  - ✅ 5 manual testing scenarios (with exact steps)
+  - ✅ Troubleshooting guide
+  - ✅ Completion requirements (session notes template)
+
+  Context files to pass:
+  1. prompt-claude.txt (base instructions) ✅
+  2. project.yaml (tech stack) ✅
+  3. GAMEMODAL_UI_REFACTORING_PLAN.md (full plan) ✅
+  4. API_CONTRACTS_SCHEMA_MANAGEMENT.md (schema patterns) ✅
+  5. HelpTooltip.svelte (existing component) ✅
+  6. validation.ts, index.ts (type references)
+
+  ---
+  📁 Additional Documents
+
+  3. AGENT_HANDOFF_GUIDE.md
+  - Quick reference for what files to pass each agent
+  - Validation checklists for you (claude-gamesettings)
+  - Common issues & quick fixes
+  - Timeline overview
+
+  4. AGENT_ASSIGNMENT_SUMMARY.md
+  - Quick start instructions
+  - File locations
+  - Success metrics
+  - Communication flow diagram
+  - Your validation role clearly defined
+
+  ---
+  🎯 How to Use These
+
+  Assign Phase 1 Agent:
+
+  Give the agent this primary file:
+  @escapeplan-app/project-docs/project-tracking/PHASE1_ROOMS_REMOVAL_AGENT_PROMPT.md
+
+  Add these context files:
+  - @escapeplan-app/project-docs/project-tracking/prompt-claude.txt
+  - @escapeplan-app/project-docs/project-tracking/project.yaml
+  - @escapeplan-app/project-docs/project-tracking/ROOMS_TABLE_REMOVAL_PLAN.md
+  - @escapeplan-app/apps/DOCS/API_CONTRACTS_SCHEMA_MANAGEMENT.md
+  - @escapeplan-app/packages/contracts/src/schema.ts
+  - @escapeplan-app/packages/contracts/src/validation.ts
+
+  Instructions: "Read PHASE1_ROOMS_REMOVAL_AGENT_PROMPT.md and execute the plan exactly. Report when complete."
+
+  Validate Phase 1:
+
+  When agent reports complete, you:
+  1. Read SESSION_42_ROOMS_REMOVAL_EXECUTION.md
+  2. Run validation commands from PHASE1 prompt (grep, type-check, database)
+  3. Check all 21 validation items
+  4. PASS → Unlock Phase 2 | FAIL → Send back with issues list
+
+  Assign Phase 2 Agent:
+
+  ⚠️ ONLY after Phase 1 validated
+
+  Give the agent this primary file:
+  @escapeplan-app/project-docs/project-tracking/PHASE2_PRICING_TAB_AGENT_PROMPT.md
+
+  Add these context files:
+  - @escapeplan-app/project-docs/project-tracking/prompt-claude.txt
+  - @escapeplan-app/project-docs/project-tracking/project.yaml
+  - @escapeplan-app/project-docs/project-tracking/GAMEMODAL_UI_REFACTORING_PLAN.md
+  - @escapeplan-app/apps/DOCS/API_CONTRACTS_SCHEMA_MANAGEMENT.md
+  - @escapeplan-app/apps/escapeplan-web/src/lib/components/ui/HelpTooltip.svelte
+  - @escapeplan-app/packages/contracts/src/validation.ts
+
+  Instructions: "Read PHASE2_PRICING_TAB_AGENT_PROMPT.md and execute the plan exactly. Report when complete."
+
+  Validate Phase 2:
+
+  When agent reports complete, you:
+  1. Read SESSION_43_PRICING_TAB_REBUILD.md
+  2. Verify folder structure + all 8 components exist
+  3. Run type-check
+  4. Manually test all 5 scenarios from PHASE2 prompt
+  5. Check all 35 validation items
+  6. PASS → Approve commit | FAIL → Send back with issues list
+
+  ---
+  📊 Key Metrics
+
+  Documentation Created:
+
+  - 7 files
+  - ~2500 lines of comprehensive instructions
+  - 56 validation checklist items (21 + 35)
+  - 5 manual testing scenarios
+  - 2 complete troubleshooting guides
+
+  Coverage:
+
+  - ✅ Base instructions referenced (prompt-claude.txt)
+  - ✅ Tech stack referenced (project.yaml)
+  - ✅ Schema patterns referenced (API_CONTRACTS_SCHEMA_MANAGEMENT.md)
+  - ✅ Drizzle + Zod patterns enforced
+  - ✅ DaisyUI standards enforced
+  - ✅ Svelte 5 runes syntax enforced
+
+  No Ambiguity:
+
+  - Every step numbered and explained
+  - Every validation criterion measurable
+  - Every file location absolute
+  - Every command copy-pasteable
+  - Every issue has a documented fix
+
+  ---
+  🚀 Ready State
+
+  Phase 1 Agent: 🟢 READY TO START
+  Phase 2 Agent: 🟡 BLOCKED (needs Phase 1 complete)
+  Your Role: 🔵 VALIDATION GATEKEEPER
+
+  All prompts are directive (not suggestive). Agents know exactly what to do, how to do it, and what "done" looks like.
+
+  Answers to your questions
+
+  A. Pricing Model Enum
+
+  - Keep: 'per_person' | 'per_session' | 'per_hour'
+
+  B. Tier-Level vs Game-Level Model
+
+  - Option 1: Each tier can have different model (flexible, recommended)
+  - Must make sure to update Game Settings and the api contract schemas and zod validations as the pricing tab in game settings will need to be changed and have very clear structure and help text that can be clicked for explanations on how to use
+  
+  C. Mobile Pricing Strategy
+NOTE: I do not understand this fully but we should have single game records with the storefront or mobile for the game (games should be configured as either Mobile or Storefront a game can't be both so not sure we need a boolean.)
+  **May Not Need** ? - Option 1: Add isMobileOnly: boolean to tier schema
+
+  D. Tier Selection Priority
+I do not understand this where is tier selection priority accessed? the tier should be not confusing for customers and needs to be easy to associate for the game with the constraints for the tier (like you said for weekday or weekend rates, holiday rates, or do we have tiers for private bookings at 'per_hour' or group session bookings for 'per_session' and default for rooms of 'per_person' up to the max players for the room) I need you to ultrathink on this as I really don't understand what is the best logical option and flow usage
+
+  E. Per-Hour Duration Handling
+NOTE: for Per-hour we need to be able to define the minimum base hours to book for like set minimum to 2 hours at set price plus 1 hour blocks on top at discounted rate. (if mobile booking we would need to plan on accounting for drive time and mileage on top of base cost) if storefront no additional cost on top of the base costs. My idea is for booking for parties where  customers would block out a room for a party for X hours
+  - Add minDurationHours to tier schema
+  - Booking modal shows duration dropdown when per-hour tier selected with minimum and then additional hours calculated on top
+  - Duration defaults to game.durationMinutes but can be overridden for the booked event like base durationMinutes would be 60 minutes but customer can shorten to 30 minutes for quicker game to allow more people to play in a 2 hour block rotated.
+
+  F. Full Group "Buyout" Rates
+
+  - Both (tier for default, codes for special promos)

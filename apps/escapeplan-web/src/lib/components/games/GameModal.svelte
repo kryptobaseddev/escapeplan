@@ -8,7 +8,6 @@
     GameMilestone,
     GamePricingConfig,
     GamePuzzleDefinition,
-    GameRoomDefinition,
     MilestoneMediaType,
     MilestoneTriggerType,
     MilestoneType,
@@ -42,7 +41,7 @@
   let dialogElement = $state<HTMLDialogElement | null>(null);
   let errorMessage = $state<string | null>(null);
   let initialised = $state(false);
-  type TabId = 'details' | 'media' | 'rooms' | 'puzzles' | 'cameras' | 'pricing' | 'booking' | 'milestones';
+  type TabId = 'details' | 'media' | 'puzzles' | 'cameras' | 'pricing' | 'booking' | 'milestones';
 
   let activeTab = $state<TabId>('details');
 
@@ -50,10 +49,8 @@
   interface EditablePuzzle extends GamePuzzleDefinition {
     hints: EditableHint[];
   }
-  interface EditableRoom extends GameRoomDefinition {}
   interface EditableMilestone extends GameMilestone {}
-  interface EditableGame extends Omit<SaveGameRequest, 'rooms' | 'puzzles' | 'media' | 'pricing' | 'bookingRules' | 'milestones'> {
-    rooms: EditableRoom[];
+  interface EditableGame extends Omit<SaveGameRequest, 'puzzles' | 'media' | 'pricing' | 'bookingRules' | 'milestones'> {
     puzzles: EditablePuzzle[];
     media: GameMediaConfig;
     pricing: GamePricingConfig;
@@ -65,7 +62,6 @@
   let workingGame = $state<EditableGame>(createEmptyGame());
   let payloadJson = $state('');
   let slugTouched = $state(false);
-  let draggingRoomId = $state<string | null>(null);
   let draggingPuzzleId = $state<string | null>(null);
   let draggingHint = $state<{ puzzleId: string; hintId: string } | null>(null);
 
@@ -85,7 +81,6 @@
   const tabItems: Array<{ id: TabId; label: string }> = [
     { id: 'details', label: 'Game Details' },
     { id: 'media', label: 'Images & Media' },
-    { id: 'rooms', label: 'Rooms' },
     { id: 'puzzles', label: 'Puzzles & Hints' },
     { id: 'cameras', label: 'Cameras' },
     { id: 'pricing', label: 'Pricing' },
@@ -152,7 +147,6 @@
       validationNotes: '',
       defaultVolume: 80,
       cameraIds: [],
-      rooms: [],
       puzzles: [],
       milestones: [],
       media: { galleryAssetIds: [] },
@@ -189,7 +183,6 @@
       validationNotes: details.validationNotes ?? '',
       defaultVolume: details.defaultVolume ?? 80,
       cameraIds: [...(details.cameraIds ?? [])],
-      rooms: details.rooms.map((room) => ({ ...room })),
       puzzles: details.puzzles.map((puzzle) => ({
         ...puzzle,
         hints: puzzle.hints ? puzzle.hints.map((hint) => ({ ...hint })) : []
@@ -226,18 +219,6 @@
             cancellationPolicy: '',
             customFields: []
           }
-    };
-  }
-
-  function createEmptyRoom(): EditableRoom {
-    return {
-      id: uid('room'),
-      name: '',
-      description: '',
-      slug: '',
-      isMobileCapable: false,
-      themeToken: '',
-      capacity: undefined
     };
   }
 
@@ -383,7 +364,6 @@
     errorMessage = null;
     payloadJson = JSON.stringify(buildPayload());
     slugTouched = false;
-    draggingRoomId = null;
     draggingPuzzleId = null;
     draggingHint = null;
   }
@@ -437,7 +417,6 @@
       initialised = true;
       payloadJson = JSON.stringify(buildPayload());
       slugTouched = mode === 'edit';
-      draggingRoomId = null;
       draggingPuzzleId = null;
       draggingHint = null;
 
@@ -494,16 +473,6 @@
     }
   }
 
-  function addRoom() {
-    workingGame.rooms = [...workingGame.rooms, createEmptyRoom()];
-    updatePayload();
-  }
-
-  function removeRoom(id: string) {
-    workingGame.rooms = workingGame.rooms.filter((room) => room.id !== id);
-    updatePayload();
-  }
-
   function addPuzzle() {
     workingGame.puzzles = [...workingGame.puzzles, createEmptyPuzzle()];
     updatePayload();
@@ -513,37 +482,6 @@
     workingGame.puzzles = workingGame.puzzles.filter((puzzle) => puzzle.id !== id);
     applyPuzzleOrder();
     updatePayload();
-  }
-
-  function handleRoomDragStart(id: string, event: DragEvent) {
-    draggingRoomId = id;
-    event.dataTransfer?.setData('text/plain', id);
-    event.dataTransfer?.setDragImage(event.currentTarget as Element, 20, 20);
-  }
-
-  function handleRoomDragOver(id: string, event: DragEvent) {
-    event.preventDefault();
-    if (!draggingRoomId || draggingRoomId === id) return;
-    const from = workingGame.rooms.findIndex((room) => room.id === draggingRoomId);
-    const to = workingGame.rooms.findIndex((room) => room.id === id);
-    if (from === -1 || to === -1) return;
-    workingGame.rooms = moveItem(workingGame.rooms, from, to);
-    updatePayload();
-  }
-
-  function handleRoomDrop(event: DragEvent) {
-    event.preventDefault();
-    draggingRoomId = null;
-  }
-
-  function handleRoomListDrop(event: DragEvent) {
-    if (!draggingRoomId) return;
-    const from = workingGame.rooms.findIndex((room) => room.id === draggingRoomId);
-    if (from === -1) return;
-    event.preventDefault();
-    workingGame.rooms = moveItem(workingGame.rooms, from, workingGame.rooms.length - 1);
-    updatePayload();
-    draggingRoomId = null;
   }
 
   function handlePuzzleDragStart(id: string, event: DragEvent) {
@@ -686,16 +624,6 @@
   const markDirty = () => updatePayload();
 
   function buildPayload(): SaveGameRequest {
-    const cleanRooms = workingGame.rooms.map((room, index) => ({
-      id: room.id || uid('room'),
-      name: room.name,
-      description: room.description || undefined,
-      slug: room.slug ? room.slug : undefined,
-      isMobileCapable: Boolean(room.isMobileCapable),
-      themeToken: room.themeToken || undefined,
-      capacity: room.capacity ?? undefined
-    }));
-
     const cleanPuzzles = workingGame.puzzles.map((puzzle, index) => ({
       id: puzzle.id || uid('puzzle'),
       title: puzzle.title,
@@ -713,55 +641,53 @@
       })) ?? []
     }));
 
-    const media: GameMediaConfig | undefined = workingGame.media
-      ? {
-          thumbnailAssetId: workingGame.media.thumbnailAssetId || undefined,
-          roomScreenAssetId: workingGame.media.roomScreenAssetId || undefined,
-          galleryAssetIds: workingGame.media.galleryAssetIds?.filter(Boolean) ?? []
-        }
-      : undefined;
+    const media: GameMediaConfig = {
+      thumbnailAssetId: workingGame.media?.thumbnailAssetId || undefined,
+      roomScreenAssetId: workingGame.media?.roomScreenAssetId || undefined,
+      galleryAssetIds: workingGame.media?.galleryAssetIds?.filter(Boolean) ?? []
+    };
 
-    const pricing: GamePricingConfig | undefined = workingGame.pricing
-      ? {
-          tiers: workingGame.pricing.tiers?.map((tier) => ({
-            ...tier,
-            id: tier.id || uid('tier'),
-            priceCents: Math.round((tier.priceCents ?? 0) * 100),
-            basePriceCents: tier.basePriceCents ? Math.round(tier.basePriceCents * 100) : undefined,
-            additionalHourCents: tier.additionalHourCents ? Math.round(tier.additionalHourCents * 100) : undefined
-          })) ?? [],
-          deposit: workingGame.pricing.deposit
-            ? {
-                required: Boolean(workingGame.pricing.deposit.required),
-                type: workingGame.pricing.deposit.type,
-                amountCents: workingGame.pricing.deposit.amountCents ? Math.round(workingGame.pricing.deposit.amountCents * 100) : null
-              }
-            : undefined,
-          discounts: workingGame.pricing.discounts?.map((discount) => ({
-            code: discount.code,
-            percentOff: discount.percentOff ?? null,
-            amountOffCents: discount.amountOffCents ? Math.round(discount.amountOffCents * 100) : null,
-            expiresAt: discount.expiresAt ?? null,
-            notes: discount.notes ?? null
-          })) ?? []
-        }
-      : undefined;
+    const pricing: GamePricingConfig = {
+      tiers: workingGame.pricing?.tiers?.map((tier) => ({
+        id: tier.id || uid('tier'),
+        label: tier.label,
+        model: tier.model || 'per_person',
+        priceCents: Math.round(tier.priceCents ?? 0),
+        baseHours: tier.baseHours,
+        basePriceCents: tier.basePriceCents != null ? Math.round(tier.basePriceCents) : undefined,
+        additionalHourCents: tier.additionalHourCents != null ? Math.round(tier.additionalHourCents) : undefined,
+        minPlayers: tier.minPlayers,
+        maxPlayers: tier.maxPlayers
+      })) ?? [],
+      deposit: workingGame.pricing?.deposit
+        ? {
+            required: Boolean(workingGame.pricing.deposit.required),
+            type: workingGame.pricing.deposit.type,
+            amountCents: workingGame.pricing.deposit.amountCents != null ? Math.round(workingGame.pricing.deposit.amountCents) : null
+          }
+        : undefined,
+      discounts: workingGame.pricing?.discounts?.map((discount) => ({
+        code: discount.code,
+        percentOff: discount.percentOff ?? null,
+        amountOffCents: discount.amountOffCents != null ? Math.round(discount.amountOffCents) : null,
+        expiresAt: discount.expiresAt ?? null,
+        notes: discount.notes ?? null
+      })) ?? []
+    };
 
-    const bookingRules: GameBookingRules | undefined = workingGame.bookingRules
-      ? {
-          isMobile: workingGame.bookingRules.isMobile ?? false,
-          locationNotes: workingGame.bookingRules.locationNotes || undefined,
-          travelBufferMinutes: workingGame.bookingRules.travelBufferMinutes ?? 0,
-          equipmentChecklist: workingGame.bookingRules.equipmentChecklist?.filter(Boolean) ?? [],
-          reservationStyle: workingGame.bookingRules.reservationStyle ?? 'public',
-          cancellationPolicy: workingGame.bookingRules.cancellationPolicy || undefined,
-          customFields:
-            workingGame.bookingRules.customFields?.map((field) => ({
-              label: field.label,
-              required: Boolean(field.required)
-            })) ?? []
-        }
-      : undefined;
+    const bookingRules: GameBookingRules = {
+      isMobile: workingGame.bookingRules?.isMobile ?? false,
+      locationNotes: workingGame.bookingRules?.locationNotes || undefined,
+      travelBufferMinutes: workingGame.bookingRules?.travelBufferMinutes ?? 0,
+      equipmentChecklist: workingGame.bookingRules?.equipmentChecklist?.filter(Boolean) ?? [],
+      reservationStyle: workingGame.bookingRules?.reservationStyle ?? 'public',
+      cancellationPolicy: workingGame.bookingRules?.cancellationPolicy || undefined,
+      customFields:
+        workingGame.bookingRules?.customFields?.map((field) => ({
+          label: field.label,
+          required: Boolean(field.required)
+        })) ?? []
+    };
 
     const cleanMilestones = workingGame.milestones.map((milestone, index) => ({
       ...(milestone.id ? { id: milestone.id } : {}),
@@ -792,7 +718,6 @@
       validationNotes: workingGame.validationNotes?.trim() || undefined,
       defaultVolume: workingGame.defaultVolume ?? 80,
       cameraIds: workingGame.cameraIds ?? [],
-      rooms: cleanRooms,
       puzzles: cleanPuzzles,
       milestones: cleanMilestones,
       media,
@@ -812,9 +737,6 @@
     }
     if (workingGame.minPlayers < 1 || workingGame.minPlayers > workingGame.maxPlayers) {
       return 'Minimum players cannot exceed the maximum player count.';
-    }
-    if (workingGame.rooms.length === 0) {
-      return 'Add at least one room before saving.';
     }
     if (workingGame.puzzles.length === 0) {
       return 'Add at least one puzzle before saving.';
@@ -1299,88 +1221,6 @@
                 </details>
               </section>
             </div>
-          {:else if activeTab === 'rooms'}
-            <div class="space-y-4">
-              {#if workingGame.rooms.length === 0}
-                <p class="rounded-lg border border-dashed border-base-content/20 bg-base-100/70 p-4 text-sm text-base-content/60">
-                  No rooms yet. Add at least one room to finish configuration.
-                </p>
-              {/if}
-              {#each workingGame.rooms as room, index (room.id)}
-                <article
-                  class="rounded-2xl border border-white/10 bg-base-100/70 p-4 shadow-sm"
-                  ondragover={(event) => handleRoomDragOver(room.id, event)}
-                  ondrop={handleRoomDrop}
-                >
-                  <header class="mb-3 flex items-start justify-between gap-3">
-                    <div>
-                      <h3 class="text-base font-semibold text-base-content">Room {index + 1}</h3>
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <button
-                        type="button"
-                        class="btn btn-xs btn-ghost text-base-content/60"
-                        aria-label="Reorder room"
-                        draggable="true"
-                        ondragstart={(event) => handleRoomDragStart(room.id, event)}
-                        ondragend={handleRoomDrop}
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-4">
-                          <path fill="currentColor" d="M4 10h16v2H4zm0-4h16v2H4zm0 8h16v2H4zm0 4h16v2H4z" />
-                        </svg>
-                      </button>
-                      <button type="button" class="btn btn-xs btn-ghost text-error" onclick={() => removeRoom(room.id)}>
-                        Remove
-                      </button>
-                    </div>
-                  </header>
-                  <div class="grid gap-3 md:grid-cols-2">
-                    <label class="form-control">
-                      <span class="label-text">Name</span>
-                      <input class="input input-bordered" bind:value={room.name} required oninput={markDirty} />
-                    </label>
-                    <label class="form-control">
-                      <span class="label-text">Slug</span>
-                      <input class="input input-bordered lowercase" placeholder="optional" bind:value={room.slug} oninput={markDirty} />
-                    </label>
-                    <label class="form-control md:col-span-2">
-                      <span class="label-text">Description</span>
-                      <textarea class="textarea textarea-bordered" rows={2} bind:value={room.description} oninput={markDirty}></textarea>
-                    </label>
-                    <label class="form-control">
-                      <span class="label-text">Theme token</span>
-                      <input class="input input-bordered" bind:value={room.themeToken} placeholder="e.g. escapeplan-pirate" oninput={markDirty} />
-                    </label>
-                    <label class="form-control">
-                      <span class="label-text">Capacity</span>
-                      <input class="input input-bordered" type="number" min="1" bind:value={room.capacity} oninput={markDirty} />
-                    </label>
-                  </div>
-                  <div class="mt-3 flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      class="toggle toggle-primary"
-                      bind:checked={room.isMobileCapable}
-                      onchange={markDirty}
-                    />
-                    <span class="text-sm text-base-content/70">Supports mobile deployments</span>
-                  </div>
-                </article>
-              {/each}
-              <div
-                class="h-3"
-                role="presentation"
-                aria-hidden="true"
-                ondragover={(event) => {
-                  event.preventDefault();
-                  handleRoomListDrop(event);
-                }}
-                ondrop={handleRoomListDrop}
-              ></div>
-              <button type="button" class="btn btn-secondary" onclick={addRoom}>
-                + Add room
-              </button>
-            </div>
           {:else if activeTab === 'puzzles'}
             <div class="space-y-4">
               {#if workingGame.puzzles.length === 0}
@@ -1790,7 +1630,7 @@
                 </div>
               </section>
             </div>
-          {:else}
+          {:else if activeTab === 'booking'}
             <div class="space-y-4">
               <div class="flex items-center gap-3 rounded-xl border border-white/10 bg-base-100/70 px-4 py-3">
                 <input type="checkbox" class="toggle toggle-primary" bind:checked={workingGame.bookingRules.isMobile} onchange={markDirty} />

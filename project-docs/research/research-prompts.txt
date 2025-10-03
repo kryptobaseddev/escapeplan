@@ -1,0 +1,165 @@
+ALL THREE COMPREHENSIVE AGENT PROMPTS COMPLETE
+
+  I've created three exhaustive, production-ready agent execution prompts:
+
+  ---
+  📄 PHASE1_ROOMS_REMOVAL_AGENT_PROMPT.md (Updated)
+
+  Location: project-docs/project-tracking/PHASE1_ROOMS_REMOVAL_AGENT_PROMPT.md
+
+  What it contains:
+  - 🔴 Critical context about partial completion and the cleanRooms bug
+  - 📝 Comprehensive grep audit workflow (6 different searches)
+  - 🔧 Step-by-step fixes for GameModal.svelte:725 and :804
+  - ✅ 31-item validation checklist
+  - 🧪 3 manual testing scenarios
+  - 📊 Complete session notes template
+  - ⏱️ Estimated time: 3-4 hours
+
+  Key features:
+  - Assumes previous agent left incomplete work
+  - Zero-tolerance approach for remaining room references
+  - Multiple validation layers (grep, type-check, runtime, manual testing)
+
+  ---
+  📄 PHASE2_PRICING_COMPLETE_REBUILD_PROMPT.md (New)
+
+  Location: project-docs/project-tracking/PHASE2_PRICING_COMPLETE_REBUILD_PROMPT.md
+
+  What it contains:
+  - 🎯 Your complete pricing requirements (all answers integrated)
+  - 📋 Per-tier pricing model implementation ('per_person' | 'per_session' | 'per_hour')
+  - 🕒 Per-hour base + additional hours logic with examples
+  - 📅 Tier scheduling (days, times, seasonal dates)
+  - 📱 Mobile game pricing considerations
+  - 🎨 8 complete component specifications with full Svelte 5 code:
+    a. VolumeSlider.svelte
+    b. FormField.svelte
+    c. DepositConfig.svelte
+    d. TierModelSelector.svelte
+    e. PerHourFields.svelte
+    f. TierScheduleFields.svelte
+    g. TierCard.svelte
+    h. GamePricingTab.svelte
+  - 🔌 GameModal integration instructions
+  - ✅ 45+ validation checklist items
+  - 🧪 5 comprehensive manual test scenarios
+  - ⏱️ Estimated time: 12-16 hours (2 sessions)
+
+  Key features:
+  - Build order specified (bottom-up: utilities → subcomponents → orchestrators)
+  - Cents-to-dollars conversion handled correctly
+  - DaisyUI 5.1.26+ component usage throughout
+  - 27+ HelpTooltips across pricing system
+  - Tier selection priority logic fully explained
+
+  ---
+  📄 PHASE0_UI_DESIGN_SYSTEM_AUDIT_PROMPT.md (New)
+
+  Location: project-docs/project-tracking/PHASE0_UI_DESIGN_SYSTEM_AUDIT_PROMPT.md
+
+  What it contains:
+  - 🔍 Complete UI audit workflow (15+ grep searches)
+  - 📊 Component inventory documentation template
+  - 🔬 Context7 research queries for DaisyUI v5.1.26+
+  - 📐 Pattern analysis framework
+  - 📖 COMPLETE UI_DESIGN_SYSTEM.md specification (comprehensive bible):
+    - Design principles
+    - Color system (DaisyUI theme)
+    - Typography standards
+    - Spacing & layout patterns
+    - Component library (8 utility components fully spec'd)
+    - Form components (all DaisyUI inputs standardized)
+    - Data display (tables, badges, ratings)
+    - Navigation (navbar, breadcrumbs, tabs)
+    - Feedback (alerts, toasts, modals, tooltips)
+    - Loading states (loading infinity ✅, skeleton screens)
+    - Accessibility requirements
+    - Responsive patterns
+    - Code examples (complete working examples)
+  - 🛠️ 7 utility components to create
+  - 🔧 Component refactoring targets
+  - ✅ 30+ validation checklist items
+  - ⏱️ Estimated time: 16-24 hours (3 sessions)
+
+  Key features:
+  - Loading infinity as default (your specific request)
+  - Skeleton screen planning for entire app
+  - Keyboard shortcuts (kbd component)
+  - Table with sorting/pagination
+  - Breadcrumbs navigation
+  - Comprehensive accessibility standards
+  - DaisyUI 5.1.26+ best practices via Context7
+
+  ---
+  🎯 USAGE INSTRUCTIONS
+
+  Execution Order:
+
+  Option A: Sequential
+  1. Phase 1 (Rooms Removal) → Agent cleans up remaining room references
+  2. Phase 2 (Pricing Rebuild) → Agent builds complete pricing system
+  3. Phase 0 (UI Audit) → Agent standardizes all UI components
+
+  Option B: Parallel (Recommended)
+  1. Phase 0 + Phase 1 in parallel (different agents)
+    - Phase 0 agent creates design system + utilities
+    - Phase 1 agent finishes rooms removal
+  2. Phase 2 after both complete
+    - Pricing rebuild uses newly created UI components from Phase 0
+
+  Option C: UI-First
+  1. Phase 0 (UI Audit) → Creates design system + utility components
+  2. Phase 1 + Phase 2 in parallel using standardized components
+
+  ---
+  📦 DELIVERABLES FROM EACH PHASE
+
+  Phase 1 Deliverables:
+
+  - ✅ Zero room references in codebase
+  - 📄 SESSION_50_ROOMS_FINAL_CLEANUP.md with audit results
+  - 🐛 Critical cleanRooms bug fixed
+
+  Phase 2 Deliverables:
+
+  - 🎨 8 pricing UI components (all functional)
+  - 📐 Complete per-tier pricing system
+  - 🕒 Per-hour model with base + additional rates
+  - 📅 Tier scheduling constraints
+  - 💰 Deposit configuration
+  - 🔧 GameModal integration
+  - 📄 SESSION_51_PRICING_COMPLETE_REBUILD.md
+
+  Phase 0 Deliverables:
+
+  - 📖 UI_DESIGN_SYSTEM.md (THE BIBLE)
+  - 📊 COMPONENT_INVENTORY.md
+  - 🔬 DAISYUI_RESEARCH_NOTES.md
+  - 📐 PATTERN_ANALYSIS.md
+  - 🛠️ 7 utility components (LoadingState, SkeletonLoader, etc.)
+  - 🔧 3+ refactored major components
+  - 📄 SESSION_52_UI_DESIGN_SYSTEM_AUDIT.md
+
+  ---
+  ✨ KEY HIGHLIGHTS
+
+  Your specific requirements ALL addressed:
+
+  ✅ Rooms removal: Complete cleanup with zero-tolerance validation✅ Per-tier pricing models: Full implementation with all 3 models✅
+  Per-hour base + additional: Complete spec with calculation examples✅ Tier scheduling: Days, times, seasonal dates all covered✅ Mobile 
+  pricing: gameType-based logic, no separate boolean needed✅ Tier selection priority: Full explanation with 3 usage scenarios✅ Group 
+  buyouts: Both tier-based and discount code approaches✅ DaisyUI standardization: Complete with v5.1.26+ Context7 research✅ Loading 
+  infinity: Your requested default loading animation✅ Skeleton screens: Planned across entire app✅ Breadcrumbs: Complete component spec✅
+  Navbar improvements: Responsive patterns documented✅ Keyboard shortcuts: kbd component spec included✅ Table component: Full DataTable
+  with sorting/pagination✅ Rating component: Star ratings documented✅ All form inputs: Standardized with validation states✅ HelpTooltip 
+  usage: 27+ instances across pricing system
+
+  ---
+  📋 NEXT STEPS FOR YOU
+
+  1. Review all three prompts to ensure they match your vision
+  2. Choose execution order (Sequential, Parallel, or UI-First)
+  3. Assign to agents (can be same agent or different specialists)
+  4. Provide prompts exactly as written (they're self-contained)
+  5. Validate deliverables using the completion checklists in each prompt

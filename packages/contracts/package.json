@@ -4,6 +4,20 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./paths": {
+      "types": "./dist/paths.d.ts",
+      "default": "./dist/paths.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "default": "./dist/runtime.js"
+    }
+  },
   "files": [
     "dist"
   ],
@@ -11,6 +25,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "devDependencies": {
+    "@types/node": "^20.19.19",
     "typescript": "^5.5.0"
   },
   "dependencies": {

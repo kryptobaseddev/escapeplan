@@ -61,16 +61,14 @@ describe('EscapePlan API', () => {
       const timerSlug = 'pirate-mutiny-live';
 
       const game = sqlite.prepare(`SELECT id FROM games WHERE slug = ?`).get('pirate-mutiny') as { id: string };
-      const room = sqlite.prepare(`SELECT id FROM rooms WHERE game_id = ? LIMIT 1`).get(game.id) as { id: string };
 
       sqlite.prepare(
-        `INSERT INTO bookings (id, booking_code, game_id, room_id, start_time, end_time, status, party_size, deposit_due_cents, total_due_cents, price_tier, discount_code, is_mobile, location_note, contact_name, contact_phone)
-         VALUES (?, ?, ?, ?, ?, ?, 'checked_in', 4, 0, 0, 'standard', NULL, 0, NULL, 'Test Crew', '555-0100')`
+        `INSERT INTO bookings (id, booking_code, game_id, start_time, end_time, status, party_size, deposit_due_cents, total_due_cents, price_tier, discount_code, is_mobile, location_note, contact_name, contact_phone)
+         VALUES (?, ?, ?, ?, ?, 'checked_in', 4, 0, 0, 'standard', NULL, 0, NULL, 'Test Crew', '555-0100')`
       ).run(
         bookingId,
         `TEST-${now.getTime()}`,
         game.id,
-        room.id,
         new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
         new Date(now.getTime() + 55 * 60 * 1000).toISOString()
       );

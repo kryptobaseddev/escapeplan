@@ -21,7 +21,6 @@ const db = sqlite;
 
 // Stable identifiers keep the seed idempotent across runs
 const pirateGameId = randomUUID();
-const roomMainId = 'room-pirate-main';
 const puzzleIds = [
   'puzzle-pirate-intro-audio',
   'puzzle-pirate-find-map',
@@ -44,13 +43,14 @@ const pirateGame = {
     'The Captain has decided to keep 90% of the treasure. This is unacceptable—recover the map and make the captain walk the plank.',
   duration_minutes: 20,
   difficulty: '3/5',
+  game_type: 'storefront',
   pricing_model: 'PER_PERSON',
   categories: JSON.stringify(['Person', 'Private']),
   min_players: 1,
   max_players: 5,
   price_per_player_cents: 2000,
   resources_required: 1,
-  validation_notes: 'Enforce min/max participants, confirm resource availability, ensure room availability in booking window.',
+  validation_notes: 'Enforce min/max participants, confirm resource availability, ensure booking window.',
   default_volume: 80
 };
 
@@ -143,7 +143,6 @@ export const clearAll = () => {
     'bookings',
     'game_milestones',
     'game_puzzles',
-    'rooms',
     'asset_usage',
     'assets',
     'games',
@@ -411,13 +410,13 @@ export async function seedIdempotent() {
     db.prepare(
       `INSERT INTO games (
          id, slug, name, description, story_intro, duration_minutes, difficulty,
-         pricing_model, category, categories, min_players, max_players,
+         game_type, pricing_model, category, categories, min_players, max_players,
          price_per_player_cents, resources_required, validation_notes, default_volume,
          created_at, updated_at
        )
        VALUES (
          @id, @slug, @name, @description, @story_intro, @duration_minutes, @difficulty,
-         @pricing_model, @category, @categories, @min_players, @max_players,
+         @game_type, @pricing_model, @category, @categories, @min_players, @max_players,
          @price_per_player_cents, @resources_required, @validation_notes, @default_volume,
          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
        )`
@@ -440,6 +439,7 @@ export async function seedIdempotent() {
          story_intro = @story_intro,
          duration_minutes = @duration_minutes,
          difficulty = @difficulty,
+         game_type = @game_type,
          pricing_model = @pricing_model,
          category = @category,
          categories = @categories,
@@ -462,39 +462,6 @@ export async function seedIdempotent() {
     legacy: 'pirate-mutiny',
     id: pirateGame.id
   });
-
-  // Seed room (idempotent)
-  const existingRoom = db
-    .prepare('SELECT id FROM rooms WHERE game_id = ? AND name = ? LIMIT 1')
-    .get(pirateGame.id, 'Main') as { id: string } | undefined;
-
-  const roomId = existingRoom?.id ?? roomMainId;
-
-  if (!existingRoom) {
-    console.log('Creating Main room...');
-    db.prepare(
-      `INSERT INTO rooms (id, game_id, name, is_mobile_capable, theme_token)
-       VALUES (@id, @game_id, @name, @is_mobile_capable, @theme_token)`
-    ).run({
-      id: roomId,
-      game_id: pirateGame.id,
-      name: 'Main',
-      is_mobile_capable: 0,
-      theme_token: 'escapeplan-pirate'
-    });
-  } else {
-    console.log('Main room already exists, syncing metadata...');
-    db.prepare(
-      `UPDATE rooms SET
-         is_mobile_capable = @is_mobile_capable,
-         theme_token = @theme_token
-       WHERE id = @id`
-    ).run({
-      id: roomId,
-      is_mobile_capable: 0,
-      theme_token: 'escapeplan-pirate'
-    });
-  }
 
   // Seed puzzles (idempotent)
   const existingPuzzles = db.prepare('SELECT COUNT(*) as count FROM game_puzzles WHERE game_id = ?').get(pirateGame.id) as { count: number };
@@ -543,7 +510,7 @@ export async function seedIdempotent() {
       enabled: 1,
       conditions: JSON.stringify({ event: 'timer_paused' }),
       title_template: '⏸ Game Paused',
-      message_template: '{{gameName}} ({{roomName}}) paused at {{time}}',
+      message_template: '{{gameName}} paused at {{time}}',
       auto_dismiss_on: JSON.stringify(['timer_resume', 'session_complete'])
     },
     {

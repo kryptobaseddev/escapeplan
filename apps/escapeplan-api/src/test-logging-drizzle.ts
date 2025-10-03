@@ -4,7 +4,7 @@
  */
 
 import { db, sqlite } from './db/client.js';
-import { systemLogs, alerts, alertRules, sessionHints, sessions, bookings, games, rooms, operators } from '@escapeplan/contracts';
+import { systemLogs, alerts, alertRules, sessionHints, sessions, bookings, games, operators } from '@escapeplan/contracts';
 import { eq, and, isNull, count, desc, like } from 'drizzle-orm';
 import { logToDatabase, queryLogs } from './logging/database.js';
 import {
@@ -190,17 +190,16 @@ try {
   // =========================================================================
   console.log('6. Testing End-to-End Flow (Session → Logging → Alerting)');
 
-  // Get test game and room
+  // Get test game
   const game = db.select().from(games).limit(1).all()[0];
-  const room = db.select().from(rooms).limit(1).all()[0];
 
-  if (!game || !room) {
-    console.log('   ⚠️  Skipping integration test - no game/room found. Run `pnpm db:seed` first.');
+  if (!game) {
+    console.log('   ⚠️  Skipping integration test - no game found. Run `pnpm db:seed` first.');
   } else {
-    // Clean up any existing active sessions for this room
+    // Clean up any existing active sessions for this game
     try {
-      sqlite.prepare('UPDATE sessions SET status = ? WHERE room_id = ? AND status = ?')
-        .run('completed', room.id, 'running');
+      sqlite.prepare('UPDATE sessions SET status = ? WHERE game_id = ? AND status = ?')
+        .run('completed', game.id, 'running');
     } catch (e) {
       // Ignore cleanup errors
     }
@@ -215,7 +214,6 @@ try {
       id: bookingId,
       booking_code: bookingCode,
       game_id: game.id,
-      room_id: room.id,
       start_time: startTime,
       end_time: endTime,
       status: 'confirmed',
@@ -233,9 +231,8 @@ try {
     // Start session using the proper QuickStartSessionRequest
     const sessionResponse = quickStartSession({
       gameId: game.id,
-      roomId: room.id,
       partySize: 4,
-      durationMinutes: null,
+      durationMinutes: 60,
       notes: 'Drizzle ORM test session'
     }, operatorResult[0].id);
 

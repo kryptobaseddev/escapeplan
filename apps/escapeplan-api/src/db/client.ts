@@ -1,19 +1,16 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import * as schema from '@escapeplan/contracts';
+import { getDatabasePath, ensureDataDirectory } from '@escapeplan/contracts/paths';
 
 // ============================================================================
 // DATABASE CONNECTION
 // ============================================================================
 
-const moduleDir = dirname(fileURLToPath(import.meta.url));
-const dataPath = resolve(moduleDir, '../../data');
-mkdirSync(dataPath, { recursive: true });
+// Ensure data directory exists before opening database
+await ensureDataDirectory();
 
-const dbFile = resolve(dataPath, 'escapeplan.db');
+const dbFile = getDatabasePath();
 
 // Initialize better-sqlite3 with WAL mode for better concurrency
 export const sqlite = new Database(dbFile);

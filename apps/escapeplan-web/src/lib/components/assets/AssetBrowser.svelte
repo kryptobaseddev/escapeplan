@@ -2,21 +2,22 @@
 
 <script lang="ts">
 	import { apiFetch } from '$lib/api/client';
-	import VideoPlayerModal from '../media/VideoPlayerModal.svelte';
+	import MediaModal from '../media/MediaModal.svelte';
 
 	interface AssetRecord {
 		id: string;
 		filename: string;
-		original_filename: string;
-		mime_type: string;
-		size_bytes: number;
-		asset_type: string;
-		media_type: string | null;
-		game_id: string | null;
-		puzzle_id: string | null;
-		hint_order: number | null;
-		is_reusable: number;
-		uploaded_at: string;
+		originalFilename: string;
+		mimeType: string;
+		sizeBytes: number;
+		assetType: string;
+		mediaType: string | null;
+		url: string;
+		gameId: string | null;
+		puzzleId: string | null;
+		hintOrder: number | null;
+		isReusable: boolean;
+		uploadedAt: string;
 	}
 
 	interface AssetBrowserProps {
@@ -41,15 +42,26 @@
 
 	let assets = $state<AssetRecord[]>([]);
 	let games = $state<Record<string, string>>({});
-	let puzzles = $state<Record<string, string>>({});
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let searchQuery = $state('');
-	let filterType = $state<'all' | 'images' | 'audio' | 'video'>('all');
+	let filterAssetType = $state<string>('all');
+	let filterMediaType = $state<string>('all');
 	let selectedAssets = $state<Set<string>>(new Set());
-	let videoModalOpen = $state(false);
-	let currentVideoSrc = $state('');
-	let currentVideoTitle = $state('');
+
+	// Media player states
+	let mediaModalOpen = $state(false);
+	let currentMediaSrc = $state('');
+	let currentMediaTitle = $state('');
+	let currentMediaType = $state<'image' | 'audio' | 'video'>('image');
+
+	// Info popup state
+	let infoPopupOpen = $state(false);
+	let currentAssetInfo = $state<AssetRecord | null>(null);
+
+	// Dynamic filter options
+	let availableAssetTypes = $state<string[]>([]);
+	let availableMediaTypes = $state<string[]>([]);
 
 	async function loadAssets() {
 		loading = true;
@@ -71,20 +83,34 @@
 
 			let allAssets = Array.isArray(result) ? result : [];
 
-			// Client-side filtering by type
-			if (filterType !== 'all') {
-				allAssets = allAssets.filter((asset) => {
-					if (filterType === 'images') return asset.mime_type.startsWith('image/');
-					if (filterType === 'audio') return asset.mime_type.startsWith('audio/');
-					if (filterType === 'video') return asset.mime_type.startsWith('video/');
-					return true;
-				});
+			// Build dynamic filter options from actual data (only on first load)
+			if (availableAssetTypes.length === 0) {
+				const assetTypesSet = new Set(allAssets.map(a => a.assetType));
+				availableAssetTypes = Array.from(assetTypesSet).sort();
+
+				const mediaTypesSet = new Set(
+					allAssets.map(a => a.mediaType).filter(Boolean) as string[]
+				);
+				availableMediaTypes = Array.from(mediaTypesSet).sort();
+			}
+
+			// Client-side filtering
+			if (filterAssetType !== 'all') {
+				allAssets = allAssets.filter((asset) => asset.assetType === filterAssetType);
+			}
+			if (filterMediaType !== 'all') {
+				if (filterMediaType === 'image') {
+					// Images have null media_type
+					allAssets = allAssets.filter((asset) => !asset.mediaType);
+				} else {
+					allAssets = allAssets.filter((asset) => asset.mediaType === filterMediaType);
+				}
 			}
 
 			assets = allAssets;
 
 			// Load game names
-			const gameIds = new Set(allAssets.map((a) => a.game_id).filter(Boolean) as string[]);
+			const gameIds = new Set(allAssets.map((a) => a.gameId).filter(Boolean) as string[]);
 			if (gameIds.size > 0) {
 				await loadGameNames(Array.from(gameIds));
 			}
@@ -98,7 +124,6 @@
 
 	async function loadGameNames(gameIds: string[]) {
 		try {
-			// Assuming there's an endpoint to get game names - if not, we'll fetch all games
 			const result = await apiFetch<Array<{ id: string; name: string }>>(
 				fetch,
 				'/admin/games',
@@ -110,11 +135,41 @@
 		}
 	}
 
-	function handleSelect(asset: AssetRecord) {
-		onSelect?.(asset);
+	function openMedia(asset: AssetRecord) {
+		currentMediaSrc = asset.url;
+		currentMediaTitle = asset.originalFilename;
+
+		// Determine media type
+		if (asset.mediaType === 'video') {
+			currentMediaType = 'video';
+		} else if (asset.mediaType === 'audio') {
+			currentMediaType = 'audio';
+		} else {
+			currentMediaType = 'image';
+		}
+
+		mediaModalOpen = true;
 	}
 
-	function toggleSelectAsset(assetId: string) {
+	function closeMedia() {
+		mediaModalOpen = false;
+		currentMediaSrc = '';
+		currentMediaTitle = '';
+	}
+
+	function openInfo(asset: AssetRecord, event: Event) {
+		event.stopPropagation();
+		currentAssetInfo = asset;
+		infoPopupOpen = true;
+	}
+
+	function closeInfo() {
+		infoPopupOpen = false;
+		currentAssetInfo = null;
+	}
+
+	function toggleSelectAsset(assetId: string, event: Event) {
+		event.stopPropagation();
 		const newSet = new Set(selectedAssets);
 		if (newSet.has(assetId)) {
 			newSet.delete(assetId);
@@ -136,10 +191,9 @@
 		for (const assetId of selectedAssets) {
 			const asset = assets.find((a) => a.id === assetId);
 			if (asset) {
-				const url = `/assets/${asset.filename}`;
 				const link = document.createElement('a');
-				link.href = url;
-				link.download = asset.original_filename;
+				link.href = asset.url;
+				link.download = asset.originalFilename;
 				link.click();
 			}
 		}
@@ -164,49 +218,46 @@
 		}
 	}
 
-	function playAsset(asset: AssetRecord) {
-		const url = `/assets/${asset.filename}`;
-		if (asset.mime_type.startsWith('video/')) {
-			currentVideoSrc = url;
-			currentVideoTitle = asset.original_filename;
-			videoModalOpen = true;
-		} else if (asset.mime_type.startsWith('audio/')) {
-			const audio = new Audio(url);
-			audio.play();
-		}
-	}
-
-	function getAssetTypeIcon(mimeType: string): string {
-		if (mimeType.includes('image'))
-			return 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z';
-		if (mimeType.includes('audio'))
-			return 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3';
-		if (mimeType.includes('video'))
+	function getMediaIcon(asset: AssetRecord): string {
+		if (asset.mediaType === 'video') {
 			return 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z';
-		return 'M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z';
+		}
+		if (asset.mediaType === 'audio') {
+			return 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3';
+		}
+		// Image
+		return 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z';
 	}
 
 	function formatFileSize(bytes: number): string {
-		if (bytes === 0) return '0 B';
+		if (!bytes || bytes === 0) return '0 B';
 		const k = 1024;
 		const sizes = ['B', 'KB', 'MB', 'GB'];
 		const i = Math.floor(Math.log(bytes) / Math.log(k));
 		return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
 	}
 
-	$effect(() => {
-		loadAssets();
-	});
+	function getFileExtension(filename: string): string {
+		const parts = filename.split('.');
+		return parts.length > 1 ? `.${parts[parts.length - 1]}` : '';
+	}
 
+	// Load assets on mount and when user input changes
+	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
+		// Watch user inputs
 		searchQuery;
-		const timeout = setTimeout(() => loadAssets(), 300);
-		return () => clearTimeout(timeout);
-	});
+		filterAssetType;
+		filterMediaType;
 
-	$effect(() => {
-		filterType;
-		loadAssets();
+		if (debounceTimer) clearTimeout(debounceTimer);
+		debounceTimer = setTimeout(() => {
+			loadAssets();
+		}, 300);
+
+		return () => {
+			if (debounceTimer) clearTimeout(debounceTimer);
+		};
 	});
 </script>
 
@@ -220,11 +271,22 @@
 				class="input input-bordered input-sm flex-1 min-w-[200px]"
 				bind:value={searchQuery}
 			/>
-			<select class="select select-bordered select-sm" bind:value={filterType}>
-				<option value="all">All Types</option>
-				<option value="images">Images</option>
-				<option value="audio">Audio</option>
-				<option value="video">Video</option>
+			<select class="select select-bordered select-sm" bind:value={filterAssetType}>
+				<option value="all">All Asset Types</option>
+				{#each availableAssetTypes as type}
+					{#if type}
+						<option value={type}>{type.replace(/_/g, ' ')}</option>
+					{/if}
+				{/each}
+			</select>
+			<select class="select select-bordered select-sm" bind:value={filterMediaType}>
+				<option value="all">All Media Types</option>
+				<option value="image">Images</option>
+				{#each availableMediaTypes as type}
+					{#if type}
+						<option value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
+					{/if}
+				{/each}
 			</select>
 			<button type="button" class="btn btn-secondary btn-sm" onclick={loadAssets}>
 				<svg
@@ -343,20 +405,23 @@
 		<div class="grid gap-3 grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
 			{#each assets as asset (asset.id)}
 				<div
-					class={`card card-compact bg-base-200 shadow-sm transition-all hover:shadow-md ${
+					class={`card card-compact bg-base-200 shadow-sm transition-all hover:shadow-md cursor-pointer ${
 						selectedAssets.has(asset.id) ? 'ring-2 ring-primary' : ''
 					}`}
+					onclick={() => openMedia(asset)}
 				>
 					<!-- Thumbnail -->
-					<figure class="relative h-32 bg-base-300 cursor-pointer" onclick={() => handleSelect(asset)}>
-						{#if asset.mime_type.startsWith('image/')}
+					<figure class="relative h-32 bg-base-300">
+						{#if !asset.mediaType}
+							<!-- Image thumbnail -->
 							<img
-								src={`/assets/${asset.filename}`}
-								alt={asset.original_filename}
+								src={asset.url}
+								alt={asset.originalFilename}
 								class="h-full w-full object-cover"
 								loading="lazy"
 							/>
 						{:else}
+							<!-- Audio/Video icon -->
 							<div class="flex h-full w-full items-center justify-center">
 								<svg
 									class="h-12 w-12 text-base-content/30"
@@ -369,71 +434,53 @@
 										stroke-linecap="round"
 										stroke-linejoin="round"
 										stroke-width="2"
-										d={getAssetTypeIcon(asset.mime_type)}
+										d={getMediaIcon(asset)}
 									/>
 								</svg>
 							</div>
 						{/if}
 						<!-- Select Checkbox -->
-						<div class="absolute top-2 left-2">
+						<div class="absolute top-2 left-2" onclick={(e) => e.stopPropagation()}>
 							<input
 								type="checkbox"
 								class="checkbox checkbox-sm checkbox-primary"
 								checked={selectedAssets.has(asset.id)}
-								onchange={() => toggleSelectAsset(asset.id)}
+								onchange={(e) => toggleSelectAsset(asset.id, e)}
 							/>
 						</div>
 						<!-- Reusable Badge -->
-						{#if asset.is_reusable}
+						{#if asset.isReusable}
 							<div class="badge badge-secondary badge-xs absolute top-2 right-2">Reusable</div>
 						{/if}
 					</figure>
 
 					<!-- Card Body -->
 					<div class="card-body p-2">
-						<!-- Filenames -->
+						<!-- Filename -->
 						<h3
-							class="text-xs font-medium truncate"
-							title={asset.original_filename}
+							class="text-xs font-medium truncate leading-tight"
+							title={asset.originalFilename}
 						>
-							{asset.original_filename}
+							{asset.originalFilename}
 						</h3>
-						<p class="text-[10px] text-base-content/60 truncate" title={asset.filename}>
-							{asset.filename}
-						</p>
 
-						<!-- Metadata -->
-						<div class="flex flex-col gap-1 text-[10px] text-base-content/60">
-							{#if asset.game_id && games[asset.game_id]}
-								<div class="flex items-center gap-1">
-									<svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-										<path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6z"></path>
-									</svg>
-									<span class="truncate">{games[asset.game_id]}</span>
-								</div>
-							{/if}
-							{#if asset.puzzle_id}
-								<div class="flex items-center gap-1">
-									<span>Puzzle #{asset.hint_order || '?'}</span>
-								</div>
-							{/if}
-							<span>{formatFileSize(asset.size_bytes)}</span>
-						</div>
-
-						<!-- Action Buttons -->
-						<div class="card-actions justify-end mt-1">
-							{#if asset.mime_type.startsWith('video/') || asset.mime_type.startsWith('audio/')}
-								<button
-									type="button"
-									class="btn btn-xs btn-circle btn-ghost"
-									onclick={() => playAsset(asset)}
-									title="Play"
-								>
-									<svg class="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-										<path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"></path>
-									</svg>
-								</button>
-							{/if}
+						<!-- Extension & Size -->
+						<div class="flex items-center justify-between gap-1 mt-1">
+							<div class="flex items-center gap-1">
+								<span class="badge badge-xs badge-outline">{getFileExtension(asset.filename).toUpperCase()}</span>
+								<span class="text-[10px] text-base-content/60">{formatFileSize(asset.sizeBytes)}</span>
+							</div>
+							<!-- Info Button -->
+							<button
+								type="button"
+								class="btn btn-xs btn-circle btn-ghost"
+								onclick={(e) => openInfo(asset, e)}
+								title="View details"
+							>
+								<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+									<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+								</svg>
+							</button>
 						</div>
 					</div>
 				</div>
@@ -442,10 +489,89 @@
 	{/if}
 </div>
 
-<!-- Video Player Modal -->
-<VideoPlayerModal
-	src={currentVideoSrc}
-	title={currentVideoTitle}
-	isOpen={videoModalOpen}
-	onClose={() => (videoModalOpen = false)}
+<!-- Media Modal -->
+<MediaModal
+	isOpen={mediaModalOpen}
+	src={currentMediaSrc}
+	title={currentMediaTitle}
+	mediaType={currentMediaType}
+	windowScale={85}
+	showControls={true}
+	autoPlay={true}
+	mediaLoop={false}
+	onClose={closeMedia}
 />
+
+<!-- Info Popup Modal - Constrained to main content area -->
+{#if infoPopupOpen && currentAssetInfo}
+	<div class="fixed inset-0 left-64 z-[9998] flex items-center justify-center bg-black/50" onclick={closeInfo}>
+		<div class="bg-base-100 rounded-lg shadow-xl max-w-md w-full m-4" onclick={(e) => e.stopPropagation()}>
+			<!-- Header -->
+			<div class="flex items-center justify-between p-4 border-b border-base-300">
+				<h3 class="text-lg font-bold">Asset Details</h3>
+				<button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={closeInfo}>
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content -->
+			<div class="p-4 space-y-3 text-sm">
+				<div>
+					<span class="font-semibold">Original Filename:</span>
+					<p class="text-base-content/70">{currentAssetInfo.originalFilename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Stored Filename:</span>
+					<p class="text-base-content/70 break-all">{currentAssetInfo.filename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Extension:</span>
+					<span class="badge badge-outline ml-2">{getFileExtension(currentAssetInfo.filename).toUpperCase()}</span>
+				</div>
+				<div>
+					<span class="font-semibold">File Size:</span>
+					<span class="ml-2">{formatFileSize(currentAssetInfo.sizeBytes)}</span>
+				</div>
+				<div>
+					<span class="font-semibold">Type:</span>
+					<span class="ml-2">{currentAssetInfo.assetType ? currentAssetInfo.assetType.replace(/_/g, ' ') : 'Unknown'}</span>
+				</div>
+				{#if currentAssetInfo.mediaType}
+					<div>
+						<span class="font-semibold">Media Type:</span>
+						<span class="ml-2">{currentAssetInfo.mediaType.charAt(0).toUpperCase() + currentAssetInfo.mediaType.slice(1)}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.gameId && games[currentAssetInfo.gameId]}
+					<div>
+						<span class="font-semibold">Game:</span>
+						<p class="text-base-content/70">{games[currentAssetInfo.gameId]}</p>
+					</div>
+				{/if}
+				{#if currentAssetInfo.puzzleId}
+					<div>
+						<span class="font-semibold">Puzzle ID:</span>
+						<span class="ml-2">{currentAssetInfo.puzzleId}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.hintOrder !== null && currentAssetInfo.hintOrder !== undefined}
+					<div>
+						<span class="font-semibold">Hint Order:</span>
+						<span class="ml-2">#{currentAssetInfo.hintOrder}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.isReusable}
+					<div>
+						<span class="badge badge-secondary">Reusable Asset</span>
+					</div>
+				{/if}
+				<div>
+					<span class="font-semibold">Uploaded:</span>
+					<p class="text-base-content/70">{new Date(currentAssetInfo.uploadedAt).toLocaleString()}</p>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}

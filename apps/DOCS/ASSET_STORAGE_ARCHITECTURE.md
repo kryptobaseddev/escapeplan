@@ -7,14 +7,23 @@ Comprehensive file upload and asset management system for EscapePlan games, hint
 ## Storage Paths
 
 ### Dynamic Path Resolution
+
+Asset storage paths are resolved using the **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md)**.
+
+| Environment | Path |
+|-------------|------|
+| Development | `{cwd}/data/assets` |
+| Production | `/var/lib/escapeplan/assets` |
+
+**Implementation:**
 ```typescript
-const getAssetBasePath = () => {
-  const isDev = process.env.NODE_ENV === 'development';
-  return isDev
-    ? path.join(process.cwd(), 'apps/escapeplan-api/data/assets')
-    : '/var/lib/escapeplan/assets';
-};
+import { getAssetBasePath } from '@escapeplan/contracts/paths';
+
+const basePath = getAssetBasePath();
+// Auto-resolves based on runtime environment
 ```
+
+See **[Runtime Configuration System → Path Resolution](./RUNTIME_CONFIGURATION_SYSTEM.md#path-resolution)** for full details on how paths are dynamically detected.
 
 ### Directory Structure
 ```
@@ -395,17 +404,22 @@ Body:
 
 ## File Size Limits
 
-### Current Limits
+### File Size Limits (Database-Backed)
+
+File size limits are now stored in the `system_settings` table and editable via the Admin UI without server restarts:
+
+```typescript
+import { settings } from './settings.js';
+
+const maxImageSize = settings.getMaxImageSizeMB() * 1024 * 1024; // 10 MB default
+```
+
+**Default Values:**
 - Images: 10 MB
 - Audio: 25 MB
 - Video: 50 MB
 
-### Configurable via Environment
-```env
-MAX_IMAGE_SIZE_MB=10
-MAX_AUDIO_SIZE_MB=25
-MAX_VIDEO_SIZE_MB=50
-```
+See **[Runtime Configuration System → System Settings](./RUNTIME_CONFIGURATION_SYSTEM.md#system-settings-database)** for how to modify these settings dynamically.
 
 ## Security
 
@@ -730,3 +744,15 @@ For **operational configuration and usage**, see: `apps/escapeplan-api/docs/ASSE
 1. **No environment variables yet** - File size limits are hardcoded (10MB images, 25MB audio, 50MB video)
 2. **No backup automation** - Manual backups work but must be triggered via UI or API
 3. **Asset deletion requires manage_games permission** - Asset Library shows all assets but delete is restricted
+
+---
+
+## Related Documentation
+
+### Core System Docs
+- **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md)** - Path resolution, file size limits (system settings)
+- **[Database System](./DATABASE_SYSTEM.md)** - Assets, asset_usage, storage_metrics tables
+- **[API Contracts & Schema Management](./API_CONTRACTS_SCHEMA_MANAGEMENT.md)** - Asset schema definition and validation
+
+### Integration Docs
+- **[RBAC System](./RBAC_SYSTEM.md)** - Permissions: `view_assets`, `manage_assets`, `view_storage`, `manage_storage`

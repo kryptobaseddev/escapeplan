@@ -72,6 +72,8 @@ import {
   listPermissions,
   getPermissionMatrix
 } from './state.js';
+import { initializeSettings, settings } from './settings.js';
+import { seedSystemSettings } from './db/seed-settings.js';
 import { auth, requireSession } from './auth.js';
 import { db, sqlite } from './db/client.js';
 import { operators, alertRules, systemLogs, cameras, games } from '@escapeplan/contracts';
@@ -648,6 +650,7 @@ export async function buildServer() {
       const { id } = request.params as { id: string };
       const parsed = saveGameSchema.safeParse(request.body);
       if (!parsed.success) {
+        request.log.error({ validation: parsed.error.flatten() }, 'Game validation failed');
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
       try {
@@ -1283,6 +1286,45 @@ export async function buildServer() {
     });
 
     // ============================================================================
+    // SYSTEM SETTINGS MANAGEMENT
+    // ============================================================================
+
+    api.get('/admin/settings', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_system_health')) return;
+
+      try {
+        const grouped = await settings.getAll();
+        return { settings: grouped };
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to get settings');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.put('/admin/settings/:key', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_system_health')) return;
+
+      const { key } = request.params as { key: string };
+      const { value } = request.body as { value: any };
+
+      if (value === undefined) {
+        return reply.status(400).send({ statusCode: 400, message: 'Value is required' });
+      }
+
+      try {
+        await settings.set(key as any, value, session.user.id);
+        return { success: true, key, value };
+      } catch (error) {
+        request.log.error({ err: error, key }, 'Failed to update setting');
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    // ============================================================================
     // SYSTEM HEALTH & BACKUPS
     // ============================================================================
 
@@ -1497,6 +1539,12 @@ const isTestEnv = process.env.NODE_ENV === 'test' || isVitest;
 if (!skipAutostart && !isTestEnv) {
   const server = await buildServer();
   try {
+    // Seed default system settings if needed
+    await seedSystemSettings();
+
+    // Initialize settings manager
+    await initializeSettings();
+
     await server.listen({ port: DEFAULT_PORT, host: '0.0.0.0' });
     server.log.info(`EscapePlan API listening on http://localhost:${DEFAULT_PORT}`);
   } catch (error) {

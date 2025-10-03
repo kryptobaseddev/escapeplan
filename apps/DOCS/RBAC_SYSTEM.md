@@ -802,6 +802,20 @@ api.get('/api/admin/roles', async (request, reply) => {
 
 ---
 
+## Runtime Integration
+
+The RBAC system loads roles and permissions from the database using runtime-detected paths. The system works identically in development and production without any configuration changes.
+
+Database path resolution is handled by the **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md)**, ensuring the correct SQLite database is accessed regardless of environment.
+
+### Zero-Configuration Deployment
+
+- **Development:** Uses `{cwd}/data/escapeplan.db`
+- **Production:** Uses `/var/lib/escapeplan/escapeplan.db`
+- **No environment variables required**
+
+---
+
 ## Additional Resources
 
 - **Database Schema:** `apps/escapeplan-api/src/db/schema.ts`
@@ -815,3 +829,17 @@ api.get('/api/admin/roles', async (request, reply) => {
 **Document Status:** ✅ Validated (2025-10-01)
 **Implementation Status:** ✅ Backend Complete | 🔄 Frontend In Progress
 **Test Coverage:** Backend (Unit tests pending) | Frontend (E2E pending)
+
+---
+
+## Related Documentation
+
+### Core System Docs
+- **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md)** - Database path resolution for RBAC tables
+- **[Database System](./DATABASE_SYSTEM.md)** - operators, roles, permissions, role_permissions tables
+- **[API Contracts & Schema Management](./API_CONTRACTS_SCHEMA_MANAGEMENT.md)** - RBAC schema definition
+
+### Integration Docs
+- **[Asset Storage Architecture](./ASSET_STORAGE_ARCHITECTURE.md)** - Uses RBAC permissions for access control
+- **[Network & WiFi System](./NETWORK_WIFI_SYSTEM.md)** - Uses RBAC permissions for network management
+- **[Logging & Alerting System](./LOGGING_ALERTING_SYSTEM.md)** - Uses RBAC permissions for system logs

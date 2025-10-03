@@ -2,11 +2,11 @@
 import type {
   GameHintDefinition,
   GamePuzzleDefinition,
-  GameRoomDefinition,
   GameMediaConfig,
   GamePricingConfig,
   GameBookingRules,
-  SaveGameRequest
+  SaveGameRequest,
+  QuickStartSessionRequest
 } from './validation.js';
 
 export type NetworkHealth = 'online' | 'degraded' | 'offline';
@@ -131,14 +131,8 @@ export interface ArchiveOperatorRequest {
   reason?: string | null;
 }
 
-export interface QuickStartSessionRequest {
-  gameId: string;
-  roomId: string;
-  partySize: number;
-  durationMinutes?: number | null;
-  notes?: string | null;
-  autoStartTimer?: boolean; // If true, timer starts immediately; if false/undefined, timer stays idle
-}
+// Re-export QuickStartSessionRequest from validation
+export type { QuickStartSessionRequest };
 
 export interface ChangeOwnPasswordRequest {
   currentPassword: string;
@@ -345,7 +339,7 @@ export interface CommandResponse {
   message?: string;
 }
 
-// NOTE: Game-related types (GamePuzzleDefinition, GameRoomDefinition, GameMediaConfig, etc.)
+// NOTE: Game-related types (GamePuzzleDefinition, GameMediaConfig, etc.)
 // are now inferred from Zod schemas in validation.ts and exported from there.
 // These old interface definitions have been removed to avoid conflicts with Zod types.
 
@@ -380,7 +374,6 @@ export interface GameDetails {
   archivedBy?: string | null;
   archivedReason?: string | null;
   puzzles: GamePuzzleDefinition[];
-  rooms: GameRoomDefinition[];
 }
 
 // NOTE: SaveGameRequest is now inferred from Zod in validation.ts
@@ -895,3 +888,19 @@ export * from './schema.js';
 
 // Export Zod validation schemas and inferred types (for API request validation)
 export * from './validation.js';
+
+// ============================================================================
+// RUNTIME ENVIRONMENT & PATHS (Node.js only - do not import in browser!)
+// ============================================================================
+
+// ============================================================================
+// UNIVERSAL CONSTANTS & SETTINGS (Browser + Node.js safe)
+// ============================================================================
+// NOTE: runtime.js and paths.js are server-only and should NOT be exported
+// from the main index. Import them directly in server code when needed.
+
+// Application constants
+export * from './constants.js';
+
+// System settings types
+export * from './settings-types.js';

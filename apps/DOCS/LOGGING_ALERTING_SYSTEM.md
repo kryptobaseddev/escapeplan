@@ -287,6 +287,17 @@ CREATE INDEX idx_alert_rules_category ON alert_rules(category);
 
 ## Winston Logger Configuration
 
+### Log File Paths (Runtime-Detected)
+
+Winston log files are stored using runtime-detected paths:
+
+| Environment | Log Path |
+|-------------|----------|
+| Development | `{cwd}/logs/` |
+| Production | `/var/log/escapeplan/` |
+
+The logger automatically uses the correct location based on environment detection. See **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md#path-resolution)** for details.
+
 ### File Structure
 
 ```
@@ -1193,6 +1204,18 @@ export const ROLE_PERMISSIONS: Record<OperatorRole, OperatorPermission[]> = {
 3. **Install dependencies** - `pnpm add winston winston-daily-rotate-file`
 4. **Start Phase 1** - Database tables + Winston setup
 5. **Create feature branch** - `feature/logging-alerting-system`
+
+---
+
+## Related Documentation
+
+### Core System Docs
+- **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md)** - Log file path resolution
+- **[Database System](./DATABASE_SYSTEM.md)** - system_logs, alerts, alert_rules tables
+- **[API Contracts & Schema Management](./API_CONTRACTS_SCHEMA_MANAGEMENT.md)** - Logging schema definition
+
+### Integration Docs
+- **[RBAC System](./RBAC_SYSTEM.md)** - Permissions: `view_system_logs`, `view_alert_rules`, `manage_alert_rules`
 
 ---
 

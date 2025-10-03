@@ -83,7 +83,7 @@ export async function setupUpdateRoutes(server: FastifyInstance) {
       version: env.version,
       buildDate: env.buildDate,
       githubRepo: env.githubRepo,
-      environment: env.nodeEnv
+      environment: env.isProd ? 'production' : 'development'
     });
   });
 }

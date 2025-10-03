@@ -134,16 +134,6 @@ export const games = sqliteTable('games', {
   archived_reason: text('archived_reason')
 });
 
-export const rooms = sqliteTable('rooms', {
-  id: text('id').primaryKey(),
-  game_id: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
-  name: text('name').notNull(),
-  is_mobile_capable: integer('is_mobile_capable', { mode: 'boolean' }).notNull().default(false),
-  theme_token: text('theme_token'),
-  description: text('description'),
-  slug: text('slug'),
-  capacity: integer('capacity')
-});
 
 export const gamePuzzles = sqliteTable('game_puzzles', {
   id: text('id').primaryKey(),
@@ -190,7 +180,6 @@ export const bookings = sqliteTable('bookings', {
   id: text('id').primaryKey(),
   booking_code: text('booking_code').notNull().unique(),
   game_id: text('game_id').notNull().references(() => games.id),
-  room_id: text('room_id').notNull().references(() => rooms.id),
   start_time: text('start_time').notNull(),
   end_time: text('end_time').notNull(),
   status: text('status').notNull(),
@@ -496,6 +485,22 @@ export const alertRules = sqliteTable('alert_rules', {
 }));
 
 // ============================================================================
+// SYSTEM SETTINGS
+// ============================================================================
+
+export const systemSettings = sqliteTable('system_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  type: text('type').notNull(), // 'string' | 'number' | 'boolean' | 'json'
+  category: text('category').notNull(), // 'storage' | 'backup' | 'updates' | 'system' | 'general'
+  label: text('label').notNull(),
+  description: text('description'),
+  is_editable: integer('is_editable', { mode: 'boolean' }).notNull().default(true),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_by: text('updated_by').references(() => operators.id)
+});
+
+// ============================================================================
 // CAMERAS
 // ============================================================================
 
@@ -535,7 +540,6 @@ export const schema = {
   operatorVerifications,
   // Games & Rooms
   games,
-  rooms,
   gamePuzzles,
   gameMilestones,
   // Bookings & Sessions
@@ -562,6 +566,8 @@ export const schema = {
   systemLogs,
   alerts,
   alertRules,
+  // System Settings
+  systemSettings,
   // Cameras
   cameras,
   // Database-driven RBAC

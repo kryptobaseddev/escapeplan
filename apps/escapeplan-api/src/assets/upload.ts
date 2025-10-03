@@ -10,12 +10,12 @@ import {
   getAssetSubPath,
   generateAssetFilename,
   getAllowedMimeTypes,
-  getMaxFileSize,
   getExtensionFromMime,
   slugify
-} from './paths.js';
+} from '@escapeplan/contracts/paths';
 import { processFile } from './processing.js';
 import { requireSession } from '../auth.js';
+import { settings } from '../settings.js';
 
 export interface UploadAssetQuery {
   gameId: string;
@@ -97,7 +97,23 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     }
 
     // Validate file size
-    const maxSize = getMaxFileSize(assetType, mediaType);
+    let maxSize: number;
+    if (assetType === 'hint_media' || assetType === 'milestone_media') {
+      if (mediaType === 'image') {
+        maxSize = settings.getMaxImageSizeMB() * 1024 * 1024;
+      } else if (mediaType === 'audio') {
+        maxSize = settings.getMaxAudioSizeMB() * 1024 * 1024;
+      } else if (mediaType === 'video') {
+        maxSize = settings.getMaxVideoSizeMB() * 1024 * 1024;
+      } else {
+        // Default to image if mediaType is text or undefined
+        maxSize = settings.getMaxImageSizeMB() * 1024 * 1024;
+      }
+    } else {
+      // All non-hint/milestone assets are images
+      maxSize = settings.getMaxImageSizeMB() * 1024 * 1024;
+    }
+
     const fileBuffer = await data.toBuffer();
     if (fileBuffer.length > maxSize) {
       return reply.status(400).send({
@@ -400,7 +416,15 @@ export async function getStorageMetrics() {
     try {
       await updateStorageMetrics();
       // Fetch the newly created record instead of recursing
-      const newLatest = sqlite.prepare('SELECT * FROM storage_metrics ORDER BY recorded_at DESC LIMIT 1').get() as typeof latest;
+      const newLatest = sqlite.prepare('SELECT * FROM storage_metrics ORDER BY recorded_at DESC LIMIT 1').get() as {
+        total_size_bytes: number;
+        total_files: number;
+        by_type: string;
+        by_game: string;
+        last_backup_at: string | null;
+        recorded_at: string;
+      } | undefined;
+
       if (!newLatest) {
         // Return minimal response if still no data
         return {

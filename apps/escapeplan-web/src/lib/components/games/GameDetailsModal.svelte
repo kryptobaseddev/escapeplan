@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { GameDetails, GameHintDefinition, GameMilestone } from '@escapeplan/contracts';
-  import { onMount } from 'svelte';
+  import MediaModal from '../media/MediaModal.svelte';
 
-  type TabId = 'details' | 'media' | 'rooms' | 'puzzles' | 'pricing' | 'booking' | 'milestones' | 'cameras';
+  type TabId = 'details' | 'media' | 'puzzles' | 'pricing' | 'booking' | 'milestones' | 'cameras';
 
   let {
     open = $bindable(false),
@@ -18,14 +18,16 @@
 
   let dialogElement = $state<HTMLDialogElement | null>(null);
   let activeTab = $state<TabId>('details');
-  let playingMedia = $state<string | null>(null);
-  let audioPlayers = $state<Record<string, HTMLAudioElement>>({});
-  let videoPlayers = $state<Record<string, HTMLVideoElement>>({});
+
+  // MediaModal state
+  let mediaModalOpen = $state(false);
+  let currentMediaSrc = $state('');
+  let currentMediaTitle = $state('');
+  let currentMediaType = $state<'audio' | 'video' | 'image'>('audio');
 
   const tabItems: Array<{ id: TabId; label: string; count?: number }> = $derived([
     { id: 'details', label: 'Game Details' },
     { id: 'media', label: 'Images & Media', count: game?.media?.galleryAssetIds?.length || 0 },
-    { id: 'rooms', label: 'Rooms', count: game?.rooms?.length || 0 },
     { id: 'puzzles', label: 'Puzzles & Hints', count: game?.puzzles?.length || 0 },
     { id: 'pricing', label: 'Pricing' },
     { id: 'booking', label: 'Booking Rules' },
@@ -54,7 +56,7 @@
 
   function handleClose() {
     open = false;
-    stopAllMedia();
+    mediaModalOpen = false;
     onclose?.();
   }
 
@@ -65,62 +67,24 @@
     }
   }
 
-  function stopAllMedia() {
-    Object.values(audioPlayers).forEach(player => {
-      if (player && typeof player.pause === 'function') {
-        try {
-          player.pause();
-          player.currentTime = 0;
-        } catch (e) {
-          console.warn('Failed to pause audio:', e);
-        }
-      }
-    });
-    Object.values(videoPlayers).forEach(player => {
-      if (player && typeof player.pause === 'function') {
-        try {
-          player.pause();
-          player.currentTime = 0;
-        } catch (e) {
-          console.warn('Failed to pause video:', e);
-        }
-      }
-    });
-    playingMedia = null;
+  function playHintMedia(hint: GameHintDefinition, hintOrder: number) {
+    if (!hint.assetUrl) return;
+    if (hint.type !== 'audio' && hint.type !== 'video') return;
+
+    currentMediaSrc = hint.assetUrl;
+    currentMediaTitle = `Hint ${hintOrder} - ${hint.type === 'audio' ? 'Audio' : 'Video'}`;
+    currentMediaType = hint.type;
+    mediaModalOpen = true;
   }
 
-  function playHintMedia(hint: GameHintDefinition, puzzleId: string) {
-    if (!hint.assetUrl) return;
+  function playMilestoneMedia(milestone: GameMilestone) {
+    if (!milestone.assetUrl) return;
+    if (milestone.mediaType !== 'audio' && milestone.mediaType !== 'video') return;
 
-    const mediaId = `${puzzleId}-${hint.uuid}`;
-
-    if (hint.type === 'audio') {
-      const player = audioPlayers[mediaId];
-      if (player) {
-        if (playingMedia === mediaId) {
-          player.pause();
-          playingMedia = null;
-        } else {
-          stopAllMedia();
-          player.volume = (hint.volumeLevel || game?.defaultVolume || 80) / 100;
-          player.play();
-          playingMedia = mediaId;
-        }
-      }
-    } else if (hint.type === 'video') {
-      const player = videoPlayers[mediaId];
-      if (player) {
-        if (playingMedia === mediaId) {
-          player.pause();
-          playingMedia = null;
-        } else {
-          stopAllMedia();
-          player.volume = (hint.volumeLevel || game?.defaultVolume || 80) / 100;
-          player.play();
-          playingMedia = mediaId;
-        }
-      }
-    }
+    currentMediaSrc = milestone.assetUrl;
+    currentMediaTitle = `${milestone.name} - ${milestone.mediaType}`;
+    currentMediaType = milestone.mediaType;
+    mediaModalOpen = true;
   }
 
   function sortPuzzles(puzzles: GameDetails['puzzles'] | undefined) {
@@ -315,8 +279,6 @@
                         </h4>
                         <div class="space-y-2">
                           {#each sortHints(puzzle.hints) as hint}
-                            {@const mediaId = `${puzzle.id}-${hint.uuid}`}
-                            {@const isPlaying = playingMedia === mediaId}
                             <div class="bg-base-200/70 rounded-lg p-3">
                               <div class="flex items-start gap-3">
                                 <div class="flex-shrink-0">
@@ -331,57 +293,30 @@
                                 <div class="flex-1">
                                   <p class="text-sm text-base-content/90">{hint.content}</p>
 
-                                  {#if hint.assetUrl}
+                                  {#if hint.assetUrl && (hint.type === 'audio' || hint.type === 'video')}
                                     <div class="mt-2 flex items-center gap-2">
                                       <button
                                         type="button"
-                                        class="btn btn-xs"
-                                        class:btn-primary={!isPlaying}
-                                        class:btn-warning={isPlaying}
-                                        onclick={() => playHintMedia(hint, puzzle.id)}
+                                        class="btn btn-xs btn-primary"
+                                        onclick={() => playHintMedia(hint, hint.order)}
                                       >
-                                        {#if isPlaying}
-                                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zM7 8a1 1 0 012 0v4a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v4a1 1 0 102 0V8a1 1 0 00-1-1z" clip-rule="evenodd" />
-                                          </svg>
-                                          Stop
-                                        {:else}
-                                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
-                                          </svg>
-                                          Play
-                                        {/if}
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                                          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                                        </svg>
+                                        Play {hint.type}
                                       </button>
 
-                                      {#if hint.type === 'audio' || hint.type === 'video'}
-                                        <div class="flex items-center gap-2">
-                                          <span class="text-xs text-base-content/50">Volume:</span>
-                                          <progress
-                                            class="progress progress-primary w-20"
-                                            value={hint.volumeLevel || game?.defaultVolume || 80}
-                                            max="100"
-                                          ></progress>
-                                          <span class="text-xs text-base-content/70">
-                                            {hint.volumeLevel || game?.defaultVolume || 80}%
-                                          </span>
-                                        </div>
-
-                                        {#if hint.type === 'audio'}
-                                          <audio
-                                            bind:this={audioPlayers[mediaId]}
-                                            src={hint.assetUrl}
-                                            preload="metadata"
-                                            style="display: none;"
-                                          ></audio>
-                                        {:else if hint.type === 'video'}
-                                          <video
-                                            bind:this={videoPlayers[mediaId]}
-                                            src={hint.assetUrl}
-                                            preload="metadata"
-                                            style="display: none;"
-                                          ></video>
-                                        {/if}
-                                      {/if}
+                                      <div class="flex items-center gap-2">
+                                        <span class="text-xs text-base-content/50">Volume:</span>
+                                        <progress
+                                          class="progress progress-primary w-20"
+                                          value={hint.volumeLevel || game?.defaultVolume || 80}
+                                          max="100"
+                                        ></progress>
+                                        <span class="text-xs text-base-content/70">
+                                          {hint.volumeLevel || game?.defaultVolume || 80}%
+                                        </span>
+                                      </div>
                                     </div>
                                   {/if}
                                 </div>
@@ -395,28 +330,6 @@
                 </article>
               {/each}
             {/if}
-          </div>
-
-        {:else if activeTab === 'rooms'}
-          <div class="grid grid-cols-2 gap-4">
-            {#each game.rooms as room}
-              <div class="card bg-base-100 border border-white/10">
-                <div class="card-body">
-                  <h3 class="card-title text-base">{room.name}</h3>
-                  {#if room.description}
-                    <p class="text-sm text-base-content/70">{room.description}</p>
-                  {/if}
-                  <div class="flex gap-2 mt-2">
-                    {#if room.isMobileCapable}
-                      <span class="badge badge-success badge-sm">Mobile Capable</span>
-                    {/if}
-                    {#if room.capacity}
-                      <span class="badge badge-outline badge-sm">Capacity: {room.capacity}</span>
-                    {/if}
-                  </div>
-                </div>
-              </div>
-            {/each}
           </div>
 
         {:else if activeTab === 'media'}
@@ -551,6 +464,21 @@
                         </div>
                       {/if}
                     </div>
+
+                    {#if milestone.assetUrl && (milestone.mediaType === 'audio' || milestone.mediaType === 'video')}
+                      <div class="mt-3">
+                        <button
+                          type="button"
+                          class="btn btn-xs btn-primary"
+                          onclick={() => playMilestoneMedia(milestone)}
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                          </svg>
+                          Play {milestone.mediaType}
+                        </button>
+                      </div>
+                    {/if}
                   </div>
                 </div>
               {/each}
@@ -621,3 +549,16 @@
     <button type="submit">close</button>
   </form>
 </dialog>
+
+<!-- Media Modal for hints and milestones -->
+<MediaModal
+  isOpen={mediaModalOpen}
+  src={currentMediaSrc}
+  title={currentMediaTitle}
+  mediaType={currentMediaType}
+  windowScale={75}
+  showControls={true}
+  autoPlay={true}
+  mediaLoop={false}
+  onClose={() => mediaModalOpen = false}
+/>

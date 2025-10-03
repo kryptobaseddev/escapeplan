@@ -27,7 +27,7 @@ const alertId = createAlert({
   category: 'timer',
   title: 'Test Alert',
   message: 'This is a test alert message',
-  context: { gameName: 'Test Game', roomName: 'Test Room' }
+  context: { gameName: 'Test Game' }
 });
 console.log(`✅ Alert created with ID: ${alertId}\n`);
 
@@ -37,7 +37,6 @@ console.log('4️⃣ Testing alert rule evaluation (timer_paused event)...');
 try {
   evaluateAlertRules('timer_paused', {
     gameName: 'Pirate Mutiny',
-    roomName: 'Main',
     time: '15:32'
   });
   console.log('✅ Alert rule evaluated and alert created if rule matched\n');

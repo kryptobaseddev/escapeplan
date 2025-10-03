@@ -778,3 +778,13 @@ const { games, rooms, gamePuzzles, operators, assets } = schema;
 20. alert_rules
 
 **Total:** 20 tables, 15 custom indexes, 100% Drizzle ORM coverage
+
+---
+
+## Related Documentation
+
+- **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md)** - Environment detection, path resolution, system settings
+- **[API Contracts & Schema Management](./API_CONTRACTS_SCHEMA_MANAGEMENT.md)** - Schema workflow, Drizzle + Zod patterns
+- **[Asset Storage Architecture](./ASSET_STORAGE_ARCHITECTURE.md)** - Asset tables, file storage integration
+- **[RBAC System](./RBAC_SYSTEM.md)** - Operators, roles, permissions tables
+- **[Logging & Alerting System](./LOGGING_ALERTING_SYSTEM.md)** - System logs, alerts, alert rules tables

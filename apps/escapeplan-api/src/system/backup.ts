@@ -22,7 +22,7 @@ import { backups, games, assets, systemLogs } from '@escapeplan/contracts';
 import { eq, and, gte, desc } from 'drizzle-orm';
 import { monotonicFactory } from 'ulid';
 import type { BackupIncludes, BackupResponse } from '@escapeplan/contracts';
-import { getBackupBasePath, getDatabasePath, getAssetBasePath, ensureBackupDirectory } from '../assets/paths.js';
+import { getBackupBasePath, getDatabasePath, getAssetBasePath, ensureBackupDirectory } from '@escapeplan/contracts/paths';
 
 const ulid = monotonicFactory();
 

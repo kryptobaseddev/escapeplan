@@ -140,11 +140,14 @@ npx drizzle-kit generate
 - Compares current schema with database state
 - Generates SQL migration in `drizzle/*.sql`
 - Updates metadata in `drizzle/meta/_journal.json`
+- Uses runtime-detected database path automatically
 
 **Output:**
 ```
 ✔ Your SQL migration file ➜ drizzle/0004_new_field.sql
 ```
+
+> **Note:** Drizzle automatically uses the correct database path based on runtime environment detection. See **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md#path-resolution)** for how paths are resolved in development vs production.
 
 ### 3. Apply Migration
 
@@ -1002,3 +1005,16 @@ This guide establishes the **SINGLE SOURCE OF TRUTH** pattern for EscapePlan:
 - ❌ Duplicate type definitions
 
 **The milestone save bug is permanently fixed** and cannot recur when following this pattern.
+
+---
+
+## Related Documentation
+
+### Core System Docs
+- **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md)** - Environment detection, database path resolution
+- **[Database System](./DATABASE_SYSTEM.md)** - Complete database schema reference, all 20+ tables
+
+### Integration Docs
+- **[Asset Storage Architecture](./ASSET_STORAGE_ARCHITECTURE.md)** - Asset schema and file upload validation
+- **[RBAC System](./RBAC_SYSTEM.md)** - Roles, permissions, and access control tables
+- **[Logging & Alerting System](./LOGGING_ALERTING_SYSTEM.md)** - System logs and alert rules schema

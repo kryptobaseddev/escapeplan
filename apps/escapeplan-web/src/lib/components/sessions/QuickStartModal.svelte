@@ -5,7 +5,6 @@
   import { formatTime } from '$lib/utils/datetime';
   import type {
     GameDetails,
-    GameRoomDefinition,
     QuickStartSessionRequest,
     QuickStartSessionResponse,
     GameSessionDetails
@@ -23,28 +22,25 @@
 
   let dialogElement = $state<HTMLDialogElement | null>(null);
   let selectedGameId = $state<string | null>(null);
-  let selectedRoomId = $state<string | null>(null);
   let partySize = $state(4);
   let durationMinutes = $state<number | string | null>(null);
   let notes = $state('');
-  let autoStartTimer = $state(true); // Auto-start timer by default
+  let autoStartTimer = $state(true);
   let errorMessage = $state<string | null>(null);
   let submitting = $state(false);
-  let occupiedRoomMap = $state(new Map<string, GameSessionDetails>());
-  let availableRooms = $state<GameRoomDefinition[]>([]);
-  let occupiedSummaries = $state<Array<{ room: GameRoomDefinition; session: GameSessionDetails }>>([]);
+  let occupiedGameMap = $state(new Map<string, GameSessionDetails>());
   let lastGameId = $state<string | null>(null);
 
-  const occupancyForRoom = (room: GameRoomDefinition | undefined | null) => {
-    if (!room) return undefined;
-    return occupiedRoomMap.get(room.id);
+  // Check if a game has an active session
+  const isGameOccupied = (gameId: string | null) => {
+    if (!gameId) return false;
+    return occupiedGameMap.has(gameId);
   };
 
-  const firstAvailableRoomId = (game: GameDetails | null | undefined) => {
-    if (!game) return null;
-    const rooms = game.rooms ?? [];
-    const available = rooms.find((room: GameRoomDefinition) => !occupancyForRoom(room));
-    return available?.id ?? null;
+  // Get active session for a game
+  const getActiveSession = (gameId: string | null) => {
+    if (!gameId) return null;
+    return occupiedGameMap.get(gameId) ?? null;
   };
 
   const clampPartySize = (game: GameDetails | null, requested: number) => {
@@ -57,35 +53,34 @@
 
   const resetState = () => {
     const games = props.games ?? [];
-    const firstGame = games[0] ?? null;
-    selectedGameId = firstGame?.id ?? null;
-    selectedRoomId = firstAvailableRoomId(firstGame) ?? firstGame?.rooms?.[0]?.id ?? null;
-    partySize = firstGame ? clampPartySize(firstGame, 4) : 4;
+    const firstAvailableGame = games.find(game => !isGameOccupied(game.id)) ?? games[0] ?? null;
+    selectedGameId = firstAvailableGame?.id ?? null;
+    partySize = firstAvailableGame ? clampPartySize(firstAvailableGame, 4) : 4;
     durationMinutes = null;
     notes = '';
     errorMessage = null;
+    autoStartTimer = true;
   };
 
   const close = () => {
     props.onclose?.();
   };
 
-  // Build occupiedRoomMap from activeSessions
+  // Build occupiedGameMap from activeSessions
   $effect(() => {
     const map = new Map<string, GameSessionDetails>();
     const activeSessions = props.activeSessions ?? [];
     for (const session of activeSessions) {
-      if (session.roomId) map.set(session.roomId, session);
+      // Each active session occupies its game
+      map.set(session.gameId, session);
     }
-    occupiedRoomMap = map;
+    occupiedGameMap = map;
   });
 
   const currentGame = () => {
     const games = props.games ?? [];
     return games.find((game: GameDetails) => game.id === selectedGameId) ?? null;
   };
-
-  const currentRoom = () => currentGame()?.rooms.find((room: GameRoomDefinition) => room.id === selectedRoomId) ?? null;
 
   // Reset state when modal opens if selected game is invalid
   $effect(() => {
@@ -94,39 +89,6 @@
     if (open) {
       if (!selectedGameId || !games.find((game: GameDetails) => game.id === selectedGameId)) {
         resetState();
-      }
-    }
-  });
-
-  // Update availableRooms and occupiedSummaries when game or occupancy changes
-  $effect(() => {
-    const game = currentGame();
-    if (game) {
-      const rooms = game.rooms ?? [];
-      availableRooms = rooms.filter((room: GameRoomDefinition) => !occupancyForRoom(room));
-      occupiedSummaries = rooms
-        .map((room: GameRoomDefinition) => ({ room, session: occupancyForRoom(room) }))
-        .filter((entry: { room: GameRoomDefinition; session: GameSessionDetails | undefined }): entry is { room: GameRoomDefinition; session: GameSessionDetails } => Boolean(entry.session));
-    } else {
-      availableRooms = [];
-      occupiedSummaries = [];
-    }
-  });
-
-  // Auto-select available room when game changes or room becomes unavailable
-  $effect(() => {
-    if (!selectedGameId) {
-      selectedRoomId = null;
-    } else {
-      const game = currentGame();
-      if (!game) {
-        selectedRoomId = null;
-      } else {
-        const rooms = game.rooms ?? [];
-        const stillAvailable = rooms.some((room: GameRoomDefinition) => room.id === selectedRoomId && !occupancyForRoom(room));
-        if (!stillAvailable) {
-          selectedRoomId = firstAvailableRoomId(game);
-        }
       }
     }
   });
@@ -143,31 +105,29 @@
   });
 
   const submitQuickStart = async () => {
-    if (!selectedGameId || !selectedRoomId) {
-      errorMessage = 'Select a game and room to start a session.';
+    if (!selectedGameId) {
+      errorMessage = 'Select a game to start a session.';
       return;
     }
     const game = currentGame();
-    const room = currentRoom();
-    if (!game || !room) {
-      errorMessage = 'Selected game or room is no longer available.';
+    if (!game) {
+      errorMessage = 'Selected game is no longer available.';
       return;
     }
 
-    const occupancy = occupancyForRoom(room);
-    if (occupancy) {
-      const until = formatTime(occupancy.scheduledEnd);
-      errorMessage = `Room is occupied until ${until}. Choose another room or end the active session first.`;
+    // Check if game is already occupied
+    const activeSession = getActiveSession(selectedGameId);
+    if (activeSession) {
+      const until = formatTime(activeSession.scheduledEnd);
+      errorMessage = `This game has an active session until ${until}. End the current session first.`;
       return;
     }
 
     const overrideMinutes = durationMinutes !== null && durationMinutes !== '' ? Number(durationMinutes) : null;
-
     const normalizedPartySize = Number(partySize) || (game.minPlayers ?? 1);
 
     const request: QuickStartSessionRequest = {
       gameId: game.id,
-      roomId: room.id,
       partySize: normalizedPartySize,
       durationMinutes: overrideMinutes && overrideMinutes > 0 ? overrideMinutes : undefined,
       notes: notes.trim() ? notes.trim() : undefined,
@@ -236,17 +196,24 @@
             required
           >
             {#each props.games ?? [] as game}
-              <option value={game.id}>{game.name}</option>
+              {@const occupied = isGameOccupied(game.id)}
+              <option value={game.id} disabled={occupied}>
+                {game.name} {occupied ? '(Active session)' : ''}
+              </option>
             {/each}
           </select>
         </label>
 
-        <!-- Room auto-selected to 'Main' - hidden from UI -->
-        <input type="hidden" bind:value={selectedRoomId} />
-        {#if occupiedSummaries.length}
-          <div class="alert alert-warning border border-warning/30 bg-warning/10 text-sm">
-            <span>Currently running until {formatTime(occupiedSummaries[0].session.scheduledEnd)}</span>
-          </div>
+        {#if selectedGameId && isGameOccupied(selectedGameId)}
+          {@const session = getActiveSession(selectedGameId)}
+          {#if session}
+            <div class="alert alert-warning border border-warning/30 bg-warning/10 text-sm">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+              </svg>
+              <span>Active session until {formatTime(session.scheduledEnd)}. End current session to start new one.</span>
+            </div>
+          {/if}
         {/if}
 
         <div class="grid gap-4 md:grid-cols-2">
@@ -314,7 +281,11 @@
 
         <footer class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={close}>Cancel</button>
-          <button type="submit" class="btn btn-primary w-full sm:w-auto" disabled={submitting || !selectedGameId || !selectedRoomId}>
+          <button
+            type="submit"
+            class="btn btn-primary w-full sm:w-auto"
+            disabled={submitting || !selectedGameId || isGameOccupied(selectedGameId)}
+          >
             {submitting ? 'Starting…' : 'Start session'}
           </button>
         </footer>

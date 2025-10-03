@@ -27,16 +27,6 @@ export const hintSchema = z.object({
   order: z.number().int().min(1)
 });
 
-// Room schema
-export const roomSchema = z.object({
-  id: z.string().optional(),
-  name: z.string().min(1, 'Room name is required'),
-  isMobileCapable: z.boolean().default(false),
-  themeToken: z.string().optional(),
-  description: z.string().optional(),
-  slug: z.string().optional(),
-  capacity: z.number().int().positive().optional()
-});
 
 // Puzzle schema
 export const puzzleSchema = z.object({
@@ -174,7 +164,6 @@ export const saveGameSchema = z.object({
   cameraIds: z.array(z.string()).default([]),
 
   // Child entities
-  rooms: z.array(roomSchema).min(1, 'At least one room is required'),
   puzzles: z.array(puzzleSchema).default([]),
   milestones: z.array(milestoneSchema).default([]),
 
@@ -189,7 +178,6 @@ export const saveGameSchema = z.object({
  * These become the canonical types used throughout the application
  */
 export type SaveGameRequest = z.infer<typeof saveGameSchema>;
-export type GameRoomDefinition = z.infer<typeof roomSchema>;
 export type GamePuzzleDefinition = z.infer<typeof puzzleSchema>;
 export type GameMilestone = z.infer<typeof milestoneSchema>;
 export type GameHintDefinition = z.infer<typeof hintSchema>;
@@ -244,7 +232,6 @@ export type UpdateOperatorRequest = z.infer<typeof updateOperatorSchema>;
 
 export const quickStartSchema = z.object({
   gameId: z.string().min(1),
-  roomId: z.string().min(1),
   partySize: z.number().int().positive(),
   durationMinutes: z.number().int().min(5).max(240).optional(),
   notes: z.string().max(500).optional().nullable(),

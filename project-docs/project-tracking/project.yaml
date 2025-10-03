@@ -10,42 +10,180 @@ summary: "Offline-first escape room management suite for a Raspberry Pi-hosted n
 goal: "Ship a Pi-hosted MVP that lets operators manage bookings and run games with reliable video, timers, and hints entirely offline."
 overview_path: project-docs/project-overview.md
 current_phase: PHASE_3
+
+# ==============================================================================
+# TECHNOLOGY STACK
+# ==============================================================================
 stack:
-  - Raspberry Pi OS Bookworm (64-bit)
-  - Custom pi-gen image (EscapePlan Base)
-  - Node.js 24 LTS + TypeScript v5.9+
-  - Fastify v5.6.1+ API with Winston v3.18.2 logging and Alerts
-  - Argon2id password hashing + bearer token auth as custom hasher with Better-Auth
-  - Socket.IO 5 for real-time control
-  - SQLite WAL mode with runtime schema bootstrap
-  - Drizzle v0.44.5+
-  - Drizzle-kit v0.31.5+
-  - ffmpeg 7 for RTSP->HLS pipelines
-  - Nginx v1.29.1+ reverse proxy
-  - SvelteKit 2 + Svelte 5
-  - Better-Auth v1.3.24+
+  # Frontend
+  - SvelteKit 2 + Svelte 5 runes
   - Tailwind CSS 4 + DaisyUI 5.1.25+ theme components
-  - "@vite-pwa/sveltekit PWA integration"
-  - pnpm 9 workspace tooling
+  - "@vite-pwa/sveltekit PWA integration with Workbox"
+  - Socket.IO 5 client for real-time updates
+
+  # Backend API
+  - Node.js 24 LTS + TypeScript v5.9+
+  - Fastify v5.6.1+ with CORS + multipart file uploads
+  - Socket.IO 5 server for real-time control
+  - Better-Auth v1.3.24+ with Argon2id password hashing
+  - Winston v3.18.2 logging with daily rotation and alert rules
+
+  # Database & Schema
+  - SQLite WAL mode with Drizzle ORM v0.44.5+
+  - Drizzle-kit v0.31.5+ for migrations
+  - 31+ tables with TEXT UUID primary keys
+  - Database-backed RBAC (roles, permissions, role_permissions tables)
+  - Database-backed system settings (runtime-configurable via Admin UI)
+
+  # Configuration & Runtime (Zero-Config)
+  - Automatic dev/prod detection via filesystem + systemd inspection
+  - No .env files or NODE_ENV environment variable required
+  - Dynamic path resolution (@escapeplan/contracts/runtime module)
+  - Database-backed settings for file sizes, backup retention, update config
+
+  # Media Processing
+  - ffmpeg 7 for RTSP→HLS camera stream transcoding
+  - Sharp for image optimization and thumbnail generation
+  - fluent-ffmpeg for video metadata extraction
+
+  # Platform (Production)
+  - Raspberry Pi OS Bookworm 64-bit
+  - Custom pi-gen image (EscapePlan Base)
+  - Nginx v1.29.1+ reverse proxy with mDNS (escapeplan.local)
+  - hostapd + dnsmasq for WiFi AP (10.10.10.0/24 subnet)
+  - Systemd services for API server + camera stream workers
+
+  # Build & Deployment
+  - pnpm 10.12.4 workspace monorepo (packages + apps)
+  - .deb package for Raspberry Pi deployment
+  - Automatic Drizzle migrations on production startup
+
+# ==============================================================================
+# SHARED PACKAGES (Monorepo)
+# ==============================================================================
+packages:
+  contracts:
+    location: "packages/contracts"
+    description: "Shared TypeScript types, Drizzle schema, runtime detection, and validation"
+    exports:
+      - "Drizzle schema (31+ tables) - single source of truth"
+      - "Zod validation schemas for API request/response"
+      - "Runtime environment detection (dev vs prod, no NODE_ENV)"
+      - "Path resolution functions (database, assets, backups)"
+      - "System settings types (database-backed configuration)"
+      - "Universal constants (ports, domains, file size defaults)"
+    consumers:
+      - "apps/escapeplan-api - Full usage (schema, runtime, paths, settings)"
+      - "apps/escapeplan-web - Types and constants only (browser-safe imports)"
+    build_order: "contracts → api → web (enforced via workspace dependencies)"
+
+# ==============================================================================
+# RUNTIME CONFIGURATION SYSTEM
+# ==============================================================================
+configuration:
+  type: "Zero-configuration runtime detection"
+  environment_detection:
+    method: "Automatic via filesystem paths and systemd presence"
+    production_criteria:
+      - "Running from /opt/escapeplan/ or /usr/lib/escapeplan/"
+      - "OR: systemd service (INVOCATION_ID env var) + built code (dist/ exists, src/ doesn't)"
+    development_criteria:
+      - "Running from source directory with src/ folder present"
+  settings_storage:
+    type: "Database-backed (system_settings table)"
+    editable: "Yes, via Admin UI without server restarts"
+    cached: "In-memory cache, loaded on startup"
+  path_resolution:
+    module: "@escapeplan/contracts/runtime"
+    development:
+      - "Database: {cwd}/data/escapeplan.db"
+      - "Assets: {cwd}/data/assets/"
+      - "Backups: {cwd}/data/backups/"
+    production:
+      - "Database: /var/lib/escapeplan/escapeplan.db"
+      - "Assets: /var/lib/escapeplan/assets/"
+      - "Backups: /var/backups/escapeplan/"
+  requirements:
+    - "No .env files required"
+    - "No NODE_ENV environment variable required"
+    - "All paths dynamically resolved at runtime"
+    - "Settings seeded automatically on first startup"
+
+# ==============================================================================
+# COMMANDS
+# ==============================================================================
 commands:
   validate: "./project-tracker validate"
   quick_check: "./project-tracker quick-check"
-  base_image_build: "cd platform/escapeplan-base && pnpm run build:image"
+  base_image_build: "cd ../escapeplan-base && pnpm run build:image"
   base_image_test:
-    - "cd platform/escapeplan-base && pnpm run lint"
-    - "cd platform/escapeplan-base && pnpm run test"
-  webapp_dev: "cd apps/escapeplan-web && pnpm run dev --host"
-  webapp_build: "cd apps/escapeplan-web && pnpm run build"
+    - "cd ../escapeplan-base && pnpm run lint"
+    - "cd ../escapeplan-base && pnpm run test"
+  webapp_dev: "pnpm --filter escapeplan-web dev --host"
+  webapp_build: "pnpm --filter escapeplan-web build"
+  api_dev: "pnpm --filter escapeplan-api dev"
+  api_build: "pnpm --filter escapeplan-api build"
+  contracts_build: "pnpm --filter @escapeplan/contracts build"
+  build_all: "pnpm -r run build"
   webapp_test:
-    - "cd apps/escapeplan-api && pnpm run test"
-    - "cd apps/escapeplan-web && pnpm run test"
-  package_deb: "cd platform/escapeplan-base && ./scripts/package-deb.sh"
-environments: "Local dev via Docker/Podman; production on Raspberry Pi 5 + USB AC600M Wi-Fi AP."
+    - "pnpm --filter escapeplan-api test"
+    - "pnpm --filter escapeplan-web test"
+  package_deb: "cd ../escapeplan-base && ./scripts/package-deb.sh"
+  db_seed: "pnpm --filter escapeplan-api db:seed"
+  db_seed_settings: "pnpm --filter escapeplan-api db:seed:settings"
+  db_migrate: "cd apps/escapeplan-api && npx drizzle-kit migrate"
+
+# ==============================================================================
+# ENVIRONMENTS
+# ==============================================================================
+environments: "Local dev via pnpm workspace; production on Raspberry Pi 5 + USB AC600M WiFi AP; Docker/Podman for testing."
+
+# ==============================================================================
+# ARCHITECTURE NOTES
+# ==============================================================================
 notes:
-  - "Two-repo setup: platform/escapeplan-base (OS image + services) and apps/escapeplan-web (API + PWA)."
-  - "Primary UI palette: charcoals/blacks with #C43131 and #00D5C8 accents for high-contrast dark mode."
-  - "Mobile-first responsive layout with PWA install support and desktop control room scaling."
-  - "Each game publishes a slugged session page delivering synchronized countdowns and hints via WebSocket."
-  - "Offline-first posture with optional OTA update channel when WAN is available."
+  # Repository Structure
+  - "Two-repo setup: escapeplan-base (OS image + services) and escapeplan-app (monorepo: API + Web + Contracts)."
+  - "Monorepo workspace: packages/contracts (shared schema/types), apps/escapeplan-api, apps/escapeplan-web."
+  - "Build order enforced: contracts → api → web via pnpm workspace dependencies."
+
+  # Zero-Configuration System
+  - "Zero-configuration deployment: Environment auto-detected via filesystem/systemd, no .env files required."
+  - "All paths dynamically resolved: dev uses {cwd}/data, production uses /var/lib/escapeplan."
+  - "System settings stored in database (file size limits, backup retention, update config) - editable via Admin UI without restarts."
+  - "Production detected by: /opt/escapeplan path OR systemd + built code; everything else is development mode."
+
+  # Database & Schema Management
+  - "Single source of truth: Drizzle schema in packages/contracts/src/schema.ts."
+  - "31+ tables with TEXT UUID primary keys, foreign key cascades, and soft-delete patterns."
+  - "Drizzle migrations auto-applied on production startup; manual apply in development."
   - "No mock or hardcoded data; use database seeds/migrations for canonical records and load everything dynamically."
-  - "RBAC permissions drive both API guards and Svelte admin consoles; Better-Auth adoption under evaluation."
+  - "Database-backed RBAC: roles, permissions, role_permissions tables with session enrichment."
+
+  # Authentication & Authorization
+  - "Better-Auth v1.3.24+ fully integrated with custom Argon2id password hasher."
+  - "RBAC permissions drive both API guards and Svelte admin consoles via Better-Auth session enrichment."
+  - "27 permissions across 10 categories; 4 system roles (admin, manager, game_master, customer)."
+  - "Session cookies only (HttpOnly) - no localStorage for auth tokens."
+
+  # Real-Time & Networking
+  - "Socket.IO for real-time updates: session state, dashboard, timer broadcasts, bookings."
+  - "Offline command queueing: commands stored in Svelte stores when disconnected, replayed on reconnect."
+  - "Each game publishes a slugged session page delivering synchronized countdowns and hints via WebSocket."
+  - "mDNS address: escapeplan.local (production), localhost:4000 (API dev), localhost:5173 (Web dev)."
+
+  # Design & UX
+  - "Primary UI palette: charcoals/blacks with #C43131 (red) and #00D5C8 (teal) accents for high-contrast dark mode."
+  - "Mobile-first responsive layout with PWA install support and desktop control room scaling."
+  - "Offline-first posture with optional OTA update channel when WAN is available."
+
+  # Media & Assets
+  - "Dynamic asset path resolution via @escapeplan/contracts/paths module."
+  - "File size limits configurable via database settings (default: 10MB images, 25MB audio, 50MB video)."
+  - "RTSP camera streams transcoded to HLS via ffmpeg systemd workers."
+  - "Sharp for image processing, fluent-ffmpeg for video metadata extraction."
+
+  # Deployment
+  - ".deb package for Raspberry Pi with systemd services, nginx config, and automatic migrations."
+  - "Zero-config installation: paths auto-detected, settings seeded on first run."
+  - "Backup system with configurable retention (default: 7 days) stored in database settings."

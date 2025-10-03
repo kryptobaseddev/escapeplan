@@ -57,10 +57,6 @@
       archivedAt: null,
       archivedBy: null,
       archivedReason: null,
-      rooms: game.rooms.map((room) => ({
-        ...room,
-        id: uid('room')
-      })),
       puzzles: game.puzzles.map((puzzle) => ({
         ...puzzle,
         id: uid('puzzle'),
@@ -330,10 +326,6 @@
             <div>
               <dt class="uppercase tracking-[0.25em] text-base-content/40">Players</dt>
               <dd class="text-base-content">{game.minPlayers} - {game.maxPlayers}</dd>
-            </div>
-            <div>
-              <dt class="uppercase tracking-[0.25em] text-base-content/40">Rooms</dt>
-              <dd class="text-base-content">{game.rooms.length}</dd>
             </div>
           </dl>
           <div class="mt-5">

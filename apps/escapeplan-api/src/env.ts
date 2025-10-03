@@ -5,13 +5,21 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+  DEFAULT_API_PORT,
+  DEFAULT_BACKUP_RETENTION_DAYS,
+  DEFAULT_FILE_SIZE_LIMITS,
+  DEFAULT_GITHUB_REPO,
+  DEFAULT_AUTO_UPDATE_ENABLED,
+  PRODUCTION_DOMAIN,
+  FALLBACK_VERSION
+} from '@escapeplan/contracts';
+import { runtime } from '@escapeplan/contracts/runtime';
 
 export interface AppEnvironment {
   // Runtime detection
-  nodeEnv: 'development' | 'production' | 'test';
   isDev: boolean;
   isProd: boolean;
-  isTest: boolean;
 
   // Server configuration
   port: number;
@@ -46,9 +54,9 @@ function getVersion(): string {
   try {
     const pkgPath = resolve(process.cwd(), 'package.json');
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    return pkg.version || '0.1.0';
+    return pkg.version || FALLBACK_VERSION;
   } catch {
-    return process.env.npm_package_version || '0.1.0';
+    return process.env.npm_package_version || FALLBACK_VERSION;
   }
 }
 
@@ -57,13 +65,13 @@ function detectBaseUrl(port: number, host: string): string {
   if (process.env.BASE_URL) return process.env.BASE_URL;
 
   // 2. Production mDNS address
-  if (process.env.NODE_ENV === 'production') {
-    return `https://escapeplan.local`;
+  if (runtime.isProduction) {
+    return `https://${PRODUCTION_DOMAIN}`;
   }
 
   // 3. Check if running behind nginx proxy
   if (process.env.NGINX_PROXY === 'true') {
-    return `https://escapeplan.local`;
+    return `https://${PRODUCTION_DOMAIN}`;
   }
 
   // 4. Development fallback
@@ -75,8 +83,8 @@ function detectWebAppOrigin(): string {
   if (process.env.WEB_APP_ORIGIN) return process.env.WEB_APP_ORIGIN;
 
   // 2. Production
-  if (process.env.NODE_ENV === 'production') {
-    return 'https://escapeplan.local';
+  if (runtime.isProduction) {
+    return `https://${PRODUCTION_DOMAIN}`;
   }
 
   // 3. Development (SvelteKit default port)
@@ -108,12 +116,11 @@ function detectGithubRepo(): string {
   }
 
   // 3. Fallback
-  return 'escapeplan/escapeplan';
+  return DEFAULT_GITHUB_REPO;
 }
 
 export function loadEnvironment(): AppEnvironment {
-  const nodeEnv = (process.env.NODE_ENV || 'development') as AppEnvironment['nodeEnv'];
-  const port = Number(process.env.PORT || 4000);
+  const port = Number(process.env.PORT || DEFAULT_API_PORT);
   const host = process.env.HOST || '0.0.0.0';
 
   const baseUrl = detectBaseUrl(port, host);
@@ -121,10 +128,8 @@ export function loadEnvironment(): AppEnvironment {
 
   return {
     // Runtime
-    nodeEnv,
-    isDev: nodeEnv === 'development',
-    isProd: nodeEnv === 'production',
-    isTest: nodeEnv === 'test',
+    isDev: runtime.isDevelopment,
+    isProd: runtime.isProduction,
 
     // Server
     port,
@@ -141,22 +146,18 @@ export function loadEnvironment(): AppEnvironment {
     buildDate: process.env.BUILD_DATE || new Date().toISOString(),
 
     // Features
-    enableAutoUpdate: process.env.ENABLE_AUTO_UPDATE !== 'false',
+    enableAutoUpdate: process.env.ENABLE_AUTO_UPDATE !== 'false' ? DEFAULT_AUTO_UPDATE_ENABLED : false,
 
-    // Storage
-    maxImageSizeMB: Number(process.env.MAX_IMAGE_SIZE_MB || 10),
-    maxAudioSizeMB: Number(process.env.MAX_AUDIO_SIZE_MB || 25),
-    maxVideoSizeMB: Number(process.env.MAX_VIDEO_SIZE_MB || 50),
-    dataDir: process.env.ESCAPEPLAN_DATA_DIR || resolve(process.cwd(), 'data'),
-    assetDir: process.env.ESCAPEPLAN_ASSET_DIR || resolve(process.cwd(), 'data/assets'),
+    // Storage (use runtime detection with env var overrides)
+    maxImageSizeMB: Number(process.env.MAX_IMAGE_SIZE_MB || DEFAULT_FILE_SIZE_LIMITS.IMAGE_MB),
+    maxAudioSizeMB: Number(process.env.MAX_AUDIO_SIZE_MB || DEFAULT_FILE_SIZE_LIMITS.AUDIO_MB),
+    maxVideoSizeMB: Number(process.env.MAX_VIDEO_SIZE_MB || DEFAULT_FILE_SIZE_LIMITS.VIDEO_MB),
+    dataDir: process.env.ESCAPEPLAN_DATA_DIR || runtime.dataDir,
+    assetDir: process.env.ESCAPEPLAN_ASSET_DIR || runtime.assetsDir,
 
-    // Backup (development-aware)
-    backupDir: process.env.ESCAPEPLAN_BACKUP_DIR || (
-      nodeEnv === 'production'
-        ? '/var/backups/escapeplan'
-        : resolve(process.cwd(), 'data/backups')
-    ),
-    backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS || 7)
+    // Backup (use runtime detection with env var overrides)
+    backupDir: process.env.ESCAPEPLAN_BACKUP_DIR || runtime.backupDir,
+    backupRetentionDays: Number(process.env.BACKUP_RETENTION_DAYS || DEFAULT_BACKUP_RETENTION_DAYS)
   };
 }
 
@@ -166,11 +167,14 @@ export const env = loadEnvironment();
 // Log environment on startup (only in dev)
 if (env.isDev) {
   console.log('[ENV] Environment loaded:', {
-    nodeEnv: env.nodeEnv,
+    mode: env.isProd ? 'production' : 'development',
     baseUrl: env.baseUrl,
     authBaseUrl: env.authBaseUrl,
     webAppOrigin: env.webAppOrigin,
     version: env.version,
-    githubRepo: env.githubRepo
+    githubRepo: env.githubRepo,
+    dataDir: env.dataDir,
+    assetDir: env.assetDir,
+    backupDir: env.backupDir
   });
 }

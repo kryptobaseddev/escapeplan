@@ -13,7 +13,7 @@ export const load: PageServerLoad = async (event) => {
   return { games };
 };
 
-async function buildPayload(form: FormData, requireRooms: boolean) {
+async function buildPayload(form: FormData) {
   const rawPayload = form.get('payload');
   if (typeof rawPayload !== 'string' || rawPayload.trim().length === 0) {
     return { ok: false as const, message: 'Missing payload.' };
@@ -23,9 +23,6 @@ async function buildPayload(form: FormData, requireRooms: boolean) {
     const parsed = JSON.parse(rawPayload) as SaveGameRequest;
     if (!parsed.slug || !parsed.name || !parsed.description) {
       return { ok: false as const, message: 'Missing required fields.' };
-    }
-    if (requireRooms && (!parsed.rooms || parsed.rooms.length === 0)) {
-      return { ok: false as const, message: 'At least one room is required.' };
     }
     return { ok: true as const, payload: parsed };
   } catch (error) {
@@ -44,7 +41,7 @@ export const actions: Actions = {
     if (!gameId) {
       return fail(400, { message: 'Missing game identifier.' });
     }
-    const result = await buildPayload(form, false);
+    const result = await buildPayload(form);
     if (!result.ok) {
       return fail(400, { message: result.message });
     }
@@ -65,7 +62,7 @@ export const actions: Actions = {
       return fail(403, { message: 'Permission denied.' });
     }
     const form = await event.request.formData();
-    const result = await buildPayload(form, true);
+    const result = await buildPayload(form);
     if (!result.ok) {
       return fail(400, { message: result.message });
     }

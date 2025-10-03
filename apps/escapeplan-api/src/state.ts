@@ -26,7 +26,6 @@ import type {
   DashboardResponse,
   GameDetails,
   GameBookingRules,
-  GameRoomDefinition,
   GamePuzzleDefinition,
   GameHintDefinition,
   GameMediaConfig,
@@ -105,7 +104,6 @@ type BookingRow = {
   id: string;
   booking_code: string;
   game_id: string;
-  room_id: string;
   start_time: string;
   end_time: string;
   status: string;
@@ -147,7 +145,6 @@ type SessionRow = {
   game_id: string;
   game_name: string;
   game_slug: string;
-  room_id: string;
   room_name: string;
 };
 
@@ -209,16 +206,6 @@ type NetworkProfileRow = {
   last_updated: string;
 };
 
-type RoomRow = {
-  id: string;
-  game_id: string;
-  name: string;
-  is_mobile_capable: number;
-  theme_token: string | null;
-  description: string | null;
-  slug: string | null;
-  capacity: number | null;
-};
 
 type GameMilestoneRow = {
   id: string;
@@ -311,30 +298,12 @@ const puzzlesByGameStmt = sqlite.prepare(
    FROM game_puzzles WHERE game_id = ? ORDER BY display_order ASC`
 );
 
-const roomsByGameStmt = sqlite.prepare(
-  `SELECT id, game_id, name, is_mobile_capable, theme_token, description, slug, capacity
-   FROM rooms WHERE game_id = ? ORDER BY name ASC`
-);
 
 const milestonesByGameStmt = sqlite.prepare(
   `SELECT id, game_id, type, name, media_type, content, asset_id, volume_level, display_order, trigger_type, trigger_config, enabled, created_at, updated_at
    FROM game_milestones WHERE game_id = ? ORDER BY display_order ASC`
 );
 
-const roomByIdStmt = sqlite.prepare(
-  `SELECT r.id, r.game_id, r.name, r.is_mobile_capable, r.theme_token, r.description, r.slug, r.capacity,
-          g.slug AS game_slug
-   FROM rooms r
-   JOIN games g ON g.id = r.game_id
-   WHERE r.id = ? LIMIT 1`
-);
-
-const activeSessionsByRoomStmt = sqlite.prepare(
-  `SELECT COUNT(1) as count
-   FROM sessions s
-   JOIN bookings b ON b.id = s.booking_id
-   WHERE b.room_id = ? AND s.status IN ('running', 'paused')`
-);
 
 function mapNetworkProfile(row: NetworkProfileRow | undefined): NetworkProfile {
   if (!row) {
@@ -592,7 +561,6 @@ export function disconnectFromWiFi(): WiFiClientStatus {
 function mapGameDetailsRow(row: GameRow): GameDetails {
   const categories = row.categories ? (JSON.parse(row.categories) as string[]) : [];
   const puzzleRows = puzzlesByGameStmt.all(row.id) as GamePuzzleRow[];
-  const roomRows = roomsByGameStmt.all(row.id) as RoomRow[];
   const milestoneRows = milestonesByGameStmt.all(row.id) as GameMilestoneRow[];
   const puzzles: GamePuzzleDefinition[] = puzzleRows.map((puzzle) => ({
     id: puzzle.id,
@@ -604,15 +572,6 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
     displayOrder: puzzle.display_order,
     hints: puzzle.hints ? (JSON.parse(puzzle.hints) as GameHintDefinition[]) : undefined,
     mediaMeta: puzzle.media_asset_meta ? (JSON.parse(puzzle.media_asset_meta) as Record<string, unknown>) : undefined
-  }));
-  const rooms: GameRoomDefinition[] = roomRows.map((room) => ({
-    id: room.id,
-    name: room.name,
-    isMobileCapable: Boolean(room.is_mobile_capable),
-    themeToken: room.theme_token ?? undefined,
-    description: room.description ?? undefined,
-    slug: room.slug ?? undefined,
-    capacity: room.capacity ?? undefined
   }));
   const milestones: GameMilestone[] = milestoneRows.map((milestone) => ({
     id: milestone.id,
@@ -683,8 +642,7 @@ function mapGameDetailsRow(row: GameRow): GameDetails {
     archivedReason: row.archived_reason ?? undefined,
     cameraIds: row.camera_ids ? (JSON.parse(row.camera_ids) as string[]) : [],
     milestones,
-    puzzles,
-    rooms
+    puzzles
   };
 }
 
@@ -758,19 +716,6 @@ function normalizePuzzleInput(puzzle: GamePuzzleDefinition, index: number): Game
   };
 }
 
-function normalizeRoomInput(room: GameRoomDefinition, index: number): GameRoomDefinition {
-  const id = room.id && room.id.trim().length > 0 ? room.id : randomUUID();
-  return {
-    id,
-    name: room.name,
-    isMobileCapable: room.isMobileCapable,
-    themeToken: room.themeToken,
-    description: room.description,
-    slug: room.slug,
-    capacity: room.capacity,
-    // ensure order stable by index when returning - stored order is alphabetical by query
-  };
-}
 
 function persistGameMilestones(
   gameId: string,
@@ -841,19 +786,7 @@ function persistGameMilestones(
   }
 }
 
-function persistGameRelations(gameId: string, rooms: GameRoomDefinition[], puzzles: GamePuzzleDefinition[]) {
-  // Use UPSERT to avoid foreign key constraint issues with bookings/sessions
-  const upsertRoom = sqlite.prepare(
-    `INSERT INTO rooms (id, game_id, name, is_mobile_capable, theme_token, description, slug, capacity)
-     VALUES (@id, @game_id, @name, @is_mobile_capable, @theme_token, @description, @slug, @capacity)
-     ON CONFLICT(id) DO UPDATE SET
-       name = @name,
-       is_mobile_capable = @is_mobile_capable,
-       theme_token = @theme_token,
-       description = @description,
-       slug = @slug,
-       capacity = @capacity`
-  );
+function persistGameRelations(gameId: string, puzzles: GamePuzzleDefinition[]) {
   const upsertPuzzle = sqlite.prepare(
     `INSERT INTO game_puzzles (id, game_id, title, description, solution, media_asset, operator_actions, display_order, hints, media_asset_meta)
      VALUES (@id, @game_id, @title, @description, @solution, @media_asset, @operator_actions, @display_order, @hints, @media_asset_meta)
@@ -869,39 +802,13 @@ function persistGameRelations(gameId: string, rooms: GameRoomDefinition[], puzzl
   );
 
   // Get current IDs to identify deletions
-  const existingRoomIds = sqlite.prepare(`SELECT id FROM rooms WHERE game_id = ?`).all(gameId).map((r: any) => r.id);
   const existingPuzzleIds = sqlite.prepare(`SELECT id FROM game_puzzles WHERE game_id = ?`).all(gameId).map((p: any) => p.id);
-
-  const newRoomIds = rooms.map(r => r.id);
   const newPuzzleIds = puzzles.map(p => p.id);
-
-  // Delete removed rooms (only if no bookings reference them)
-  const roomsToDelete = existingRoomIds.filter((id: string) => !newRoomIds.includes(id));
-  for (const roomId of roomsToDelete) {
-    const hasBookings = sqlite.prepare(`SELECT COUNT(*) as count FROM bookings WHERE room_id = ?`).get(roomId) as { count: number };
-    if (hasBookings.count === 0) {
-      sqlite.prepare(`DELETE FROM rooms WHERE id = ?`).run(roomId);
-    }
-  }
 
   // Delete removed puzzles (safe - no foreign key references)
   const puzzlesToDelete = existingPuzzleIds.filter((id: string) => !newPuzzleIds.includes(id));
   for (const puzzleId of puzzlesToDelete) {
     sqlite.prepare(`DELETE FROM game_puzzles WHERE id = ?`).run(puzzleId);
-  }
-
-  // Upsert rooms
-  for (const room of rooms) {
-    upsertRoom.run({
-      id: room.id,
-      game_id: gameId,
-      name: room.name,
-      is_mobile_capable: room.isMobileCapable ? 1 : 0,
-      theme_token: room.themeToken ?? null,
-      description: room.description ?? null,
-      slug: room.slug ?? null,
-      capacity: room.capacity ?? null
-    });
   }
 
   // Upsert puzzles
@@ -968,10 +875,9 @@ export function createGame(payload: SaveGameRequest): GameDetails {
       updated_at: now
     });
 
-  const normalizedRooms = (payload.rooms ?? []).map(normalizeRoomInput);
   const normalizedPuzzles = (payload.puzzles ?? []).map(normalizePuzzleInput);
 
-  persistGameRelations(gameId, normalizedRooms, normalizedPuzzles);
+  persistGameRelations(gameId, normalizedPuzzles);
 
   // Persist milestones
   if (payload.milestones) {
@@ -1046,10 +952,9 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
       updated_at: now
     });
 
-  const normalizedRooms = (payload.rooms ?? []).map(normalizeRoomInput);
   const normalizedPuzzles = (payload.puzzles ?? []).map(normalizePuzzleInput);
 
-  persistGameRelations(gameId, normalizedRooms, normalizedPuzzles);
+  persistGameRelations(gameId, normalizedPuzzles);
 
   // Persist milestones
   if (payload.milestones) {
@@ -1060,7 +965,7 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
 }
 
 export function deleteGame(gameId: string) {
-  persistGameRelations(gameId, [], []);
+  persistGameRelations(gameId, []);
   sqlite.prepare(`DELETE FROM games WHERE id = ?`).run(gameId);
 }
 
@@ -1493,7 +1398,6 @@ function mapSessionRow(row: SessionRow): GameSessionDetails {
     gameName: row.game_name,
     gameSlug: row.game_slug,
     roomName: row.room_name,
-    roomId: row.room_id,
     startedAt: row.started_at,
     scheduledEnd: row.scheduled_end,
     status: row.session_status as GameSessionDetails['status'],
@@ -1544,11 +1448,10 @@ export function listActiveSessions(): ActiveSessionsResponse {
               s.background_audio_is_playing, s.crew_primary, s.crew_support,
               b.party_size, b.is_mobile, b.is_adhoc, b.start_time, b.end_time,
               g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
-              r.id AS room_id, r.name AS room_name
+              g.name AS room_name
        FROM sessions s
        JOIN bookings b ON b.id = s.booking_id
        JOIN games g ON g.id = b.game_id
-       JOIN rooms r ON r.id = b.room_id
        WHERE s.status IN ('running', 'paused')
        ORDER BY s.started_at DESC`
     )
@@ -1606,9 +1509,9 @@ export function listSessions(filters?: {
 
   // Search filter
   if (filters?.search) {
-    whereConditions.push(`(g.name LIKE ? OR r.name LIKE ? OR b.id LIKE ?)`);
+    whereConditions.push(`(g.name LIKE ? OR b.id LIKE ?)`);
     const searchPattern = `%${filters.search}%`;
-    params.push(searchPattern, searchPattern, searchPattern);
+    params.push(searchPattern, searchPattern);
   }
 
   const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
@@ -1618,7 +1521,7 @@ export function listSessions(filters?: {
   if (filters?.sortBy === 'game') {
     orderBy = `g.name ${filters.sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
   } else if (filters?.sortBy === 'location') {
-    orderBy = `r.name ${filters.sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
+    orderBy = `g.name ${filters.sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
   } else if (filters?.sortBy === 'date') {
     orderBy = `s.started_at ${filters.sortOrder === 'asc' ? 'ASC' : 'DESC'}`;
   }
@@ -1629,11 +1532,10 @@ export function listSessions(filters?: {
            s.background_audio_is_playing, s.crew_primary, s.crew_support,
            b.party_size, b.is_mobile, b.is_adhoc, b.start_time, b.end_time,
            g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
-           r.id AS room_id, r.name AS room_name
+           g.name AS room_name
     FROM sessions s
     JOIN bookings b ON b.id = s.booking_id
     JOIN games g ON g.id = b.game_id
-    JOIN rooms r ON r.id = b.room_id
     ${whereClause}
     ORDER BY ${orderBy}
   `;
@@ -1678,11 +1580,10 @@ export function getSessionById(id: string): GameSessionDetails | undefined {
             s.background_audio_is_playing, s.crew_primary, s.crew_support,
             b.party_size, b.is_mobile, b.is_adhoc,
             g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
-            r.id AS room_id, r.name AS room_name
+            g.name AS room_name
      FROM sessions s
      JOIN bookings b ON b.id = s.booking_id
      JOIN games g ON g.id = b.game_id
-     JOIN rooms r ON r.id = b.room_id
      WHERE s.id = ? LIMIT 1`
   );
   const row = stmt.get(id) as SessionRow | undefined;
@@ -1750,12 +1651,11 @@ export function getSessionBySlug(slug: string): { session: GameSessionDetails; s
             s.background_audio_is_playing, s.crew_primary, s.crew_support,
             b.party_size, b.is_mobile, b.is_adhoc,
             g.id AS game_id, g.name AS game_name, g.slug AS game_slug,
-            r.id AS room_id, r.name AS room_name
+            g.name AS room_name
      FROM timer_slugs t
      JOIN sessions s ON s.id = t.session_id
      JOIN bookings b ON b.id = s.booking_id
      JOIN games g ON g.id = b.game_id
-     JOIN rooms r ON r.id = b.room_id
      WHERE t.slug = ? LIMIT 1`
   );
   const row = stmt.get(slug) as (SessionRow & { slug: string; narrative: string | null }) | undefined;
@@ -1792,10 +1692,9 @@ export function listUpcomingBookings(windowMinutes = 240): BookingSummary[] {
   const now = new Date();
   const end = new Date(now.getTime() + windowMinutes * 60 * 1000);
   const stmt = sqlite.prepare(
-    `SELECT b.*, g.name AS game_name, r.name AS room_name, 0 AS conflict
+    `SELECT b.*, g.name AS game_name, g.name AS room_name, 0 AS conflict
      FROM bookings b
      JOIN games g ON g.id = b.game_id
-     JOIN rooms r ON r.id = b.room_id
      WHERE b.start_time BETWEEN ? AND ?
      ORDER BY b.start_time ASC`
   );
@@ -1842,14 +1741,6 @@ export function quickStartSession(
   payload: QuickStartSessionRequest,
   operatorId: string
 ): QuickStartSessionResponse {
-  const room = roomByIdStmt.get(payload.roomId) as (RoomRow & { game_slug: string }) | undefined;
-  if (!room) {
-    throw new Error('Room not found');
-  }
-  if (room.game_id !== payload.gameId) {
-    throw new Error('Room does not belong to selected game');
-  }
-
   const gameRow = gameByIdStmt.get(payload.gameId) as GameRow | undefined;
   if (!gameRow) {
     throw new Error('Game not found');
@@ -1857,11 +1748,6 @@ export function quickStartSession(
 
   if (payload.partySize < gameRow.min_players || payload.partySize > gameRow.max_players) {
     throw new Error('Party size outside allowed range for this game');
-  }
-
-  const active = activeSessionsByRoomStmt.get(room.id) as { count: number };
-  if (active.count > 0) {
-    throw new Error('Room already has an active session');
   }
 
   const durationMinutes = payload.durationMinutes && payload.durationMinutes > 0
@@ -1884,11 +1770,11 @@ export function quickStartSession(
   sqlite
     .prepare(
       `INSERT INTO bookings (
-         id, booking_code, game_id, room_id, start_time, end_time, status,
+         id, booking_code, game_id, start_time, end_time, status,
          party_size, deposit_due_cents, total_due_cents, price_tier, discount_code,
          is_mobile, is_adhoc, location_note, notes, contact_name, contact_phone
        ) VALUES (
-         @id, @booking_code, @game_id, @room_id, @start_time, @end_time, @status,
+         @id, @booking_code, @game_id, @start_time, @end_time, @status,
          @party_size, @deposit_due_cents, @total_due_cents, @price_tier, @discount_code,
          @is_mobile, @is_adhoc, @location_note, @notes, @contact_name, @contact_phone
        )`
@@ -1897,7 +1783,6 @@ export function quickStartSession(
       id: bookingId,
       booking_code: bookingCode,
       game_id: payload.gameId,
-      room_id: payload.roomId,
       start_time: nowIso,
       end_time: scheduledEndIso,
       status: 'ADHOC',
@@ -1906,7 +1791,7 @@ export function quickStartSession(
       total_due_cents: 0,
       price_tier: 'standard',
       discount_code: null,
-      is_mobile: room.is_mobile_capable ? 1 : 0,
+      is_mobile: 0,
       is_adhoc: 1,
       location_note: bookingRules?.locationNotes ?? null,
       notes: payload.notes ?? null,
@@ -1995,10 +1880,9 @@ export function getBookingsByDate(date: string, scope: 'all' | 'storefront' | 'm
   const like = `${date}%`;
   const rows = sqlite
     .prepare(
-      `SELECT b.*, g.name AS game_name, r.name AS room_name
+      `SELECT b.*, g.name AS game_name, g.name AS room_name
        FROM bookings b
        JOIN games g ON g.id = b.game_id
-       JOIN rooms r ON r.id = b.room_id
        WHERE b.start_time LIKE ?
        ORDER BY b.start_time ASC`
     )
@@ -2015,7 +1899,7 @@ export function getBookingsByDate(date: string, scope: 'all' | 'storefront' | 'm
     current.conflict = 0;
     for (let j = i + 1; j < filtered.length; j += 1) {
       const other = filtered[j];
-      if (current.room_id !== other.room_id) continue;
+      if (current.game_id !== other.game_id) continue;
       if (current.end_time <= other.start_time) break;
       current.conflict = 1;
       other.conflict = 1;

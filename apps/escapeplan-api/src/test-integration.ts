@@ -17,29 +17,16 @@ try {
   sqlite.prepare('DELETE FROM session_hints WHERE id LIKE ?').run('hint-%');
   console.log('   ✅ Cleanup complete\n');
 
-  // Get first available game and room
-  console.log('2. Finding test game and room...');
+  // Get first available game
+  console.log('2. Finding test game...');
   const game = sqlite.prepare('SELECT * FROM games LIMIT 1').get() as any;
-  const room = sqlite.prepare('SELECT * FROM rooms LIMIT 1').get() as any;
 
-  if (!game || !room) {
-    console.log('   ⚠️  No game or room found. Run `pnpm db:seed` first.');
+  if (!game) {
+    console.log('   ⚠️  No game found. Run `pnpm db:seed` first.');
     process.exit(1);
   }
 
-  // Create a test booking
-  const bookingId = `booking-test-${Date.now()}`;
-  const bookingCode = `TEST${Date.now()}`;
-  const now = new Date();
-  const startTime = new Date(now.getTime() + 60000).toISOString(); // 1 minute from now
-  const endTime = new Date(now.getTime() + 4500000).toISOString(); // 75 minutes from now
-
-  sqlite.prepare(
-    `INSERT INTO bookings (id, booking_code, game_id, room_id, start_time, end_time, status, contact_name, contact_phone, party_size, price_tier)
-     VALUES (?, ?, ?, ?, ?, ?, 'confirmed', 'Test Customer', '555-1234', 4, 'standard')`
-  ).run(bookingId, bookingCode, game.id, room.id, startTime, endTime);
-
-  console.log(`   ✅ Created test booking for ${game.name} in ${room.name}\n`);
+  console.log(`   ✅ Found test game: ${game.name}\n`);
 
   // Get test operator (use admin from seed)
   const operator = sqlite.prepare(`SELECT id FROM operators WHERE username = 'admin' LIMIT 1`).get() as any;
@@ -52,7 +39,6 @@ try {
   console.log('3. Starting quick start session...');
   const sessionResponse = quickStartSession({
     gameId: game.id,
-    roomId: room.id,
     partySize: 4,
     durationMinutes: game.duration_minutes
   }, operator.id);

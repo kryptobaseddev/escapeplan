@@ -3,8 +3,12 @@
  * Auto-detects API base URL from runtime context
  */
 
-import { dev } from '$app/environment';
-import { browser } from '$app/environment';
+import { dev, browser } from '$app/environment';
+import {
+  DEFAULT_API_PORT,
+  PRODUCTION_DOMAIN,
+  API_BASE_PATH
+} from '@escapeplan/contracts';
 
 export interface ClientEnvironment {
   apiBaseUrl: string;
@@ -19,24 +23,26 @@ function detectApiBaseUrl(): string {
 
   // 2. Browser runtime detection
   if (browser) {
-    const { protocol, hostname, port } = window.location;
+    const { protocol, hostname } = window.location;
 
-    // Production: Same origin as web app
-    if (!dev) {
-      return `${protocol}//${hostname}/api`;
+    // Production: Check if hostname matches production domain
+    const isProduction = hostname === PRODUCTION_DOMAIN;
+
+    if (isProduction) {
+      return `${protocol}//${hostname}${API_BASE_PATH}`;
     }
 
-    // Development: API on port 4000
-    return 'http://localhost:4000/api';
+    // Development: API on configured port
+    return `http://localhost:${DEFAULT_API_PORT}${API_BASE_PATH}`;
   }
 
   // 3. SSR fallback
   if (dev) {
-    return 'http://localhost:4000/api';
+    return `http://localhost:${DEFAULT_API_PORT}${API_BASE_PATH}`;
   }
 
   // Production SSR
-  return 'https://escapeplan.local/api';
+  return `https://${PRODUCTION_DOMAIN}${API_BASE_PATH}`;
 }
 
 export const env: ClientEnvironment = {

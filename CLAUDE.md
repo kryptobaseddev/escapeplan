@@ -1,6 +1,10 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+NEVER WRITE CODE WITHOUT REFERENCING THIS FILE.
+Never do direct Sql queries without using the Drizzle ORM.
+Always reference our @API_CONTRACTS_SCHEMA_MANAGEMENT.md file when making schema changes.
+Always reference our @DATABASE_SYSTEM.md file when making database changes.
 
 ## Project Overview
 
