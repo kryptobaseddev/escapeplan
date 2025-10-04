@@ -1,10 +1,14 @@
 import path from 'node:path';
 import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
+import csrf from '@fastify/csrf-protection';
 import multipart from '@fastify/multipart';
+import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { Server as SocketServer } from 'socket.io';
 import { z } from 'zod';
+import { runtime } from '@escapeplan/contracts/runtime';
 import type {
   CommandRequest,
   OperatorPermission,
@@ -235,6 +239,57 @@ export async function buildServer() {
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']
   });
 
+  // Register cookie support (required for CSRF protection)
+  await app.register(cookie);
+
+  // Register CSRF protection middleware
+  await app.register(csrf, {
+    cookieOpts: {
+      httpOnly: false, // CSRF cookie needs to be readable by client
+      sameSite: 'lax',
+      secure: runtime.isProduction,
+      path: '/'
+    },
+    sessionPlugin: '@fastify/cookie' // Using cookie-based CSRF tokens
+  });
+
+  // Custom error handler for CSRF validation failures
+  app.setErrorHandler((error, request, reply) => {
+    if (error.code === 'FST_CSRF_INVALID_TOKEN' || error.code === 'FST_CSRF_MISSING_SECRET') {
+      app.log.warn({
+        err: error,
+        path: request.url,
+        method: request.method
+      }, 'CSRF validation failed');
+
+      return reply.status(403).send({
+        statusCode: 403,
+        error: 'Forbidden',
+        message: 'CSRF token validation failed. This request appears to be a potential Cross-Site Request Forgery attack.',
+        code: 'CSRF_VALIDATION_FAILED'
+      });
+    }
+
+    // For other errors, let Fastify handle them
+    reply.send(error);
+  });
+
+  // Register rate limiting middleware
+  await app.register(rateLimit, {
+    global: true,
+    max: 100,
+    timeWindow: '1 minute',
+    errorResponseBuilder: function (request, context) {
+      return {
+        statusCode: 429,
+        error: 'Too Many Requests',
+        message: `Rate limit exceeded. You have made too many requests. Please try again in ${context.after}`,
+        retryAfter: context.after
+      };
+    },
+    skipOnError: false
+  });
+
   // Register multipart for file uploads
   await app.register(multipart, {
     limits: {
@@ -258,13 +313,29 @@ export async function buildServer() {
     decorateReply: false
   });
 
-  app.get('/health', async () => ({ status: 'ok' }));
+  // Health check endpoint - exempt from rate limiting and CSRF
+  app.get('/health', {
+    config: {
+      rateLimit: false,
+      csrf: false
+    }
+  }, async () => ({ status: 'ok' }));
 
   // Setup update routes
   setupUpdateRoutes(app);
 
   await app.register(async (api) => {
-    api.all('/auth/*', async (request, reply) => {
+    // Apply stricter rate limiting to auth endpoints (5 requests per minute per IP)
+    // Exempt from CSRF protection - Better Auth has its own CSRF handling
+    api.all('/auth/*', {
+      config: {
+        rateLimit: {
+          max: 5,
+          timeWindow: '1 minute'
+        },
+        csrf: false
+      }
+    }, async (request, reply) => {
       try {
         // Block archived users from signing in
         if (request.url.includes('/sign-in') && request.method === 'POST') {
@@ -1922,7 +1993,12 @@ export async function buildServer() {
       }
     });
 
-    api.get('/public/room/:slug', async (request, reply) => {
+    // Public room display endpoint - exempt from CSRF (public unauthenticated endpoint)
+    api.get('/public/room/:slug', {
+      config: {
+        csrf: false
+      }
+    }, async (request, reply) => {
       const { slug } = request.params as { slug: string };
       const sessionRecord = getSessionBySlug(slug);
       if (!sessionRecord) {

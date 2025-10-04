@@ -20,14 +20,31 @@ mkdir -p "${BUILD_DIR}/opt/escapeplan/web"
 mkdir -p "${BUILD_DIR}/etc/systemd/system"
 mkdir -p "${BUILD_DIR}/etc/escapeplan"
 
-# Copy built API
-cp -r apps/escapeplan-api/dist/* "${BUILD_DIR}/opt/escapeplan/api/"
-cp -r apps/escapeplan-api/package.json "${BUILD_DIR}/opt/escapeplan/api/"
-cp -r packages/contracts/dist "${BUILD_DIR}/opt/escapeplan/api/contracts"
+# Use pnpm deploy to create production node_modules with real files (no symlinks)
+echo "Deploying production dependencies for API..."
+pnpm --filter escapeplan-api deploy --prod --legacy "${BUILD_DIR}/opt/escapeplan/api"
 
-# Copy built Web
+echo "Deploying production dependencies for Web..."
+pnpm --filter escapeplan-web deploy --prod --legacy "${BUILD_DIR}/opt/escapeplan/web"
+
+# Copy built files over the deployed structure
+echo "Copying built API files..."
+cp -r apps/escapeplan-api/dist/* "${BUILD_DIR}/opt/escapeplan/api/"
+
+echo "Copying built Web files..."
 cp -r apps/escapeplan-web/.svelte-kit "${BUILD_DIR}/opt/escapeplan/web/"
-cp -r apps/escapeplan-web/package.json "${BUILD_DIR}/opt/escapeplan/web/"
+
+# Replace workspace contracts with actual built content
+echo "Replacing contracts workspace dependency with built files..."
+rm -rf "${BUILD_DIR}/opt/escapeplan/api/node_modules/@escapeplan/contracts"
+mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/@escapeplan/contracts"
+cp -r packages/contracts/dist/* "${BUILD_DIR}/opt/escapeplan/api/node_modules/@escapeplan/contracts/"
+cp packages/contracts/package.json "${BUILD_DIR}/opt/escapeplan/api/node_modules/@escapeplan/contracts/"
+
+rm -rf "${BUILD_DIR}/opt/escapeplan/web/node_modules/@escapeplan/contracts"
+mkdir -p "${BUILD_DIR}/opt/escapeplan/web/node_modules/@escapeplan/contracts"
+cp -r packages/contracts/dist/* "${BUILD_DIR}/opt/escapeplan/web/node_modules/@escapeplan/contracts/"
+cp packages/contracts/package.json "${BUILD_DIR}/opt/escapeplan/web/node_modules/@escapeplan/contracts/"
 
 # Create systemd service files
 cat > "${BUILD_DIR}/etc/systemd/system/escapeplan-api.service" << 'EOF'
@@ -40,7 +57,7 @@ Type=simple
 User=escapeplan
 Group=escapeplan
 WorkingDirectory=/opt/escapeplan/api
-ExecStart=/usr/bin/node dist/index.js
+ExecStart=/usr/bin/node index.js
 Restart=on-failure
 RestartSec=5s
 Environment=NODE_ENV=production
@@ -92,12 +109,16 @@ if ! id escapeplan &>/dev/null; then
     useradd -r -s /bin/false escapeplan
 fi
 
-# Set ownership
-chown -R escapeplan:escapeplan /opt/escapeplan
+# Create required data directories
+mkdir -p /var/lib/escapeplan
+mkdir -p /var/log/escapeplan
+mkdir -p /etc/escapeplan
 
-# Install production dependencies
-cd /opt/escapeplan/api && npm ci --production --ignore-scripts
-cd /opt/escapeplan/web && npm ci --production --ignore-scripts
+# Set ownership (node_modules already bundled in package)
+chown -R escapeplan:escapeplan /opt/escapeplan
+chown -R escapeplan:escapeplan /var/lib/escapeplan
+chown -R escapeplan:escapeplan /var/log/escapeplan
+chown -R escapeplan:escapeplan /etc/escapeplan
 
 # Reload systemd
 systemctl daemon-reload

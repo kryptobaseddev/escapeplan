@@ -4,6 +4,7 @@ import { customSession, username } from 'better-auth/plugins';
 import argon2 from 'argon2';
 import type { BetterAuthOptions } from 'better-auth';
 import type { OperatorPermission, OperatorRole } from '@escapeplan/contracts';
+import { runtime } from '@escapeplan/contracts/runtime';
 import { db, sqlite } from './db/client.js';
 import { user, session, account, verification } from '@escapeplan/contracts';
 
@@ -160,8 +161,15 @@ function buildBaseOptions(): BetterAuthOptions {
       }
     },
     advanced: {
-      useSecureCookies: false
+      useSecureCookies: runtime.isProduction
     },
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60 // 5 minutes
+      }
+    },
+    socialProviders: {},
     plugins: [
       username({
         minUsernameLength: 4,
