@@ -59,6 +59,9 @@
   // Feature settings
   let irModeValue = $state<'auto' | 'on' | 'off'>('auto');
   let audioVolumeValue = $state(50);
+  let ptzPanValue = $state(0);
+  let ptzTiltValue = $state(0);
+  let ptzZoomValue = $state(0);
 
   function applyTemplate(template: CameraTemplate | undefined) {
     if (!template) return;
@@ -111,7 +114,7 @@
     } else if (protocolValue === 'mjpeg') {
       portValue = 80;
     } else if (protocolValue === 'onvif') {
-      portValue = 554;
+      portValue = 8000;
     }
   }
 
@@ -209,91 +212,79 @@
       <!-- Test Connection Form -->
       <form method="POST" action="?/testConnection" use:enhance={handleTestConnection} class="mb-6">
         <div class="space-y-6">
-          <!-- Camera Name -->
-          <label class="form-control">
-            <span class="label-text">Camera Name <span class="text-error">*</span></span>
-            <input
-              type="text"
-              name="name"
-              class="input input-bordered"
-              bind:value={nameValue}
-              required
-              minlength="3"
-              placeholder="Main Entrance Camera"
-            />
-            <span class="label-text-alt">Enter a descriptive name (minimum 3 characters)</span>
-          </label>
+          <!-- ESSENTIAL SECTION -->
+          <div class="border border-primary/30 rounded-lg p-5 space-y-4 bg-base-200/50">
+            <h2 class="text-lg font-bold text-primary flex items-center gap-2">
+              <span class="badge badge-primary badge-sm">Required</span>
+              Essential Information
+            </h2>
 
-          <!-- Brand & Model Selection -->
-          <div class="border border-base-300 rounded-lg p-4 space-y-4">
-            <h3 class="text-sm font-semibold">Camera Brand & Model</h3>
-            <div class="grid grid-cols-2 gap-4">
-              <label class="form-control">
-                <span class="label-text">Brand <span class="text-error">*</span></span>
-                <select
-                  name="brand"
-                  class="select select-bordered"
-                  bind:value={selectedBrand}
-                  onchange={handleBrandChange}
-                  required
-                >
-                  <option value="reolink">Reolink</option>
-                  <option value="hikvision">Hikvision</option>
-                  <option value="dahua">Dahua</option>
-                  <option value="amcrest">Amcrest</option>
-                  <option value="axis">Axis</option>
-                  <option value="tapo">TP-Link Tapo</option>
-                  <option value="tplink">TP-Link VIGI</option>
-                  <option value="foscam">Foscam</option>
-                  <option value="generic">Generic/Other</option>
-                </select>
-              </label>
-
-              <label class="form-control">
-                <span class="label-text">Model Template</span>
-                <select
-                  class="select select-bordered"
-                  bind:value={selectedTemplateId}
-                  onchange={handleTemplateChange}
-                >
-                  <option value="">Select model...</option>
-                  {#each availableTemplatesForBrand as template}
-                    <option value={template.id}>{template.displayName}</option>
-                  {/each}
-                </select>
-                <span class="label-text-alt">Auto-fills connection settings</span>
-              </label>
-            </div>
-
-            {#if selectedTemplateId}
-              {@const template = data.templates.templates.find((t) => t.id === selectedTemplateId)}
-              {#if template?.notes}
-                <div class="bg-info/10 border border-info/30 rounded p-3 text-sm text-info-content">
-                  <p class="font-semibold mb-1">📝 Template Notes:</p>
-                  <p>{template.notes}</p>
-                </div>
-              {/if}
-            {/if}
-
+            <!-- Camera Name -->
             <label class="form-control">
-              <span class="label-text">Model Name (Optional)</span>
+              <span class="label-text font-semibold">Camera Name <span class="text-error">*</span></span>
               <input
                 type="text"
-                name="model"
+                name="name"
                 class="input input-bordered"
-                bind:value={modelValue}
-                placeholder="RLC-810A"
+                bind:value={nameValue}
+                required
+                minlength="3"
+                placeholder="Main Entrance Camera"
               />
-              <span class="label-text-alt">Specific model number for your records</span>
+              <span class="label-text-alt">Enter a descriptive name (minimum 3 characters)</span>
             </label>
-          </div>
 
-          <!-- Network Configuration -->
-          <div class="border border-base-300 rounded-lg p-4 space-y-4">
-            <h3 class="text-sm font-semibold">Network Configuration</h3>
+            <!-- Brand -->
+            <label class="form-control">
+              <span class="label-text font-semibold">Brand <span class="text-error">*</span></span>
+              <select
+                name="brand"
+                class="select select-bordered"
+                bind:value={selectedBrand}
+                onchange={handleBrandChange}
+                required
+              >
+                <option value="reolink">Reolink</option>
+                <option value="hikvision">Hikvision</option>
+                <option value="dahua">Dahua</option>
+                <option value="amcrest">Amcrest</option>
+                <option value="axis">Axis</option>
+                <option value="tapo">TP-Link Tapo</option>
+                <option value="tplink">TP-Link VIGI</option>
+                <option value="foscam">Foscam</option>
+                <option value="generic">Generic/Other</option>
+              </select>
+            </label>
+
+            <!-- Network Configuration -->
             <div class="grid grid-cols-2 gap-4">
               <label class="form-control">
-                <span class="label-text">Protocol <span class="text-error">*</span></span>
+                <span class="label-text font-semibold">IP Address <span class="text-error">*</span></span>
+                <input
+                  type="text"
+                  name="host"
+                  class="input input-bordered"
+                  bind:value={hostValue}
+                  required
+                  placeholder="10.10.10.100"
+                />
+              </label>
+
+              <label class="form-control">
+                <span class="label-text font-semibold">Port <span class="text-error">*</span></span>
+                <input
+                  type="number"
+                  name="port"
+                  class="input input-bordered"
+                  bind:value={portValue}
+                  required
+                  min="1"
+                  max="65535"
+                />
+              </label>
+
+              <label class="form-control">
+                <span class="label-text font-semibold">Protocol <span class="text-error">*</span></span>
                 <select
                   name="protocol"
                   class="select select-bordered"
@@ -308,7 +299,7 @@
               </label>
 
               <label class="form-control">
-                <span class="label-text">Transport</span>
+                <span class="label-text font-semibold">Transport Protocol</span>
                 <select
                   name="transport"
                   class="select select-bordered"
@@ -319,40 +310,12 @@
                   {/each}
                 </select>
               </label>
-
-              <label class="form-control">
-                <span class="label-text">IP Address <span class="text-error">*</span></span>
-                <input
-                  type="text"
-                  name="host"
-                  class="input input-bordered"
-                  bind:value={hostValue}
-                  required
-                  placeholder="10.10.10.100"
-                />
-              </label>
-
-              <label class="form-control">
-                <span class="label-text">Port <span class="text-error">*</span></span>
-                <input
-                  type="number"
-                  name="port"
-                  class="input input-bordered"
-                  bind:value={portValue}
-                  required
-                  min="1"
-                  max="65535"
-                />
-              </label>
             </div>
-          </div>
 
-          <!-- Authentication -->
-          <div class="border border-base-300 rounded-lg p-4 space-y-4">
-            <h3 class="text-sm font-semibold">Authentication (Optional)</h3>
+            <!-- Authentication -->
             <div class="grid grid-cols-2 gap-4">
               <label class="form-control">
-                <span class="label-text">Username</span>
+                <span class="label-text font-semibold">Username</span>
                 <input
                   type="text"
                   name="username"
@@ -363,7 +326,7 @@
               </label>
 
               <label class="form-control">
-                <span class="label-text">Password</span>
+                <span class="label-text font-semibold">Password</span>
                 <input
                   type="password"
                   name="password"
@@ -375,123 +338,235 @@
             </div>
           </div>
 
-          <!-- Dual Stream Configuration -->
-          <div class="border border-base-300 rounded-lg p-4 space-y-4">
-            <h3 class="text-sm font-semibold">Stream Configuration</h3>
-            <div class="grid grid-cols-2 gap-4">
-              <label class="form-control col-span-2">
-                <span class="label-text">Main Stream Path</span>
-                <input
-                  type="text"
-                  name="mainStreamPath"
-                  class="input input-bordered"
-                  bind:value={mainStreamPathValue}
-                  placeholder="/Preview_01_main"
-                />
-                <span class="label-text-alt">High-res stream for recording</span>
-              </label>
+          <!-- COMMON SECTION -->
+          <div class="border border-base-300 rounded-lg p-5 space-y-4">
+            <h2 class="text-lg font-bold text-base-content">Common Settings</h2>
 
-              <label class="form-control col-span-2">
-                <span class="label-text">Sub Stream Path</span>
-                <input
-                  type="text"
-                  name="subStreamPath"
-                  class="input input-bordered"
-                  bind:value={subStreamPathValue}
-                  placeholder="/Preview_01_sub"
-                />
-                <span class="label-text-alt">Low-res stream for live view (saves bandwidth)</span>
-              </label>
+            <!-- Model Template Selection -->
+            <label class="form-control">
+              <span class="label-text font-semibold">Model Template</span>
+              <select
+                class="select select-bordered"
+                bind:value={selectedTemplateId}
+                onchange={handleTemplateChange}
+              >
+                <option value="">Select model...</option>
+                {#each availableTemplatesForBrand as template}
+                  <option value={template.id}>{template.displayName}</option>
+                {/each}
+              </select>
+              <span class="label-text-alt">Auto-fills connection settings</span>
+            </label>
 
-              <label class="form-control">
-                <span class="label-text">Resolution</span>
-                <select
-                  name="resolution"
-                  class="select select-bordered"
-                  bind:value={resolutionValue}
-                >
-                  {#each resolutionOptions as resolution}
-                    <option value={resolution}>{resolution}</option>
-                  {/each}
-                </select>
-              </label>
+            {#if selectedTemplateId}
+              {@const template = data.templates.templates.find((t) => t.id === selectedTemplateId)}
+              {#if template?.notes}
+                <div class="bg-info/10 border border-info/30 rounded p-3 text-sm text-info-content">
+                  <p class="font-semibold mb-1">Template Notes:</p>
+                  <p>{template.notes}</p>
+                </div>
+              {/if}
+            {/if}
 
-              <label class="form-control">
-                <span class="label-text">Frame Rate (FPS)</span>
-                <input
-                  type="number"
-                  name="frameRate"
-                  class="input input-bordered"
-                  bind:value={frameRateValue}
-                  min="1"
-                  max="60"
-                />
-              </label>
+            <label class="form-control">
+              <span class="label-text font-semibold">Model Name</span>
+              <input
+                type="text"
+                name="model"
+                class="input input-bordered"
+                bind:value={modelValue}
+                placeholder="RLC-810A"
+              />
+              <span class="label-text-alt">Specific model number for your records</span>
+            </label>
 
-              <label class="form-control col-span-2">
-                <span class="label-text">Assign to Game</span>
-                <select
-                  name="gameId"
-                  class="select select-bordered"
-                  bind:value={gameIdValue}
-                >
-                  <option value="">None</option>
-                  {#each data.games as game}
-                    <option value={game.id}>{game.name}</option>
-                  {/each}
-                </select>
-              </label>
-            </div>
+            <label class="form-control">
+              <span class="label-text font-semibold">Assign to Game</span>
+              <select
+                name="gameId"
+                class="select select-bordered"
+                bind:value={gameIdValue}
+              >
+                <option value="">None</option>
+                {#each data.games as game}
+                  <option value={game.id}>{game.name}</option>
+                {/each}
+              </select>
+            </label>
+
+            <!-- Stream Paths -->
+            <label class="form-control">
+              <span class="label-text font-semibold">Main Stream Path</span>
+              <input
+                type="text"
+                name="mainStreamPath"
+                class="input input-bordered"
+                bind:value={mainStreamPathValue}
+                placeholder="/Preview_01_main"
+              />
+              <span class="label-text-alt">High-res stream for recording</span>
+            </label>
+
+            <label class="form-control">
+              <span class="label-text font-semibold">Sub Stream Path</span>
+              <input
+                type="text"
+                name="subStreamPath"
+                class="input input-bordered"
+                bind:value={subStreamPathValue}
+                placeholder="/Preview_01_sub"
+              />
+              <span class="label-text-alt">Low-res stream for live view (saves bandwidth)</span>
+            </label>
           </div>
 
-          <!-- Camera Capabilities -->
-          <div class="border border-base-300 rounded-lg p-4 space-y-4">
-            <h3 class="text-sm font-semibold">Camera Capabilities</h3>
-            <div class="flex flex-wrap gap-4">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasPtzValue} />
-                <input type="hidden" name="hasPtz" value={hasPtzValue ? 'true' : 'false'} />
-                <span class="label-text">PTZ (Pan/Tilt/Zoom)</span>
-              </label>
-
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasAudioValue} />
-                <input type="hidden" name="hasAudio" value={hasAudioValue ? 'true' : 'false'} />
-                <span class="label-text">Audio</span>
-              </label>
-
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasIrControlValue} />
-                <input type="hidden" name="hasIrControl" value={hasIrControlValue ? 'true' : 'false'} />
-                <span class="label-text">IR Control</span>
-              </label>
+          <!-- ADVANCED SECTION (Collapsible) -->
+          <div class="collapse collapse-arrow border border-base-300 rounded-lg bg-base-200/30">
+            <input type="checkbox" />
+            <div class="collapse-title text-lg font-bold">
+              Advanced Settings
+              <span class="text-sm font-normal text-base-content/60 ml-2">(Optional)</span>
             </div>
+            <div class="collapse-content space-y-4">
+              <!-- Resolution & Frame Rate -->
+              <div class="grid grid-cols-2 gap-4">
+                <label class="form-control">
+                  <span class="label-text font-semibold">Resolution</span>
+                  <select
+                    name="resolution"
+                    class="select select-bordered"
+                    bind:value={resolutionValue}
+                  >
+                    {#each resolutionOptions as resolution}
+                      <option value={resolution}>{resolution}</option>
+                    {/each}
+                  </select>
+                  <span class="label-text-alt">Default: 720p</span>
+                </label>
 
-            {#if hasIrControlValue}
-              <label class="form-control max-w-xs">
-                <span class="label-text">IR Mode</span>
-                <select name="irMode" class="select select-bordered select-sm" bind:value={irModeValue}>
-                  {#each irModeOptions as mode}
-                    <option value={mode}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</option>
-                  {/each}
-                </select>
-              </label>
-            {/if}
+                <label class="form-control">
+                  <span class="label-text font-semibold">Frame Rate (FPS)</span>
+                  <input
+                    type="number"
+                    name="frameRate"
+                    class="input input-bordered"
+                    bind:value={frameRateValue}
+                    min="1"
+                    max="60"
+                  />
+                  <span class="label-text-alt">Default: 15fps</span>
+                </label>
+              </div>
 
-            {#if hasAudioValue}
-              <label class="form-control max-w-xs">
-                <span class="label-text">Audio Volume: {audioVolumeValue}%</span>
-                <input
-                  type="range"
-                  name="audioVolume"
-                  class="range range-sm"
-                  min="0"
-                  max="100"
-                  step="5"
-                  bind:value={audioVolumeValue}
-                />
-              </label>
-            {/if}
+              <!-- Camera Capabilities -->
+              <div class="border-t border-base-300 pt-4">
+                <h3 class="text-sm font-semibold mb-3">Camera Capabilities</h3>
+                <div class="flex flex-wrap gap-4">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasPtzValue} />
+                    <input type="hidden" name="hasPtz" value={hasPtzValue ? 'true' : 'false'} />
+                    <span class="label-text">PTZ (Pan/Tilt/Zoom)</span>
+                  </label>
+
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasAudioValue} />
+                    <input type="hidden" name="hasAudio" value={hasAudioValue ? 'true' : 'false'} />
+                    <span class="label-text">Audio</span>
+                  </label>
+
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasIrControlValue} />
+                    <input type="hidden" name="hasIrControl" value={hasIrControlValue ? 'true' : 'false'} />
+                    <span class="label-text">IR Control</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Conditional Settings -->
+              {#if hasIrControlValue}
+                <label class="form-control max-w-xs">
+                  <span class="label-text font-semibold">IR Mode</span>
+                  <select name="irMode" class="select select-bordered select-sm" bind:value={irModeValue}>
+                    {#each irModeOptions as mode}
+                      <option value={mode}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</option>
+                    {/each}
+                  </select>
+                  <span class="label-text-alt">Default: Auto</span>
+                </label>
+              {/if}
+
+              {#if hasAudioValue}
+                <label class="form-control max-w-xs">
+                  <span class="label-text font-semibold">Audio Volume: {audioVolumeValue}%</span>
+                  <input
+                    type="range"
+                    name="audioVolume"
+                    class="range range-sm"
+                    min="0"
+                    max="100"
+                    step="5"
+                    bind:value={audioVolumeValue}
+                  />
+                  <span class="label-text-alt">Default: 50%</span>
+                </label>
+              {/if}
+
+              {#if hasPtzValue}
+                <div class="mt-4 space-y-3 border-t border-base-300 pt-4">
+                  <h4 class="text-sm font-semibold">PTZ Position Controls</h4>
+                  <label class="form-control">
+                    <span class="label-text">Pan: {ptzPanValue}°</span>
+                    <input
+                      type="range"
+                      class="range range-sm"
+                      min="-180"
+                      max="180"
+                      step="5"
+                      bind:value={ptzPanValue}
+                    />
+                    <div class="flex justify-between text-xs text-base-content/60 px-2">
+                      <span>-180°</span>
+                      <span>0°</span>
+                      <span>+180°</span>
+                    </div>
+                  </label>
+
+                  <label class="form-control">
+                    <span class="label-text">Tilt: {ptzTiltValue}°</span>
+                    <input
+                      type="range"
+                      class="range range-sm"
+                      min="-90"
+                      max="90"
+                      step="5"
+                      bind:value={ptzTiltValue}
+                    />
+                    <div class="flex justify-between text-xs text-base-content/60 px-2">
+                      <span>-90°</span>
+                      <span>0°</span>
+                      <span>+90°</span>
+                    </div>
+                  </label>
+
+                  <label class="form-control">
+                    <span class="label-text">Zoom: {ptzZoomValue}%</span>
+                    <input
+                      type="range"
+                      class="range range-sm"
+                      min="0"
+                      max="100"
+                      step="5"
+                      bind:value={ptzZoomValue}
+                    />
+                    <div class="flex justify-between text-xs text-base-content/60 px-2">
+                      <span>0%</span>
+                      <span>50%</span>
+                      <span>100%</span>
+                    </div>
+                  </label>
+                </div>
+              {/if}
+            </div>
           </div>
 
           <div class="flex justify-end">
@@ -528,6 +603,9 @@
         <input type="hidden" name="hasIrControl" value={hasIrControlValue ? 'true' : 'false'} />
         <input type="hidden" name="irMode" value={irModeValue} />
         <input type="hidden" name="audioVolume" value={audioVolumeValue} />
+        <input type="hidden" name="ptzPan" value={ptzPanValue} />
+        <input type="hidden" name="ptzTilt" value={ptzTiltValue} />
+        <input type="hidden" name="ptzZoom" value={ptzZoomValue} />
       </form>
     </div>
   </main>

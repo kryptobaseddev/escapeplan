@@ -18,8 +18,8 @@ import { requireSession } from '../auth.js';
 import { settings } from '../settings.js';
 
 export interface UploadAssetQuery {
-  gameId: string;
-  assetType: 'thumbnail' | 'room_background' | 'gallery' | 'puzzle_media' | 'hint_media' | 'milestone_media';
+  gameId?: string;
+  assetType: 'thumbnail' | 'room_background' | 'gallery' | 'puzzle_media' | 'hint_media' | 'milestone_media' | 'system_audio';
   puzzleId?: string;
   milestoneId?: string;
   mediaType?: 'text' | 'image' | 'audio' | 'video';
@@ -65,10 +65,26 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
   const { gameId, assetType, puzzleId, mediaType, order, isReusable } = query;
 
   // Validate required params
-  if (!gameId || !assetType) {
+  // gameId is required UNLESS assetType is 'system_audio'
+  if (!assetType) {
     return reply.status(400).send({
       statusCode: 400,
-      message: 'gameId and assetType are required'
+      message: 'assetType is required'
+    });
+  }
+
+  if (!gameId && assetType !== 'system_audio') {
+    return reply.status(400).send({
+      statusCode: 400,
+      message: 'gameId is required for non-system assets'
+    });
+  }
+
+  // For system_audio, mediaType must be 'audio'
+  if (assetType === 'system_audio' && mediaType !== 'audio') {
+    return reply.status(400).send({
+      statusCode: 400,
+      message: 'system_audio assets must have mediaType="audio"'
     });
   }
 
@@ -117,26 +133,29 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       });
     }
 
-    // Get game details for slug (try by ID first, then by slug)
-    // Special case: "shared" means system-wide reusable assets (no game association)
-    let game: { id: string; slug: string; name: string } | undefined;
+    // Game lookup
+    let game: { id: string; slug: string; name: string } | null = null;
 
-    if (gameId !== 'shared') {
-      game = sqlite.prepare('SELECT id, slug, name FROM games WHERE id = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
-      if (!game) {
-        // Try by slug as fallback
-        game = sqlite.prepare('SELECT id, slug, name FROM games WHERE slug = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
+    if (gameId) {
+      // Try by ID first
+      const gameById = sqlite.prepare('SELECT id, slug, name FROM games WHERE id = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
+
+      // Try by slug if not found
+      if (gameById) {
+        game = gameById;
+      } else {
+        const gameBySlug = sqlite.prepare('SELECT id, slug, name FROM games WHERE slug = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
+        if (gameBySlug) {
+          game = gameBySlug;
+        }
       }
+
       if (!game) {
-        return reply.status(404).send({ statusCode: 404, message: 'Game not found' });
+        return reply.status(404).send({ statusCode: 404, message: `Game not found: ${gameId}` });
       }
     } else {
-      // For shared assets, create a virtual game object for file naming
-      game = {
-        id: 'shared',
-        slug: 'shared',
-        name: 'Shared Assets'
-      };
+      // System asset - use virtual game object
+      game = { id: '', slug: 'system', name: 'System Assets' };
     }
 
     // Get puzzle details if needed
@@ -182,10 +201,10 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       asset_type: assetType,
       media_type: mediaType || null,
       file_path: path.join(subPath, filename),
-      game_id: (isReusable || gameId === 'shared') ? null : game.id,
+      game_id: game.id || null,
       puzzle_id: puzzleId || null,
       hint_order: order ? parseInt(String(order), 10) : null,
-      is_reusable: (isReusable || gameId === 'shared') ? 1 : 0,
+      is_reusable: assetType === 'system_audio' ? 1 : (isReusable ? 1 : 0),
       uploaded_by: session.user.id as string,
       uploaded_at: new Date().toISOString(),
       metadata: JSON.stringify(processed.metadata)

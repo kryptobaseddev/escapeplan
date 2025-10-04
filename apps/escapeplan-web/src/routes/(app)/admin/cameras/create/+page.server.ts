@@ -58,6 +58,9 @@ export const actions: Actions = {
       // Feature settings
       irMode: form.get('irMode') ? String(form.get('irMode')) as 'auto' | 'on' | 'off' : 'auto',
       audioVolume: form.get('audioVolume') ? Number(form.get('audioVolume')) : 50,
+      ptzPan: form.get('ptzPan') ? Number(form.get('ptzPan')) : 0,
+      ptzTilt: form.get('ptzTilt') ? Number(form.get('ptzTilt')) : 0,
+      ptzZoom: form.get('ptzZoom') ? Number(form.get('ptzZoom')) : 0,
 
       gameId: form.get('gameId') ? String(form.get('gameId')).trim() : undefined
     };

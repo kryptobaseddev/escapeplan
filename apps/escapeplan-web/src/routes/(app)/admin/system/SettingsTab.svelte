@@ -5,6 +5,7 @@
   import HelpTooltip from '$lib/components/ui/HelpTooltip.svelte';
   import Alert from '$lib/components/ui/Alert.svelte';
   import AssetBrowser from '$lib/components/assets/AssetBrowser.svelte';
+  import UploadSystemAudioModal from '$lib/components/system/UploadSystemAudioModal.svelte';
 
   interface Setting {
     key: string;
@@ -63,6 +64,11 @@
   // Asset browser modal state
   let assetBrowserOpen = $state(false);
   let currentAssetField = $state<string | null>(null);
+
+  // Upload modal state
+  let uploadModalOpen = $state(false);
+  let selectedAssetDetails = $state<any | null>(null);
+  let loadingAssetDetails = $state(false);
 
   function getDisplayValue(setting: Setting): any {
     return editedValues[setting.key] !== undefined ? editedValues[setting.key] : setting.value;
@@ -167,12 +173,67 @@
     ];
   }
 
+  async function loadAssetDetails(assetId: string | null) {
+    if (!assetId || assetId === 'null') {
+      selectedAssetDetails = null;
+      return;
+    }
+
+    loadingAssetDetails = true;
+    try {
+      const response = await fetch(`/api/assets/${assetId}`, {
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        selectedAssetDetails = data.asset;
+      } else {
+        selectedAssetDetails = null;
+      }
+    } catch (err) {
+      console.error('Failed to load asset details:', err);
+      selectedAssetDetails = null;
+    } finally {
+      loadingAssetDetails = false;
+    }
+  }
+
+  function handleUploadSuccess(asset: any) {
+    // Set the uploaded asset as the default sound
+    const setting = getAllSettings().find(s => s.key === 'business.default_text_hint_sound_asset_id');
+    if (setting) {
+      editedValues['business.default_text_hint_sound_asset_id'] = asset.id;
+      saveSetting(setting);
+      selectedAssetDetails = asset;
+    }
+    uploadModalOpen = false;
+  }
+
+  function handleClearAsset(setting: Setting) {
+    handleEdit(setting.key, null);
+    saveSetting({ ...setting, value: null });
+    selectedAssetDetails = null;
+  }
+
   const storageSettings = $derived(settings.storage || []);
   const backupSettings = $derived(settings.backup || []);
   const updatesSettings = $derived(settings.updates || []);
   const businessSettings = $derived(settings.business || []);
   const userValidationSettings = $derived(settings.user_validation || []);
   const systemSettings = $derived(settings.system || []);
+
+  // Load asset details when the default sound setting changes
+  $effect(() => {
+    const currentValue = editedValues['business.default_text_hint_sound_asset_id'] ||
+                         settings.business.find(s => s.key === 'business.default_text_hint_sound_asset_id')?.value;
+
+    if (currentValue && currentValue !== 'null') {
+      loadAssetDetails(currentValue);
+    } else {
+      selectedAssetDetails = null;
+    }
+  });
 </script>
 
 <div class="space-y-6">
@@ -245,36 +306,57 @@
             {:else if setting.type === 'string'}
               <div class="space-y-2">
                 {#if setting.key === 'business.default_text_hint_sound_asset_id'}
-                  <!-- Asset picker for text hint sound -->
-                  <div class="flex items-center gap-2">
-                    <input
-                      type="text"
-                      class="input input-bordered flex-1"
-                      value={inputData.value || 'No sound selected'}
-                      disabled
-                      readonly
-                    />
-                    <button
-                      type="button"
-                      class="btn btn-primary btn-sm"
-                      onclick={() => openAssetBrowser(setting.key)}
-                      disabled={!setting.isEditable || saving[setting.key]}
-                    >
-                      Select Sound
-                    </button>
-                    {#if inputData.value && inputData.value !== 'null'}
+                  <!-- Asset picker for text hint sound with preview -->
+                  <div class="space-y-2">
+                    <!-- Current sound display -->
+                    {#if loadingAssetDetails}
+                      <div class="skeleton h-10 w-full"></div>
+                    {:else if selectedAssetDetails}
+                      <div class="flex items-center gap-2 p-2 bg-base-200 rounded">
+                        <span class="text-2xl">🎵</span>
+                        <div class="flex-1 min-w-0">
+                          <div class="text-sm font-medium truncate">{selectedAssetDetails.originalFilename}</div>
+                          <div class="text-xs text-base-content/60">{(selectedAssetDetails.sizeBytes / 1024).toFixed(1)} KB</div>
+                        </div>
+                        <audio controls class="h-8">
+                          <source src={selectedAssetDetails.url} type={selectedAssetDetails.mimeType} />
+                        </audio>
+                      </div>
+                    {:else}
+                      <input
+                        type="text"
+                        value="No sound selected"
+                        class="input input-bordered w-full"
+                        disabled
+                      />
+                    {/if}
+
+                    <!-- Action buttons -->
+                    <div class="flex gap-2">
                       <button
-                        type="button"
-                        class="btn btn-error btn-sm"
-                        onclick={() => {
-                          handleEdit(setting.key, null);
-                          saveSetting({ ...setting, value: null });
-                        }}
+                        class="btn btn-primary btn-sm"
+                        onclick={() => openAssetBrowser(setting.key)}
                         disabled={!setting.isEditable || saving[setting.key]}
                       >
-                        Clear
+                        Select Sound
                       </button>
-                    {/if}
+                      <button
+                        class="btn btn-secondary btn-sm"
+                        onclick={() => { uploadModalOpen = true; }}
+                        disabled={!setting.isEditable || saving[setting.key]}
+                      >
+                        Upload New
+                      </button>
+                      {#if selectedAssetDetails}
+                        <button
+                          class="btn btn-error btn-sm"
+                          onclick={() => handleClearAsset(setting)}
+                          disabled={saving[setting.key]}
+                        >
+                          Clear
+                        </button>
+                      {/if}
+                    </div>
                   </div>
                 {:else if setting.key.includes('policy')}
                   <!-- Textarea for policies -->
@@ -660,6 +742,7 @@
           mediaType="audio"
           onSelect={handleAssetSelected}
           selectionMode="single"
+          selectedAssetId={currentAssetField ? (editedValues[currentAssetField] || undefined) : undefined}
         />
       </div>
 
@@ -678,4 +761,13 @@
       </div>
     </div>
   </div>
+{/if}
+
+<!-- Upload System Audio Modal -->
+{#if uploadModalOpen}
+  <UploadSystemAudioModal
+    open={uploadModalOpen}
+    onClose={() => { uploadModalOpen = false; }}
+    onSuccess={handleUploadSuccess}
+  />
 {/if}

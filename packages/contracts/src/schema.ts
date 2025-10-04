@@ -274,6 +274,7 @@ export const sessionHints = sqliteTable('session_hints', {
   message: text('message').notNull(),
   asset_url: text('asset_url'),
   volume_level: integer('volume_level'), // Volume at which this hint was sent
+  count_as_hint: integer('count_as_hint', { mode: 'boolean' }).notNull().default(true), // Whether this hint counts toward hints_used
   delivered_by: text('delivered_by').notNull(),
   delivered_at: text('delivered_at').notNull()
 });

@@ -29,10 +29,6 @@
   </div>
 
   <div class="px-3 pb-3 md:px-5 md:pb-5 space-y-2">
-    <a class="btn btn-xs md:btn-sm btn-ghost border border-white/10 w-fit" href={`/bookings?focus=${session.id}`}>
-      View booking
-    </a>
-
     {#if offlineNotice}
       <p class="text-[10px] md:text-xs text-warning">{offlineNotice} ({queuedCommands} queued)</p>
     {:else if queuedCommands > 0}
@@ -63,7 +59,29 @@
     }
   }
 
+  /* Hide SessionCard's "View bookings" button */
   .session-header-wrapper :global(.card button[onclick*="bookings"]) {
     display: none;
+  }
+
+  /* Position Room Display section to align with right side under timer */
+  .session-header-wrapper :global(.card > div:first-child > div:first-child > div:first-child) {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  @media (min-width: 640px) {
+    .session-header-wrapper :global(.card > div:first-child > div:first-child > div:first-child) {
+      gap: 0.75rem;
+    }
+  }
+
+  /* Room Display section - float it to the right */
+  .session-header-wrapper :global(.card > div:first-child > div:first-child > div:first-child > div.pt-1),
+  .session-header-wrapper :global(.card > div:first-child > div:first-child > div:first-child > div.sm\\:pt-2) {
+    justify-self: end;
+    max-width: 12rem;
+    width: 100%;
   }
 </style>

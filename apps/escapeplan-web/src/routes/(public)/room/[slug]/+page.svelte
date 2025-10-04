@@ -18,7 +18,9 @@
   let timer = $state<TimerBroadcast | null>(data.timer);
   let errorMessage = $state<string | null>(data.timerError ?? null);
   let currentMedia = $state<RoomDisplayMediaEvent | null>(null);
-  let mediaKey = $state<string>('');
+  let textHintDisplay = $state<RoomDisplayMediaEvent | null>(null);
+  let backgroundAudio = $state<string | null>(null);
+  let textHintTimer: ReturnType<typeof setTimeout> | null = null;
   let unsub: (() => void) | null = null;
 
   /**
@@ -61,29 +63,51 @@
       // Media events
       socket.on('room-display:media', (event: RoomDisplayMediaEvent) => {
         if (event.slug === params.slug) {
-          // Force cleanup of previous media by clearing state first
-          if (currentMedia) {
-            currentMedia = null;
-            // Allow cleanup cycle to complete before mounting new media
-            setTimeout(() => {
-              currentMedia = event;
-              // Unique key forces component to fully remount
-              mediaKey = `${event.mediaType}-${event.triggeredAt}`;
+          // Handle text hints separately from regular media
+          if (event.mediaType === 'text') {
+            // Clear any existing text hint timer
+            if (textHintTimer) {
+              clearTimeout(textHintTimer);
+              textHintTimer = null;
+            }
 
-              // Emit 'playing' status when media starts
-              emitPlaybackStatus(
-                event.sessionId,
-                event.mediaType,
-                event.source,
-                'playing',
-                event.triggeredAt
-              );
-            }, 50);
+            // Set text hint display immediately (replaces previous text)
+            textHintDisplay = event;
+
+            // Start background audio if present
+            if (event.textHintSoundAssetUrl) {
+              backgroundAudio = event.textHintSoundAssetUrl;
+            }
+
+            // Emit 'playing' status
+            emitPlaybackStatus(
+              event.sessionId,
+              event.mediaType,
+              event.source,
+              'playing',
+              event.triggeredAt
+            );
+
+            // Auto-dismiss text after 3 seconds
+            textHintTimer = setTimeout(() => {
+              if (textHintDisplay?.sessionId === event.sessionId && textHintDisplay?.triggeredAt === event.triggeredAt) {
+                // Emit 'finished' status before clearing
+                emitPlaybackStatus(
+                  event.sessionId,
+                  event.mediaType,
+                  event.source,
+                  'finished',
+                  event.triggeredAt
+                );
+                textHintDisplay = null;
+              }
+              textHintTimer = null;
+            }, 3000);
           } else {
+            // Regular media (audio, video, image)
             currentMedia = event;
-            mediaKey = `${event.mediaType}-${event.triggeredAt}`;
 
-            // Emit 'playing' status when media starts
+            // Emit 'playing' status
             emitPlaybackStatus(
               event.sessionId,
               event.mediaType,
@@ -102,7 +126,13 @@
     }
   });
 
-  onDestroy(() => unsub?.());
+  onDestroy(() => {
+    if (textHintTimer) {
+      clearTimeout(textHintTimer);
+      textHintTimer = null;
+    }
+    unsub?.();
+  });
 
   function clearMedia() {
     // Emit 'finished' status before clearing
@@ -117,7 +147,6 @@
     }
 
     currentMedia = null;
-    mediaKey = '';
   }
 </script>
 
@@ -151,42 +180,56 @@
     {/if}
 
     <!-- Z-index 20+: Media Overlays -->
+
+    <!-- Text hints with separate lifecycle -->
+    {#if textHintDisplay}
+      <RoomTextHint
+        content={textHintDisplay.content}
+        colors={textHintDisplay.textHintColors}
+      />
+    {/if}
+
+    <!-- Background audio for text hints (plays independently) -->
+    {#if backgroundAudio}
+      <RoomAudio
+        src={backgroundAudio}
+        volumeLevel={80}
+        loop={false}
+        autoDismiss={true}
+        onFinish={() => { backgroundAudio = null; }}
+      />
+    {/if}
+
+    <!-- Regular media (audio, video, image) -->
     {#if currentMedia}
-      {#key mediaKey}
-        {#if currentMedia.mediaType === 'text'}
-          <RoomTextHint
-            content={currentMedia.content}
-            colors={currentMedia.textHintColors}
-          />
-        {:else if currentMedia.mediaType === 'audio'}
-          <RoomAudio
-            src={currentMedia.content}
-            volumeLevel={currentMedia.volumeLevel}
-            loop={currentMedia.loop}
-            loopCount={currentMedia.loopCount}
-            autoDismiss={currentMedia.autoDismiss}
-            onFinish={clearMedia}
-          />
-        {:else if currentMedia.mediaType === 'image'}
-          <RoomImage
-            src={currentMedia.content}
-            displayDuration={currentMedia.displayDurationSeconds}
-            autoDismiss={currentMedia.autoDismiss}
-            scale={timer.roomConfig?.defaultMediaScale ?? 90}
-            onDismiss={clearMedia}
-          />
-        {:else if currentMedia.mediaType === 'video'}
-          <RoomVideo
-            src={currentMedia.content}
-            volumeLevel={currentMedia.volumeLevel}
-            loop={currentMedia.loop}
-            loopCount={currentMedia.loopCount}
-            autoDismiss={currentMedia.autoDismiss}
-            scale={timer.roomConfig?.defaultMediaScale ?? 90}
-            onFinish={clearMedia}
-          />
-        {/if}
-      {/key}
+      {#if currentMedia.mediaType === 'audio'}
+        <RoomAudio
+          src={currentMedia.content}
+          volumeLevel={currentMedia.volumeLevel}
+          loop={currentMedia.loop}
+          loopCount={currentMedia.loopCount}
+          autoDismiss={currentMedia.autoDismiss}
+          onFinish={clearMedia}
+        />
+      {:else if currentMedia.mediaType === 'image'}
+        <RoomImage
+          src={currentMedia.content}
+          displayDuration={currentMedia.displayDurationSeconds}
+          autoDismiss={currentMedia.autoDismiss}
+          scale={timer.roomConfig?.defaultMediaScale ?? 90}
+          onDismiss={clearMedia}
+        />
+      {:else if currentMedia.mediaType === 'video'}
+        <RoomVideo
+          src={currentMedia.content}
+          volumeLevel={currentMedia.volumeLevel}
+          loop={currentMedia.loop}
+          loopCount={currentMedia.loopCount}
+          autoDismiss={currentMedia.autoDismiss}
+          scale={timer.roomConfig?.defaultMediaScale ?? 90}
+          onFinish={clearMedia}
+        />
+      {/if}
     {/if}
 
   </section>

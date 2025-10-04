@@ -28,6 +28,7 @@ import { evaluateAlertRules, autoDismissAlerts } from '../../logging/alerts.js';
 import { getDashboard } from '../dashboard/index.svelte.js';
 import { getSessionById, updateRoomDisplayPlayback } from './index.svelte.js';
 import { getGameDetails } from '../games/index.svelte.js';
+import { settings } from '../../settings.js';
 import type { CommandRequest, CommandResponse, GameSessionDetails } from '@escapeplan/contracts';
 import type { GameMilestoneRow } from '../games/types.js';
 
@@ -263,12 +264,33 @@ class CommandsState {
     const displayDurationSeconds = payload?.displayDurationSeconds ? Number(payload.displayDurationSeconds) : undefined;
     const loop = payload?.loop ? Boolean(payload.loop) : false;
     const loopCount = payload?.loopCount ? Number(payload.loopCount) : undefined;
+    const textHintSoundAssetUrl = payload?.textHintSoundAssetUrl ? String(payload.textHintSoundAssetUrl).trim() : null;
 
     // Validate based on medium type
     if (medium === 'text') {
       // Text hints require non-empty message
       if (!message || message.length === 0) {
         throw new Error('Hint message required for text hints');
+      }
+
+      // For text hints, lookup default text hint sound asset if not explicitly provided
+      if (!textHintSoundAssetUrl) {
+        const defaultSoundAssetId = settings.getDefaultTextHintSoundAssetId();
+        if (defaultSoundAssetId) {
+          // Lookup asset file path from database
+          const asset = sqlite.prepare('SELECT file_path FROM assets WHERE id = ?').get(defaultSoundAssetId) as
+            | { file_path: string }
+            | undefined;
+          if (asset) {
+            // Store the asset URL for later use in room display
+            (payload as Record<string, unknown>).textHintSoundAssetUrl = `/assets/${asset.file_path}`;
+          } else {
+            logToDatabase('warn', 'session', `Default text hint sound asset not found: ${defaultSoundAssetId}`, {
+              sessionId,
+              assetId: defaultSoundAssetId
+            });
+          }
+        }
       }
     } else if (medium === 'audio' || medium === 'image' || medium === 'video') {
       // Audio/image/video hints require assetUrl
@@ -279,17 +301,18 @@ class CommandsState {
       throw new Error(`Invalid hint medium: ${medium}`);
     }
 
+    // Only increment hints_used if countAsHint is not explicitly false (defaults to true)
+    const countAsHint = payload?.countAsHint !== false;
+
     // Store hint in session_hints
     sqlite
       .prepare(
         `INSERT INTO session_hints
-        (id, session_id, puzzle_id, type, message, asset_url, volume_level, delivered_by, delivered_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        (id, session_id, puzzle_id, type, message, asset_url, volume_level, count_as_hint, delivered_by, delivered_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
-      .run(`hint-${Date.now()}`, sessionId, puzzleId, medium, message, assetUrl, volumeLevel, 'Console Operator', nowIso);
+      .run(`hint-${Date.now()}`, sessionId, puzzleId, medium, message, assetUrl, volumeLevel, countAsHint ? 1 : 0, 'Console Operator', nowIso);
 
-    // Only increment hints_used if countAsHint is not explicitly false (defaults to true)
-    const countAsHint = payload?.countAsHint !== false;
     if (countAsHint) {
       sqlite.prepare(`UPDATE sessions SET hints_used = hints_used + 1 WHERE id = ?`).run(sessionId);
     }
@@ -305,6 +328,9 @@ class CommandsState {
     // Emit to Room Display
     const timerSlugs = timerSlugBySessionStmt.all(sessionId) as { slug: string }[];
     const game = getGameDetails(session.gameId);
+
+    // Re-read textHintSoundAssetUrl after potential lookup
+    const finalTextHintSoundAssetUrl = payload?.textHintSoundAssetUrl ? String(payload.textHintSoundAssetUrl).trim() : null;
 
     for (const { slug } of timerSlugs) {
       emitRoomDisplayMedia({
@@ -325,7 +351,8 @@ class CommandsState {
                 textColor: game?.roomDisplayConfig?.textHintTextColor ?? '#000000',
                 backgroundColor: game?.roomDisplayConfig?.textHintBackgroundColor ?? '#FFA500'
               }
-            : undefined
+            : undefined,
+        textHintSoundAssetUrl: medium === 'text' ? finalTextHintSoundAssetUrl : undefined
       });
     }
 

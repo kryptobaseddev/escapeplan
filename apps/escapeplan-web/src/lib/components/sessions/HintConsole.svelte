@@ -38,8 +38,7 @@
 
   <form class="mt-3 space-y-2" onsubmit={onSubmit}>
     <label class="form-control">
-      <span class="label-text text-[10px] md:text-xs uppercase tracking-[0.3em] text-base-content/50">Hint message</span>
-      <textarea class="textarea textarea-bordered textarea-sm mt-1 bg-base-100/60" name="message" required rows="2" placeholder="Team is stuck on the cipher..."></textarea>
+      <textarea class="textarea textarea-bordered textarea-sm bg-base-100/60" name="message" required rows="2" placeholder="Team is stuck on the cipher..."></textarea>
     </label>
 
     <button class={`btn btn-primary btn-sm w-full mt-3 ${isTextHintPlaying ? 'media-playing' : ''}`} type="submit">

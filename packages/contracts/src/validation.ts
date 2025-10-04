@@ -353,7 +353,12 @@ export const createCameraSchema = z.object({
 
   // Feature Settings
   irMode: z.enum(['auto', 'on', 'off']).default('auto'),
-  audioVolume: z.number().int().min(0).max(100).default(80)
+  audioVolume: z.number().int().min(0).max(100).default(80),
+
+  // PTZ Settings
+  ptzPan: z.number().int().min(-180).max(180).default(0),
+  ptzTilt: z.number().int().min(-90).max(90).default(0),
+  ptzZoom: z.number().int().min(0).max(100).default(0)
 });
 
 export const updateCameraSchema = z.object({
@@ -396,6 +401,35 @@ export const updateCameraSchema = z.object({
 
 export type CreateCameraRequest = z.infer<typeof createCameraSchema>;
 export type UpdateCameraRequest = z.infer<typeof updateCameraSchema>;
+
+// ============================================================================
+// ROOM DISPLAY EVENTS
+// ============================================================================
+
+/**
+ * Room Display Media Event schema
+ * Used for validating WebSocket events sent to room displays
+ */
+export const roomDisplayMediaEventSchema = z.object({
+  slug: z.string(),
+  sessionId: z.string(),
+  mediaType: z.enum(['text', 'image', 'audio', 'video']),
+  content: z.string(),
+  volumeLevel: z.number().int().min(0).max(100).optional(),
+  loop: z.boolean().optional(),
+  loopCount: z.number().int().positive().optional(),
+  autoDismiss: z.boolean().optional(),
+  displayDurationSeconds: z.number().int().positive().optional(),
+  triggeredAt: z.string(),
+  source: z.enum(['hint', 'milestone']),
+  textHintColors: z.object({
+    textColor: z.string(),
+    backgroundColor: z.string()
+  }).optional(),
+  textHintSoundAssetUrl: z.string().nullable().optional()
+});
+
+export type RoomDisplayMediaEvent = z.infer<typeof roomDisplayMediaEventSchema>;
 
 // ============================================================================
 // SYSTEM HEALTH

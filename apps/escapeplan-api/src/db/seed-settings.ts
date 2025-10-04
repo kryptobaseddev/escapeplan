@@ -146,6 +146,15 @@ export async function seedSystemSettings() {
       description: 'How far in advance bookings can be made',
       is_editable: true
     },
+    {
+      key: SETTING_KEYS.BUSINESS.DEFAULT_TEXT_HINT_SOUND_ASSET_ID,
+      value: String(BUSINESS_DEFAULTS.DEFAULT_TEXT_HINT_SOUND_ASSET_ID ?? 'null'),
+      type: 'string',
+      category: 'business',
+      label: 'Default Text Hint Sound Asset ID',
+      description: 'Asset ID for the background sound that plays when text hints are displayed',
+      is_editable: true
+    },
 
     // ========== USER VALIDATION SETTINGS ==========
     {

@@ -53,6 +53,8 @@ export function getBackupBasePath(): string {
  */
 export function getAssetSubPath(assetType: string, mediaType?: string): string {
   switch (assetType) {
+    case 'system_audio':
+      return 'audio/system';
     case 'thumbnail':
       return 'images/thumbnails';
     case 'room_background':
@@ -92,7 +94,7 @@ export function slugify(text: string): string {
  * Generate filename for asset
  */
 export function generateAssetFilename(params: {
-  gameSlug: string;
+  gameSlug: string | null;
   puzzleSlug?: string;
   assetType: string;
   mediaType?: string;
@@ -102,25 +104,28 @@ export function generateAssetFilename(params: {
   const { gameSlug, puzzleSlug, assetType, mediaType, order, extension } = params;
   const uuid = crypto.randomUUID().slice(0, 8); // Short UUID
 
+  // Use 'system' prefix for null gameSlug or 'system' gameSlug
+  const slug = gameSlug || 'system';
+
   // For hint media
   if (assetType === 'hint_media' && puzzleSlug && mediaType) {
     const orderStr = order ? `-${order}` : '';
-    return `${gameSlug}-${puzzleSlug}-hint-${mediaType}${orderStr}-${uuid}.${extension}`;
+    return `${slug}-${puzzleSlug}-hint-${mediaType}${orderStr}-${uuid}.${extension}`;
   }
 
   // For milestone media
   if (assetType === 'milestone_media' && mediaType) {
-    return `${gameSlug}-milestone-${mediaType}-${uuid}.${extension}`;
+    return `${slug}-milestone-${mediaType}-${uuid}.${extension}`;
   }
 
   // For gallery (numbered)
   if (assetType === 'gallery' && order) {
-    return `${gameSlug}-gallery-${order}-${uuid}.${extension}`;
+    return `${slug}-gallery-${order}-${uuid}.${extension}`;
   }
 
-  // For other types
+  // For other types (including system_audio)
   const typeSlug = assetType.replace('_', '-');
-  return `${gameSlug}-${typeSlug}-${uuid}.${extension}`;
+  return `${slug}-${typeSlug}-${uuid}.${extension}`;
 }
 
 /**
@@ -149,6 +154,11 @@ export function getExtensionFromMime(mimeType: string): string {
  * Get allowed MIME types for asset type
  */
 export function getAllowedMimeTypes(assetType: string, mediaType?: string): string[] {
+  // System audio only accepts audio types
+  if (assetType === 'system_audio') {
+    return ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm'];
+  }
+
   if (assetType === 'hint_media' || assetType === 'milestone_media') {
     if (mediaType === 'image') {
       return ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];

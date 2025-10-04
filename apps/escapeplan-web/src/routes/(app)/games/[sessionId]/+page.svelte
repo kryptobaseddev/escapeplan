@@ -173,13 +173,7 @@
   />
 
   <div class="grid gap-4 md:gap-6 lg:grid-cols-[2fr_1fr]">
-    <section class="space-y-4 md:space-y-6">
-      <HintConsole
-        {session}
-        {hintFormError}
-        onSubmit={handleHint}
-      />
-
+    <section class="space-y-4 md:space-y-6 order-2 lg:order-1">
       <GameMilestones
         {session}
         onTriggerMilestone={triggerMilestone}
@@ -196,7 +190,13 @@
       <LiveFeed {session} />
     </section>
 
-    <aside class="space-y-4 md:space-y-6">
+    <aside class="space-y-4 md:space-y-6 order-1 lg:order-2">
+      <HintConsole
+        {session}
+        {hintFormError}
+        onSubmit={handleHint}
+      />
+
       {#if session.backgroundAudio}
         <div class="glass-panel border-white/10 bg-base-200/70 p-4">
           <h2 class="text-base md:text-lg font-semibold text-base-content">Audio</h2>

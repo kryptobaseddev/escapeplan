@@ -79,7 +79,7 @@ import { initializeSettings, settings } from './settings.js';
 import { seedSystemSettings } from './db/seed-settings.js';
 import { auth, requireSession } from './auth.js';
 import { db, sqlite } from './db/client.js';
-import { operators, alertRules, systemLogs, cameras, games } from '@escapeplan/contracts';
+import { operators, alertRules, systemLogs, cameras, games, assets } from '@escapeplan/contracts';
 import { eq, and, like, count, desc } from 'drizzle-orm';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
@@ -1444,15 +1444,50 @@ export async function buildServer() {
       return handleAssetUpload(request, reply);
     });
 
+    // Get single asset by ID
     api.get('/assets/:id', async (request, reply) => {
+      // Require authentication
       const session = await ensureAuth(request, reply);
       if (!session) return;
+
       const { id } = request.params as { id: string };
-      const asset = await getAssetById(id);
-      if (!asset) {
-        return reply.code(404).send({ error: 'Asset not found' });
+
+      try {
+        // Query asset from database
+        const asset = await db.query.assets.findFirst({
+          where: eq(assets.id, id)
+        });
+
+        if (!asset) {
+          return reply.code(404).send({ error: { code: 'NOT_FOUND', message: 'Asset not found' } });
+        }
+
+        // Construct full URL for the asset
+        const assetUrl = `/assets/${asset.file_path}`;
+
+        return reply.send({
+          asset: {
+            id: asset.id,
+            filename: asset.filename,
+            originalFilename: asset.original_filename,
+            mimeType: asset.mime_type,
+            sizeBytes: asset.size_bytes,
+            assetType: asset.asset_type,
+            mediaType: asset.media_type,
+            url: assetUrl,
+            gameId: asset.game_id,
+            puzzleId: asset.puzzle_id,
+            hintOrder: asset.hint_order,
+            isReusable: asset.is_reusable,
+            uploadedBy: asset.uploaded_by,
+            uploadedAt: asset.uploaded_at,
+            metadata: typeof asset.metadata === 'string' ? JSON.parse(asset.metadata) : (asset.metadata || null)
+          }
+        });
+      } catch (error: any) {
+        console.error('Error fetching asset:', error);
+        return reply.code(500).send({ error: { code: 'INTERNAL_ERROR', message: error.message } });
       }
-      return { asset };
     });
 
     api.get('/assets/list', async (request, reply) => {

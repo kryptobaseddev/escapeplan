@@ -298,23 +298,8 @@ export interface RoomDisplayConfig {
   timerOpacity?: number;
 }
 
-export interface RoomDisplayMediaEvent {
-  slug: string;
-  sessionId: string;
-  mediaType: 'text' | 'image' | 'audio' | 'video';
-  content: string; // Text content OR asset URL
-  volumeLevel?: number; // For audio/video (0-100)
-  loop?: boolean;
-  loopCount?: number; // undefined = infinite
-  autoDismiss?: boolean; // Auto-close after playback
-  displayDurationSeconds?: number; // For images or override
-  triggeredAt: string;
-  source: 'hint' | 'milestone'; // Track origin
-  textHintColors?: {
-    textColor: string;
-    backgroundColor: string;
-  };
-}
+// RoomDisplayMediaEvent is now exported from validation.ts as a Zod-inferred type
+// This ensures runtime validation and TypeScript types stay in sync
 
 export type RoomDisplayPlaybackStatus = 'playing' | 'finished' | 'dismissed';
 
@@ -861,6 +846,9 @@ export interface CreateCameraRequest {
   // Feature Settings
   irMode?: IRMode;
   audioVolume?: number;
+  ptzPan?: number; // -180 to 180
+  ptzTilt?: number; // -90 to 90
+  ptzZoom?: number; // 0-100
 }
 
 export interface UpdateCameraRequest {
