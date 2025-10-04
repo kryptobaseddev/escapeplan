@@ -108,6 +108,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build contracts (required dependency)
+        run: pnpm --filter @escapeplan/contracts build
+
       - name: Lint ${{ matrix.package }}
         run: ${{ matrix.lint_cmd }}
 

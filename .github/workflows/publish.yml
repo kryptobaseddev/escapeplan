@@ -43,14 +43,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build all packages
-        run: |
-          pnpm --filter @escapeplan/contracts build
-          pnpm --filter escapeplan-api build
-          pnpm --filter escapeplan-web build
+      - name: Build contracts (required for tests)
+        run: pnpm --filter @escapeplan/contracts build
 
       - name: Run tests
         run: pnpm run test
+
+      - name: Build API and Web
+        run: |
+          pnpm --filter escapeplan-api build
+          pnpm --filter escapeplan-web build
 
       # Package
       - name: Build Debian package
