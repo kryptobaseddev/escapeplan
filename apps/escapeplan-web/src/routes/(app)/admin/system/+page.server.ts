@@ -32,7 +32,7 @@ export const load: PageServerLoad = async (event) => {
 		: 'health';
 
 	// Load data for all tabs in parallel
-	const [networkData, alertsData, logsData, storageData, settingsData] = await Promise.allSettled([
+	const [networkData, alertsData, logsData, storageData, settingsData, rolesData] = await Promise.allSettled([
 		// Network tab
 		canViewNetwork ? apiFetch<NetworkProfile>('/admin/network').catch(() => null) : null,
 
@@ -78,7 +78,12 @@ export const load: PageServerLoad = async (event) => {
 		// Settings tab
 		canManageSystemHealth
 			? apiFetch<{ settings: any }>('/admin/settings').catch(() => ({ settings: {} }))
-			: { settings: {} }
+			: { settings: {} },
+
+		// Roles data for settings default role dropdown
+		canManageSystemHealth
+			? apiFetch<Array<{ id: string; name: string; user_type_scope: string }>>('/admin/roles').catch(() => [])
+			: []
 	]);
 
 	return {
@@ -95,6 +100,7 @@ export const load: PageServerLoad = async (event) => {
 		alertRules: alertsData.status === 'fulfilled' ? alertsData.value : [],
 		logsData: logsData.status === 'fulfilled' ? logsData.value : { logs: [], total: 0, page: 1 },
 		storageMetrics: storageData.status === 'fulfilled' ? storageData.value : null,
-		systemSettings: settingsData.status === 'fulfilled' ? settingsData.value.settings : {}
+		systemSettings: settingsData.status === 'fulfilled' ? settingsData.value.settings : {},
+		availableRoles: rolesData.status === 'fulfilled' ? rolesData.value : []
 	};
 };

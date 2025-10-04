@@ -4,12 +4,14 @@
   import { goto } from '$app/navigation';
   import { enhance } from '$app/forms';
   import type {
+    CameraBrand,
     CameraProtocol,
     CameraResolution,
     CameraTransport,
-    GameDetails
+    CameraTemplate
   } from '@escapeplan/contracts';
   import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
   import { createFormHandler } from '$lib/utils/forms';
   import type { PageData } from './$types';
 
@@ -18,35 +20,97 @@
   const protocolOptions: CameraProtocol[] = ['rtsp', 'mjpeg', 'onvif'];
   const resolutionOptions: CameraResolution[] = ['480p', '720p', '1080p', 'native'];
   const transportOptions: CameraTransport[] = ['tcp', 'udp', 'http'];
+  const irModeOptions = ['auto', 'on', 'off'] as const;
 
   let errorMessage = $state<string | null>(null);
   let testResult = $state<{ success: boolean; errorMessage?: string; diagnostics?: any } | null>(null);
   let isTesting = $state(false);
   let isSubmitting = $state(false);
 
-  // Form fields - initialized from camera data
+  // Brand/Model/Template selection - initialize from camera data
+  let selectedBrand = $state<CameraBrand>((data.camera.brand as CameraBrand) || 'generic');
+  let selectedTemplateId = $state<string>('');
+  let availableTemplatesForBrand = $derived<CameraTemplate[]>(
+    selectedBrand === 'generic'
+      ? data.templates.templates.filter((t) => t.brand === 'generic')
+      : data.templates.templates.filter((t) => t.brand === selectedBrand)
+  );
+
+  // Form fields - initialize from camera data
   let nameValue = $state(data.camera.name);
+  let modelValue = $state(data.camera.model || '');
   let protocolValue = $state<CameraProtocol>(data.camera.protocol as CameraProtocol);
   let hostValue = $state(data.camera.host);
   let portValue = $state(data.camera.port);
-  let usernameValue = $state('');
-  let passwordValue = $state('');
-  let streamPathValue = $state('');
-  let resolutionValue = $state<CameraResolution>('720p');
-  let frameRateValue = $state(15);
-  let transportValue = $state<CameraTransport>('tcp');
-  let gameIdValue = $state<string>(data.camera.gameId ?? '');
+  let usernameValue = $state(data.camera.username || '');
+  let passwordValue = $state(''); // Don't pre-fill password for security
+  let mainStreamPathValue = $state(data.camera.mainStreamPath || '');
+  let subStreamPathValue = $state(data.camera.subStreamPath || '');
+  let resolutionValue = $state<CameraResolution>((data.camera.resolution as CameraResolution) || '720p');
+  let frameRateValue = $state(data.camera.frameRate || 15);
+  let transportValue = $state<CameraTransport>((data.camera.transport as CameraTransport) || 'tcp');
+  let gameIdValue = $state<string>(data.camera.gameId || '');
+
+  // Camera capabilities - initialize from camera data
+  let hasPtzValue = $state(data.camera.hasPtz || false);
+  let hasAudioValue = $state(data.camera.hasAudio || false);
+  let hasIrControlValue = $state(data.camera.hasIrControl || false);
+
+  // Feature settings - initialize from camera data
+  let irModeValue = $state<'auto' | 'on' | 'off'>((data.camera.irMode as 'auto' | 'on' | 'off') || 'auto');
+  let audioVolumeValue = $state(data.camera.audioVolume || 50);
+
+  function applyTemplate(template: CameraTemplate | undefined) {
+    if (!template) return;
+
+    // Apply network settings
+    portValue = template.defaultPort;
+    protocolValue = template.protocol as CameraProtocol;
+    mainStreamPathValue = template.mainStreamPath || '';
+    subStreamPathValue = template.subStreamPath || '';
+    transportValue = template.recommendedSettings.transport as CameraTransport;
+
+    // Apply capabilities
+    hasPtzValue = template.hasPtz;
+    hasAudioValue = template.hasAudio;
+    hasIrControlValue = template.hasIr || false;
+
+    // Apply model if not already set
+    if (!modelValue) {
+      modelValue = template.model;
+    }
+
+    // Apply recommended settings
+    frameRateValue = template.recommendedSettings.mainFps || 15;
+
+    console.log('[Camera Edit] Applied template:', template.id);
+  }
+
+  function handleBrandChange() {
+    selectedTemplateId = '';
+    // Reset to brand defaults
+    const brandDefaults = data.templates.brandDefaults?.[selectedBrand];
+    if (brandDefaults) {
+      portValue = brandDefaults.defaultPort || 554;
+      protocolValue = brandDefaults.protocol as CameraProtocol;
+      transportValue = brandDefaults.transport as CameraTransport;
+    }
+  }
+
+  function handleTemplateChange() {
+    const template = data.templates.templates.find((t) => t.id === selectedTemplateId);
+    if (template) {
+      applyTemplate(template);
+    }
+  }
 
   function handleProtocolChange() {
     if (protocolValue === 'rtsp') {
-      portValue = 554;
-      streamPathValue = '/';
+      if (!selectedTemplateId) portValue = 554;
     } else if (protocolValue === 'mjpeg') {
       portValue = 80;
-      streamPathValue = '/video.mjpg';
     } else if (protocolValue === 'onvif') {
       portValue = 554;
-      streamPathValue = '/onvif1';
     }
   }
 
@@ -104,26 +168,26 @@
       </div>
 
       {#if errorMessage}
-        <div class="alert alert-error mb-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
-        </div>
+        <Alert type="error" class="mb-4">
+          {errorMessage}
+        </Alert>
       {/if}
 
       {#if testResult}
-        <div class={`alert mb-4 ${testResult.success ? 'alert-success border-success/30 bg-success/10' : 'alert-warning border-warning/30 bg-warning/10'}`}>
+        <Alert type={testResult.success ? 'success' : 'warning'} class="mb-4">
           {#if testResult.success}
             <div>
-              <p class="font-semibold">Connection successful!</p>
+              <p class="font-semibold">✓ Connection successful!</p>
               {#if testResult.diagnostics?.resolution}
-                <p class="text-sm">
+                <p class="text-sm mt-1">
                   Resolution: {testResult.diagnostics.resolution} @ {testResult.diagnostics.frameRate}fps
                 </p>
               {/if}
             </div>
           {:else}
             <div>
-              <p class="font-semibold">Connection failed</p>
-              <p class="text-sm">{testResult.errorMessage ?? 'Unknown error'}</p>
+              <p class="font-semibold">✗ Connection failed</p>
+              <p class="text-sm mt-1">{testResult.errorMessage ?? 'Unknown error'}</p>
               {#if testResult.diagnostics}
                 <p class="text-xs mt-1">
                   {testResult.diagnostics.reachable ? '✓' : '✗'} Reachable •
@@ -133,7 +197,7 @@
               {/if}
             </div>
           {/if}
-        </div>
+        </Alert>
       {/if}
     </div>
   </header>
@@ -158,6 +222,70 @@
             />
             <span class="label-text-alt">Enter a descriptive name (minimum 3 characters)</span>
           </label>
+
+          <!-- Brand & Model Selection -->
+          <div class="border border-base-300 rounded-lg p-4 space-y-4">
+            <h3 class="text-sm font-semibold">Camera Brand & Model</h3>
+            <div class="grid grid-cols-2 gap-4">
+              <label class="form-control">
+                <span class="label-text">Brand <span class="text-error">*</span></span>
+                <select
+                  name="brand"
+                  class="select select-bordered"
+                  bind:value={selectedBrand}
+                  onchange={handleBrandChange}
+                  required
+                >
+                  <option value="reolink">Reolink</option>
+                  <option value="hikvision">Hikvision</option>
+                  <option value="dahua">Dahua</option>
+                  <option value="amcrest">Amcrest</option>
+                  <option value="axis">Axis</option>
+                  <option value="tapo">TP-Link Tapo</option>
+                  <option value="tplink">TP-Link VIGI</option>
+                  <option value="foscam">Foscam</option>
+                  <option value="generic">Generic/Other</option>
+                </select>
+              </label>
+
+              <label class="form-control">
+                <span class="label-text">Model Template</span>
+                <select
+                  class="select select-bordered"
+                  bind:value={selectedTemplateId}
+                  onchange={handleTemplateChange}
+                >
+                  <option value="">Select model...</option>
+                  {#each availableTemplatesForBrand as template}
+                    <option value={template.id}>{template.displayName}</option>
+                  {/each}
+                </select>
+                <span class="label-text-alt">Auto-fills connection settings</span>
+              </label>
+            </div>
+
+            {#if selectedTemplateId}
+              {@const template = data.templates.templates.find((t) => t.id === selectedTemplateId)}
+              {#if template?.notes}
+                <div class="bg-info/10 border border-info/30 rounded p-3 text-sm text-info-content">
+                  <p class="font-semibold mb-1">📝 Template Notes:</p>
+                  <p>{template.notes}</p>
+                </div>
+              {/if}
+            {/if}
+
+            <label class="form-control">
+              <span class="label-text">Model Name (Optional)</span>
+              <input
+                type="text"
+                name="model"
+                class="input input-bordered"
+                bind:value={modelValue}
+                placeholder="RLC-810A"
+              />
+              <span class="label-text-alt">Specific model number for your records</span>
+            </label>
+          </div>
 
           <!-- Network Configuration -->
           <div class="border border-base-300 rounded-lg p-4 space-y-4">
@@ -199,7 +327,7 @@
                   class="input input-bordered"
                   bind:value={hostValue}
                   required
-                  placeholder="192.168.1.100"
+                  placeholder="10.10.10.100"
                 />
               </label>
 
@@ -220,7 +348,7 @@
 
           <!-- Authentication -->
           <div class="border border-base-300 rounded-lg p-4 space-y-4">
-            <h3 class="text-sm font-semibold">Authentication (Optional)</h3>
+            <h3 class="text-sm font-semibold">Authentication</h3>
             <div class="grid grid-cols-2 gap-4">
               <label class="form-control">
                 <span class="label-text">Username</span>
@@ -240,26 +368,39 @@
                   name="password"
                   class="input input-bordered"
                   bind:value={passwordValue}
-                  placeholder="••••••••"
+                  placeholder="Leave blank to keep current"
                 />
+                <span class="label-text-alt">Only enter if changing password</span>
               </label>
             </div>
           </div>
 
-          <!-- Stream Configuration -->
+          <!-- Dual Stream Configuration -->
           <div class="border border-base-300 rounded-lg p-4 space-y-4">
             <h3 class="text-sm font-semibold">Stream Configuration</h3>
-            <div class="grid grid-cols-3 gap-4">
-              <label class="form-control col-span-3">
-                <span class="label-text">Stream Path</span>
+            <div class="grid grid-cols-2 gap-4">
+              <label class="form-control col-span-2">
+                <span class="label-text">Main Stream Path</span>
                 <input
                   type="text"
-                  name="streamPath"
+                  name="mainStreamPath"
                   class="input input-bordered"
-                  bind:value={streamPathValue}
-                  placeholder="/stream1"
+                  bind:value={mainStreamPathValue}
+                  placeholder="/Preview_01_main"
                 />
-                <span class="label-text-alt">Example: /stream1 or /live/main</span>
+                <span class="label-text-alt">High-res stream for recording</span>
+              </label>
+
+              <label class="form-control col-span-2">
+                <span class="label-text">Sub Stream Path</span>
+                <input
+                  type="text"
+                  name="subStreamPath"
+                  class="input input-bordered"
+                  bind:value={subStreamPathValue}
+                  placeholder="/Preview_01_sub"
+                />
+                <span class="label-text-alt">Low-res stream for live view (saves bandwidth)</span>
               </label>
 
               <label class="form-control">
@@ -276,7 +417,7 @@
               </label>
 
               <label class="form-control">
-                <span class="label-text">Frame Rate</span>
+                <span class="label-text">Frame Rate (FPS)</span>
                 <input
                   type="number"
                   name="frameRate"
@@ -287,7 +428,7 @@
                 />
               </label>
 
-              <label class="form-control">
+              <label class="form-control col-span-2">
                 <span class="label-text">Assign to Game</span>
                 <select
                   name="gameId"
@@ -301,6 +442,56 @@
                 </select>
               </label>
             </div>
+          </div>
+
+          <!-- Camera Capabilities -->
+          <div class="border border-base-300 rounded-lg p-4 space-y-4">
+            <h3 class="text-sm font-semibold">Camera Capabilities</h3>
+            <div class="flex flex-wrap gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasPtzValue} />
+                <input type="hidden" name="hasPtz" value={hasPtzValue ? 'true' : 'false'} />
+                <span class="label-text">PTZ (Pan/Tilt/Zoom)</span>
+              </label>
+
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasAudioValue} />
+                <input type="hidden" name="hasAudio" value={hasAudioValue ? 'true' : 'false'} />
+                <span class="label-text">Audio</span>
+              </label>
+
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" class="checkbox checkbox-sm" bind:checked={hasIrControlValue} />
+                <input type="hidden" name="hasIrControl" value={hasIrControlValue ? 'true' : 'false'} />
+                <span class="label-text">IR Control</span>
+              </label>
+            </div>
+
+            {#if hasIrControlValue}
+              <label class="form-control max-w-xs">
+                <span class="label-text">IR Mode</span>
+                <select name="irMode" class="select select-bordered select-sm" bind:value={irModeValue}>
+                  {#each irModeOptions as mode}
+                    <option value={mode}>{mode.charAt(0).toUpperCase() + mode.slice(1)}</option>
+                  {/each}
+                </select>
+              </label>
+            {/if}
+
+            {#if hasAudioValue}
+              <label class="form-control max-w-xs">
+                <span class="label-text">Audio Volume: {audioVolumeValue}%</span>
+                <input
+                  type="range"
+                  name="audioVolume"
+                  class="range range-sm"
+                  min="0"
+                  max="100"
+                  step="5"
+                  bind:value={audioVolumeValue}
+                />
+              </label>
+            {/if}
           </div>
 
           <div class="flex justify-end">
@@ -319,16 +510,24 @@
       <form method="POST" use:enhance={handleSubmit}>
         <!-- Hidden fields to carry over values -->
         <input type="hidden" name="name" value={nameValue} />
+        <input type="hidden" name="brand" value={selectedBrand} />
+        <input type="hidden" name="model" value={modelValue} />
         <input type="hidden" name="protocol" value={protocolValue} />
         <input type="hidden" name="host" value={hostValue} />
         <input type="hidden" name="port" value={portValue} />
         <input type="hidden" name="username" value={usernameValue} />
         <input type="hidden" name="password" value={passwordValue} />
-        <input type="hidden" name="streamPath" value={streamPathValue} />
+        <input type="hidden" name="mainStreamPath" value={mainStreamPathValue} />
+        <input type="hidden" name="subStreamPath" value={subStreamPathValue} />
         <input type="hidden" name="resolution" value={resolutionValue} />
         <input type="hidden" name="frameRate" value={frameRateValue} />
         <input type="hidden" name="transport" value={transportValue} />
         <input type="hidden" name="gameId" value={gameIdValue} />
+        <input type="hidden" name="hasPtz" value={hasPtzValue ? 'true' : 'false'} />
+        <input type="hidden" name="hasAudio" value={hasAudioValue ? 'true' : 'false'} />
+        <input type="hidden" name="hasIrControl" value={hasIrControlValue ? 'true' : 'false'} />
+        <input type="hidden" name="irMode" value={irModeValue} />
+        <input type="hidden" name="audioVolume" value={audioVolumeValue} />
       </form>
     </div>
   </main>

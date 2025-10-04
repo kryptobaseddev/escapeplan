@@ -164,12 +164,30 @@
           <header class="flex items-start justify-between">
             <div class="flex-1">
               <h3 class="text-base font-semibold text-base-content">{camera.name}</h3>
-              <p class="text-xs text-base-content/50">
+              {#if camera.brand && camera.model}
+                <p class="text-xs text-base-content/60 capitalize mt-0.5">
+                  {camera.brand} {camera.model}
+                </p>
+              {:else if camera.brand}
+                <p class="text-xs text-base-content/60 capitalize mt-0.5">{camera.brand}</p>
+              {/if}
+              <p class="text-xs text-base-content/50 mt-1">
                 {protocolBadge(camera.protocol)} • {camera.host}:{camera.port}
               </p>
               {#if camera.gameName}
                 <p class="text-xs text-base-content/40 mt-1">Game: {camera.gameName}</p>
               {/if}
+              <div class="flex gap-1 mt-2">
+                {#if camera.hasPtz}
+                  <span class="badge badge-xs badge-outline">PTZ</span>
+                {/if}
+                {#if camera.hasAudio}
+                  <span class="badge badge-xs badge-outline">Audio</span>
+                {/if}
+                {#if camera.hlsStreaming}
+                  <span class="badge badge-xs badge-info">Streaming</span>
+                {/if}
+              </div>
             </div>
             <span class={`badge badge-sm ${statusBadge(camera.status).class}`}>
               {statusBadge(camera.status).text}
@@ -249,6 +267,13 @@
                     </div>
                     <div>
                       <p class="font-medium text-base-content">{camera.name}</p>
+                      {#if camera.brand && camera.model}
+                        <p class="text-xs text-base-content/60 capitalize">
+                          {camera.brand} {camera.model}
+                        </p>
+                      {:else if camera.brand}
+                        <p class="text-xs text-base-content/60 capitalize">{camera.brand}</p>
+                      {/if}
                       {#if camera.lastSeen}
                         <p class="text-xs text-base-content/50">Last seen: {camera.lastSeen}</p>
                       {/if}
@@ -269,12 +294,20 @@
                   {/if}
                 </td>
                 <td>
-                  <span class={`badge badge-sm ${statusBadge(camera.status).class}`}>
-                    {statusBadge(camera.status).text}
-                  </span>
-                  {#if camera.hlsStreaming}
-                    <span class="badge badge-sm badge-info ml-1">Streaming</span>
-                  {/if}
+                  <div class="flex flex-wrap gap-1">
+                    <span class={`badge badge-sm ${statusBadge(camera.status).class}`}>
+                      {statusBadge(camera.status).text}
+                    </span>
+                    {#if camera.hlsStreaming}
+                      <span class="badge badge-sm badge-info">Streaming</span>
+                    {/if}
+                    {#if camera.hasPtz}
+                      <span class="badge badge-sm badge-outline" title="PTZ Capable">PTZ</span>
+                    {/if}
+                    {#if camera.hasAudio}
+                      <span class="badge badge-sm badge-outline" title="Has Audio">🔊</span>
+                    {/if}
+                  </div>
                 </td>
                 {#if canManageCameras}
                   <td>

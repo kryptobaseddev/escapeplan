@@ -218,8 +218,8 @@
               <div>
                 <h3 class="text-sm uppercase tracking-wider text-base-content/50 mb-2">Default Volume</h3>
                 <div class="flex items-center gap-2">
-                  <progress class="progress progress-primary w-32" value={game.defaultVolume} max="100"></progress>
-                  <span class="text-sm">{game.defaultVolume}%</span>
+                  <progress class="progress progress-primary w-56" value={game.defaultVolume ?? 80} max="100"></progress>
+                  <span class="text-sm">{game.defaultVolume ?? 80}%</span>
                 </div>
               </div>
             </div>

@@ -46,6 +46,21 @@ function buildTestUrl(req: TestCameraConnectionRequest): string {
 export async function testCameraConnection(
   req: TestCameraConnectionRequest
 ): Promise<TestCameraConnectionResponse> {
+  // Check if ffprobe is available
+  try {
+    await execAsync('which ffprobe');
+  } catch (error) {
+    return {
+      success: false,
+      errorMessage: 'ffprobe not installed. Install ffmpeg to enable connection testing.',
+      diagnostics: {
+        reachable: false,
+        authValid: false,
+        streamAvailable: false
+      }
+    };
+  }
+
   const url = buildTestUrl(req);
 
   // Use ffprobe to test connection with 5-second timeout

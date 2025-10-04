@@ -9,6 +9,7 @@
 
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { mkdirSync } from 'node:fs';
 import { runtime } from './runtime.js';
 
 /**
@@ -160,8 +161,17 @@ export function getAllowedMimeTypes(assetType: string, mediaType?: string): stri
     }
   }
 
-  // Images for thumbnails, room backgrounds, gallery, puzzle media
-  if (['thumbnail', 'room_background', 'gallery', 'puzzle_media'].includes(assetType)) {
+  // Gallery supports all media types (images, audio, video)
+  if (assetType === 'gallery') {
+    return [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg',
+      'video/mp4', 'video/webm', 'video/ogg'
+    ];
+  }
+
+  // Images only for thumbnails, room backgrounds, puzzle media
+  if (['thumbnail', 'room_background', 'puzzle_media'].includes(assetType)) {
     return ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   }
 
@@ -219,5 +229,11 @@ export async function ensureBackupDirectory(): Promise<string> {
 export async function ensureDataDirectory(): Promise<string> {
   const dataPath = runtime.dataDir;
   await fs.mkdir(dataPath, { recursive: true });
+  return dataPath;
+}
+
+export function ensureDataDirectorySync(): string {
+  const dataPath = runtime.dataDir;
+  mkdirSync(dataPath, { recursive: true });
   return dataPath;
 }

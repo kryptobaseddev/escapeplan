@@ -297,9 +297,10 @@ const networkProfileStmt = sqlite.prepare(
 );
 
 const gameByIdStmt = sqlite.prepare(
-  `SELECT id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories,
-          min_players, max_players, price_per_player_cents, resources_required, validation_notes, created_at, updated_at,
-          archived_at, archived_by, archived_reason
+  `SELECT id, slug, name, description, story_intro, duration_minutes, difficulty, game_type, pricing_model, category, categories,
+          min_players, max_players, price_per_player_cents, resources_required, validation_notes, default_volume, camera_ids,
+          media_config, room_display_config, pricing_config, booking_rules_config,
+          created_at, updated_at, archived_at, archived_by, archived_reason
    FROM games WHERE id = ? LIMIT 1`
 );
 
@@ -693,9 +694,9 @@ export function listGameDetails(filters: GameListFilters = {}): GameDetails[] {
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
   const stmt = sqlite.prepare(
-    `SELECT id, slug, name, description, story_intro, duration_minutes, difficulty, pricing_model, category, categories,
-            min_players, max_players, price_per_player_cents, resources_required, validation_notes,
-            media_config, pricing_config, booking_rules_config,
+    `SELECT id, slug, name, description, story_intro, duration_minutes, difficulty, game_type, pricing_model, category, categories,
+            min_players, max_players, price_per_player_cents, resources_required, validation_notes, default_volume, camera_ids,
+            media_config, room_display_config, pricing_config, booking_rules_config,
             created_at, updated_at, archived_at, archived_by, archived_reason
      FROM games
      ${whereClause}
@@ -824,6 +825,10 @@ function persistGameRelations(gameId: string, puzzles: GamePuzzleDefinition[]) {
 
   // Upsert puzzles
   for (const puzzle of puzzles) {
+    console.log(`[DEBUG] Persisting puzzle ${puzzle.id} (${puzzle.title}):`, {
+      hintsCount: puzzle.hints?.length || 0,
+      hints: puzzle.hints
+    });
     upsertPuzzle.run({
       id: puzzle.id,
       game_id: gameId,
@@ -912,11 +917,24 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
     throw new Error('Another game already uses that slug');
   }
 
+  console.log('[DEBUG] updateGame called with payload:', {
+    gameId,
+    puzzlesCount: payload.puzzles?.length || 0,
+    puzzles: payload.puzzles?.map(p => ({ id: p.id, title: p.title, hintsCount: p.hints?.length || 0 })),
+    media: payload.media,
+    roomDisplayConfig: payload.roomDisplayConfig
+  });
+
   const now = new Date().toISOString();
   const mediaConfig = payload.media ? JSON.stringify(payload.media) : null;
   const pricingConfig = payload.pricing ? JSON.stringify(payload.pricing) : null;
   const bookingRulesConfig = payload.bookingRules ? JSON.stringify(payload.bookingRules) : null;
   const roomDisplayConfig = payload.roomDisplayConfig ? JSON.stringify(payload.roomDisplayConfig) : null;
+
+  console.log('[DEBUG] Serialized configs:', {
+    mediaConfig,
+    roomDisplayConfig
+  });
   sqlite
     .prepare(
       `UPDATE games
@@ -970,6 +988,13 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
 
   const normalizedPuzzles = (payload.puzzles ?? []).map(normalizePuzzleInput);
 
+  console.log('[DEBUG] Normalized puzzles before persist:', normalizedPuzzles.map(p => ({
+    id: p.id,
+    title: p.title,
+    hintsCount: p.hints?.length || 0,
+    hints: p.hints
+  })));
+
   persistGameRelations(gameId, normalizedPuzzles);
 
   // Persist milestones
@@ -977,7 +1002,15 @@ export function updateGame(gameId: string, payload: SaveGameRequest): GameDetail
     persistGameMilestones(gameId, payload.milestones);
   }
 
-  return getGameDetails(gameId)!;
+  const result = getGameDetails(gameId)!;
+  console.log('[DEBUG] Game after update:', {
+    id: result.id,
+    media: result.media,
+    roomDisplayConfig: result.roomDisplayConfig,
+    puzzles: result.puzzles.map(p => ({ id: p.id, title: p.title, hintsCount: p.hints?.length || 0 }))
+  });
+
+  return result;
 }
 
 export function deleteGame(gameId: string) {
@@ -1997,11 +2030,20 @@ export function toTimerBroadcast(slug: string, details: GameSessionDetails, narr
   let background: { type: 'image' | 'video'; url: string };
 
   if (roomConfig?.backgroundType === 'asset' && roomConfig.backgroundAssetId) {
-    // Use configured asset
-    background = {
-      type: 'image', // TODO: detect from asset metadata
-      url: `/api/assets/${roomConfig.backgroundAssetId}`
-    };
+    // Use configured asset - look up the file_path from the database
+    const assetRow = sqlite.prepare('SELECT file_path, asset_type FROM assets WHERE id = ?').get(roomConfig.backgroundAssetId) as { file_path: string; asset_type: string } | undefined;
+    if (assetRow) {
+      background = {
+        type: assetRow.asset_type === 'video' ? 'video' : 'image',
+        url: `/assets/${assetRow.file_path}`
+      };
+    } else {
+      // Asset not found, fallback to dark gradient
+      background = {
+        type: 'image',
+        url: 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIwMCIgaGVpZ2h0PSI4MDAiIHZpZXdCb3g9IjAgMCAxMjAwIDgwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMCUiIHkyPSIxMDAlIj48c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjojMWExYTFhO3N0b3Atb3BhY2l0eToxIiAvPjxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6IzJkMmQyZDtzdG9wLW9wYWNpdHk6MSIgLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iMTIwMCIgaGVpZ2h0PSI4MDAiIGZpbGw9InVybCgjZykiIC8+PC9zdmc+'
+      };
+    }
   } else {
     // Fallback to dark gradient (NO camera stream)
     background = {
@@ -2017,7 +2059,8 @@ export function toTimerBroadcast(slug: string, details: GameSessionDetails, narr
     roomName: details.roomName,
     narrative,
     background,
-    timer: details.timer
+    timer: details.timer,
+    roomConfig
     // hintBanner removed - using room-display:media event instead
   };
 }
@@ -2653,12 +2696,6 @@ export function getPermissionMatrix(): import('@escapeplan/contracts').GetPermis
 }
 
 // Start the ticker - runs every 1000ms (1 second)
-const timerInterval = setInterval(tickTimers, 1000);
-
-// Ensure ticker stops if module unloads (for dev server restarts)
-if (typeof process !== "undefined") {
-  process.on("SIGTERM", () => clearInterval(timerInterval));
-  process.on("SIGINT", () => clearInterval(timerInterval));
-}
+export const timerInterval = setInterval(tickTimers, 1000);
 
 console.log("[Timer Ticker] Started - running every 1 second");

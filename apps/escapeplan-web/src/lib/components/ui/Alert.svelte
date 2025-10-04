@@ -22,12 +22,13 @@
 
 	let visible = $state(true);
 
-	// Derived type classes with enhanced styling
+	// Proper Tailwind classes with readable contrast on dark backgrounds
+	// Using white/light text on semi-transparent colored backgrounds
 	const typeClasses = {
-		info: 'alert-info border border-info/30 bg-info/10',
-		success: 'alert-success border border-success/30 bg-success/10',
-		warning: 'alert-warning border border-warning/30 bg-warning/10',
-		error: 'alert-error border border-error/30 bg-error/10'
+		info: 'border-info/50 bg-info/10 text-white',
+		success: 'border-success/50 bg-success/10 text-white',
+		warning: 'border-warning/50 bg-warning/10 text-white',
+		error: 'border-error/50 bg-error/10 text-white'
 	};
 	let typeClass = $derived(typeClasses[type as keyof typeof typeClasses]);
 
@@ -38,7 +39,7 @@
 </script>
 
 {#if visible}
-	<div class="alert {typeClass} text-sm {className || ''}">
+	<div class="flex items-start gap-2 rounded-lg border px-3 py-2 text-sm {typeClass} {className || ''}">
 		<div class="flex-1">
 			{@render children()}
 		</div>

@@ -127,9 +127,7 @@
       {/if}
 
       {#if errorMessage}
-        <div class="alert alert-error mb-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
-        </div>
+        <Alert type="error" class="mb-4">{errorMessage}</Alert>
       {/if}
     </div>
   </header>

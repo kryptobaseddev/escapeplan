@@ -548,24 +548,53 @@ export const cameras = sqliteTable('cameras', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   game_id: text('game_id').references(() => games.id, { onDelete: 'set null' }), // 1-to-1: camera can only be associated with one game
+
+  // Brand & Model
+  brand: text('brand').notNull().default('generic'), // 'reolink' | 'hikvision' | 'dahua' | 'amcrest' | 'axis' | 'tapo' | 'foscam' | 'tplink' | 'generic'
+  model: text('model'), // Specific model name for auto-configuration
+
+  // Connection Details
   protocol: text('protocol').notNull(), // 'rtsp' | 'mjpeg' | 'onvif'
   host: text('host').notNull(),
   port: integer('port').notNull().default(554),
   username: text('username'),
   password_encrypted: text('password_encrypted'), // Encrypted with libsodium
-  stream_path: text('stream_path'),
+
+  // Stream Paths (dual-stream support)
+  main_stream_path: text('main_stream_path'), // High-res stream path for recording
+  sub_stream_path: text('sub_stream_path'), // Low-res stream path for live viewing
+  stream_path: text('stream_path'), // DEPRECATED: Legacy single stream path
+
+  // Stream Settings (defaults, can be overridden per stream)
   resolution: text('resolution').default('720p'), // '480p' | '720p' | '1080p' | 'native'
   frame_rate: integer('frame_rate').default(15),
   transport: text('transport').default('tcp'), // 'tcp' | 'udp' | 'http'
+
+  // Camera Capabilities (boolean flags)
+  has_ptz: integer('has_ptz', { mode: 'boolean' }).notNull().default(false),
+  has_audio: integer('has_audio', { mode: 'boolean' }).notNull().default(false),
+  has_ir_control: integer('has_ir_control', { mode: 'boolean' }).notNull().default(false),
+
+  // Feature Settings
+  ir_mode: text('ir_mode').default('auto'), // 'auto' | 'on' | 'off'
+  audio_volume: integer('audio_volume').default(80), // 0-100
+  ptz_pan: integer('ptz_pan').default(0), // -180 to 180 degrees
+  ptz_tilt: integer('ptz_tilt').default(0), // -90 to 90 degrees
+  ptz_zoom: integer('ptz_zoom').default(0), // 0-100 (percentage)
+
+  // Status & Health
   status: text('status').default('offline'), // 'online' | 'offline' | 'testing' | 'error'
   last_seen: text('last_seen'),
   error_message: text('error_message'),
   hls_streaming: integer('hls_streaming', { mode: 'boolean' }).default(false),
+
+  // Timestamps
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => ({
   gameIdIdx: index('idx_cameras_game').on(table.game_id),
-  statusIdx: index('idx_cameras_status').on(table.status)
+  statusIdx: index('idx_cameras_status').on(table.status),
+  brandIdx: index('idx_cameras_brand').on(table.brand)
 }));
 
 // ============================================================================

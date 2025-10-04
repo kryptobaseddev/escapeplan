@@ -76,6 +76,9 @@
         gameName={timer.gameName}
         sessionId={timer.sessionId}
         position={timer.roomConfig?.timerPosition ?? 'center'}
+        textColor={timer.roomConfig?.timerTextColor ?? '#FFFFFF'}
+        backgroundColor={timer.roomConfig?.timerBackgroundColor ?? '#000000'}
+        opacity={timer.roomConfig?.timerOpacity ?? 80}
       />
     {/if}
 

@@ -6,6 +6,7 @@
   import type { PermissionSummary } from '@escapeplan/contracts';
   import { PERMISSION_LABELS } from '@escapeplan/contracts';
   import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
   import { createFormHandler } from '$lib/utils/forms';
   import type { PageData } from './$types';
 
@@ -107,9 +108,7 @@
       </div>
 
       {#if errorMessage}
-        <div class="alert alert-error mb-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
-        </div>
+        <Alert type="error" class="mb-4">{errorMessage}</Alert>
       {/if}
     </div>
   </header>

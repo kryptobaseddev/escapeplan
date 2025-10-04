@@ -8,6 +8,7 @@
   import Avatar from '$lib/avatar/Avatar.svelte';
   import { randomizeAvatarConfig } from '$lib/avatar/avatar-utils';
   import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
   import { createFormHandler } from '$lib/utils/forms';
   import type { PageData } from './$types';
 
@@ -95,9 +96,7 @@
       </div>
 
       {#if errorMessage}
-        <div class="alert alert-error mb-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
-        </div>
+        <Alert type="error" class="mb-4">{errorMessage}</Alert>
       {/if}
     </div>
   </header>
@@ -247,12 +246,7 @@
         </fieldset>
 
         <!-- Password Reset Note -->
-        <div class="alert alert-info border-info/30 bg-info/10">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" class="size-6 shrink-0">
-            <path fill="currentColor" d="M11 9h2V7h-2m1 13c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8m0-18A10 10 0 0 0 2 12a10 10 0 0 0 10 10 10 10 0 0 0 10-10A10 10 0 0 0 12 2m-1 15h2v-6h-2z"/>
-          </svg>
-          <span class="text-sm">To change the password, use the "Reset password" action from the users list.</span>
-        </div>
+        <Alert type="info">To change the password, use the "Reset password" action from the users list.</Alert>
       </form>
     </div>
   </main>

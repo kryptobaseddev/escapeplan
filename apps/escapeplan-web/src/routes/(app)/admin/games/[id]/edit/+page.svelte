@@ -18,10 +18,12 @@
   import { createFormHandler } from '$lib/utils/forms';
   import { slugify, uid } from '$lib/utils/game';
   import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
   import GameBasicInfoForm from '$lib/components/games/GameBasicInfoForm.svelte';
   import GameMediaSection from '$lib/components/games/GameMediaSection.svelte';
   import GamePuzzlesSection from '$lib/components/games/GamePuzzlesSection.svelte';
   import GameCamerasTab from '$lib/components/games/GameCamerasTab.svelte';
+  import GameRoomDisplayTab from '$lib/components/games/GameRoomDisplayTab.svelte';
   import GameBookingTab from '$lib/components/games/GameBookingTab.svelte';
   import GameMilestonesTab from '$lib/components/games/GameMilestonesTab.svelte';
   import HintModal from '$lib/components/games/HintModal.svelte';
@@ -29,7 +31,7 @@
 
   let { data }: { data: PageData } = $props();
 
-  type TabId = 'basic' | 'media' | 'puzzles' | 'cameras' | 'booking' | 'milestones';
+  type TabId = 'basic' | 'media' | 'puzzles' | 'cameras' | 'display' | 'booking' | 'milestones';
 
   interface EditableHint extends GameHintDefinition {
     // All fields inherited from GameHintDefinition
@@ -76,6 +78,7 @@
     { id: 'media', label: 'Media' },
     { id: 'puzzles', label: 'Puzzles' },
     { id: 'cameras', label: 'Cameras' },
+    { id: 'display', label: 'Display' },
     { id: 'booking', label: 'Booking' },
     { id: 'milestones', label: 'Milestones' }
   ];
@@ -319,10 +322,18 @@
 
   // Event handlers
   function updatePayload() {
-    payloadJson = JSON.stringify(buildPayload());
+    const payload = buildPayload();
+    console.log('[updatePayload] Built payload:', {
+      media: payload.media,
+      roomDisplayConfig: payload.roomDisplayConfig
+    });
+    payloadJson = JSON.stringify(payload);
   }
 
-  const markDirty = () => updatePayload();
+  const markDirty = () => {
+    console.log('[markDirty] Called');
+    updatePayload();
+  };
 
   function handleNameChange(name: string) {
     workingGame.name = name;
@@ -375,15 +386,29 @@
 
     const { puzzle, hint: originalHint } = editingHint;
 
-    if (originalHint) {
-      const index = puzzle.hints.findIndex(h => h.uuid === originalHint.uuid);
-      if (index !== -1) {
-        puzzle.hints[index] = savedHint as EditableHint;
-      }
-    } else {
-      puzzle.hints = [...puzzle.hints, savedHint as EditableHint];
+    // Find the puzzle in workingGame.puzzles and update its hints
+    const puzzleIndex = workingGame.puzzles.findIndex(p => p.id === puzzle.id);
+    if (puzzleIndex === -1) return;
+
+    const targetPuzzle = workingGame.puzzles[puzzleIndex];
+
+    // Ensure hints array exists
+    if (!targetPuzzle.hints || !Array.isArray(targetPuzzle.hints)) {
+      targetPuzzle.hints = [];
     }
 
+    if (originalHint) {
+      // Update existing hint
+      const hintIndex = targetPuzzle.hints.findIndex(h => h.uuid === originalHint.uuid);
+      if (hintIndex !== -1) {
+        targetPuzzle.hints[hintIndex] = savedHint as EditableHint;
+      }
+    } else {
+      // Add new hint
+      targetPuzzle.hints = [...targetPuzzle.hints, savedHint as EditableHint];
+    }
+
+    // Trigger reactivity by creating a new array
     workingGame.puzzles = [...workingGame.puzzles];
     updatePayload();
     closeHintModal();
@@ -469,9 +494,7 @@
       </div>
 
       {#if errorMessage}
-        <div class="alert alert-error mb-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
-        </div>
+        <Alert type="error" class="mb-4">{errorMessage}</Alert>
       {/if}
 
       <nav class="tabs tabs-boxed overflow-x-auto">
@@ -521,12 +544,18 @@
           {:else if activeTab === 'media'}
             <GameMediaSection
               gameSlug={workingGame.slug}
-              bind:coverImageId={workingGame.media!.thumbnailAssetId}
+              coverImageId={workingGame.media!.thumbnailAssetId}
               roomDisplayBackgroundId={workingGame.roomDisplayConfig?.backgroundAssetId}
-              bind:galleryImageIds={workingGame.media!.galleryAssetIds}
+              galleryImageIds={workingGame.media!.galleryAssetIds}
               assetCache={assetCache}
-              onCoverImageChange={(val) => { if (workingGame.media) workingGame.media.thumbnailAssetId = val; markDirty(); }}
+              onCoverImageChange={(val) => {
+                console.log('[Media] onCoverImageChange called with:', val);
+                if (workingGame.media) workingGame.media.thumbnailAssetId = val;
+                console.log('[Media] Updated thumbnailAssetId to:', workingGame.media?.thumbnailAssetId);
+                markDirty();
+              }}
               onRoomDisplayBackgroundChange={(val) => {
+                console.log('[Media] onRoomDisplayBackgroundChange called with:', val);
                 if (!workingGame.roomDisplayConfig) {
                   workingGame.roomDisplayConfig = {
                     backgroundType: 'asset',
@@ -545,9 +574,15 @@
                 } else {
                   workingGame.roomDisplayConfig.backgroundType = 'asset';
                 }
+                console.log('[Media] Updated roomDisplayConfig:', workingGame.roomDisplayConfig);
                 markDirty();
               }}
-              onGalleryImagesChange={(val) => { if (workingGame.media) workingGame.media.galleryAssetIds = val; markDirty(); }}
+              onGalleryImagesChange={(val) => {
+                console.log('[Media] onGalleryImagesChange called with:', val);
+                if (workingGame.media) workingGame.media.galleryAssetIds = val;
+                console.log('[Media] Updated galleryAssetIds to:', workingGame.media?.galleryAssetIds);
+                markDirty();
+              }}
               onAssetCacheUpdate={(assetId, asset) => { assetCache[assetId] = asset; }}
             />
           {:else if activeTab === 'puzzles'}
@@ -568,6 +603,13 @@
               availableCameras={availableCameras}
               bind:assignedCameraIds={workingGame.cameraIds}
               onCamerasChange={(val) => { workingGame.cameraIds = val; markDirty(); }}
+            />
+          {:else if activeTab === 'display'}
+            <GameRoomDisplayTab
+              bind:roomDisplayConfig={workingGame.roomDisplayConfig}
+              gameSlug={workingGame.slug}
+              onConfigChange={(config: RoomDisplayConfig | undefined) => { workingGame.roomDisplayConfig = config; markDirty(); }}
+              onMarkDirty={markDirty}
             />
           {:else if activeTab === 'booking'}
             <GameBookingTab

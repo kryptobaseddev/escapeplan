@@ -287,6 +287,9 @@ export interface RoomDisplayConfig {
   defaultMediaScale?: number;
   textHintTextColor?: string;
   textHintBackgroundColor?: string;
+  timerTextColor?: string;
+  timerBackgroundColor?: string;
+  timerOpacity?: number;
 }
 
 export interface RoomDisplayMediaEvent {
@@ -733,28 +736,58 @@ export interface GetPermissionsResponse {
 // CAMERAS
 // ============================================================================
 
+export type CameraBrand = 'reolink' | 'hikvision' | 'dahua' | 'amcrest' | 'axis' | 'tapo' | 'foscam' | 'tplink' | 'generic';
 export type CameraProtocol = 'rtsp' | 'mjpeg' | 'onvif';
-export type CameraResolution = '480p' | '720p' | '1080p' | 'native';
+export type CameraResolution = '480p' | '720p' | '1080p' | '2k' | '4k' | 'native';
 export type CameraTransport = 'tcp' | 'udp' | 'http';
 export type CameraStatus = 'online' | 'offline' | 'testing' | 'error';
+export type IRMode = 'auto' | 'on' | 'off';
 
 export interface Camera {
   id: string;
   name: string;
   gameId?: string | null; // 1-to-1 association with game
+
+  // Brand & Model
+  brand: CameraBrand;
+  model?: string | null;
+
+  // Connection Details
   protocol: CameraProtocol;
   host: string;
   port: number;
   username?: string | null;
   passwordEncrypted?: string | null; // Never expose plain password
-  streamPath?: string | null;
+
+  // Stream Paths (dual-stream support)
+  mainStreamPath?: string | null;
+  subStreamPath?: string | null;
+  streamPath?: string | null; // DEPRECATED: Legacy single stream
+
+  // Stream Settings
   resolution: CameraResolution;
   frameRate: number;
   transport: CameraTransport;
+
+  // Capabilities
+  hasPtz: boolean;
+  hasAudio: boolean;
+  hasIrControl: boolean;
+
+  // Feature Settings
+  irMode: IRMode;
+  audioVolume: number; // 0-100
+  ptzPan: number; // -180 to 180
+  ptzTilt: number; // -90 to 90
+  ptzZoom: number; // 0-100
+
+  // Status
   status: CameraStatus;
   lastSeen?: string | null;
   errorMessage?: string | null;
   hlsStreaming: boolean;
+
+  // Timestamps
   createdAt: string;
   updatedAt: string;
 }
@@ -764,40 +797,89 @@ export interface CameraSummary {
   name: string;
   gameId?: string | null;
   gameName?: string | null; // Populated from join
+  brand: CameraBrand;
+  model?: string | null;
   protocol: CameraProtocol;
   host: string;
   port: number;
   status: CameraStatus;
   lastSeen?: string | null;
   hlsStreaming: boolean;
+  hasPtz: boolean;
+  hasAudio: boolean;
 }
 
 export interface CreateCameraRequest {
   name: string;
   gameId?: string | null;
+
+  // Brand & Model
+  brand: CameraBrand;
+  model?: string | null;
+
+  // Connection
   protocol: CameraProtocol;
   host: string;
   port?: number;
   username?: string | null;
   password?: string | null; // Plain password, will be encrypted server-side
-  streamPath?: string | null;
+
+  // Stream Paths
+  mainStreamPath?: string | null;
+  subStreamPath?: string | null;
+  streamPath?: string | null; // DEPRECATED
+
+  // Stream Settings
   resolution?: CameraResolution;
   frameRate?: number;
   transport?: CameraTransport;
+
+  // Capabilities (usually auto-detected from brand/model)
+  hasPtz?: boolean;
+  hasAudio?: boolean;
+  hasIrControl?: boolean;
+
+  // Feature Settings
+  irMode?: IRMode;
+  audioVolume?: number;
 }
 
 export interface UpdateCameraRequest {
   name?: string;
-  gameId?: string | null; // Can reassign to different game
+  gameId?: string | null;
+
+  // Brand & Model
+  brand?: CameraBrand;
+  model?: string | null;
+
+  // Connection
   protocol?: CameraProtocol;
   host?: string;
   port?: number;
   username?: string | null;
   password?: string | null; // If provided, will be re-encrypted
+
+  // Stream Paths
+  mainStreamPath?: string | null;
+  subStreamPath?: string | null;
   streamPath?: string | null;
+
+  // Stream Settings
   resolution?: CameraResolution;
   frameRate?: number;
   transport?: CameraTransport;
+
+  // Capabilities
+  hasPtz?: boolean;
+  hasAudio?: boolean;
+  hasIrControl?: boolean;
+
+  // Feature Settings
+  irMode?: IRMode;
+  audioVolume?: number;
+  ptzPan?: number;
+  ptzTilt?: number;
+  ptzZoom?: number;
 }
 
 export interface TestCameraConnectionRequest {
@@ -841,6 +923,67 @@ export interface CameraStreamStatus {
 
 export interface GetCamerasResponse {
   cameras: CameraSummary[];
+}
+
+// Camera Template Types (for auto-configuration from camera-templates.json)
+export interface CameraTemplate {
+  id: string;
+  brand: CameraBrand;
+  model: string;
+  modelSeries?: string;
+  displayName: string;
+  defaultPort: number;
+  defaultOnvifPort?: number;
+  protocol: CameraProtocol;
+  mainStreamPath: string;
+  subStreamPath?: string;
+  streamUrlFormat: string;
+  hasPtz: boolean;
+  hasAudio: boolean;
+  hasIr: boolean;
+  videoSpecs?: {
+    maxResolution: string;
+    mainCodec: string;
+    subCodec: string;
+    maxFps: number;
+  };
+  audioSpecs?: {
+    inputCodec?: string;
+    outputCodec?: string;
+    sampleRate?: number;
+  };
+  ptzSpecs?: {
+    panRange?: string;
+    tiltRange?: string;
+    zoom?: string;
+    presets?: number;
+    patrols?: boolean;
+    autoTracking?: boolean;
+  };
+  recommendedSettings: {
+    transport: CameraTransport;
+    timeout: number;
+    mainResolution: string;
+    mainFps: number;
+    subResolution?: string;
+    subFps?: number;
+  };
+  notes?: string;
+  documentationUrl?: string;
+}
+
+export interface CameraTemplatesResponse {
+  version: string;
+  lastUpdated: string;
+  templates: CameraTemplate[];
+  brandDefaults: Record<CameraBrand, {
+    defaultPort: number;
+    defaultOnvifPort: number;
+    protocol: CameraProtocol;
+    urlPattern: string;
+    transport: CameraTransport;
+    timeout: number;
+  }>;
 }
 
 // ============================================================================

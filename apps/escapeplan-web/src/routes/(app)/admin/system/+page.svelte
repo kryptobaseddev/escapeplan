@@ -4,6 +4,7 @@
 	import { browser } from '$app/environment';
 	import { replaceState } from '$app/navigation';
 	import { page } from '$app/stores';
+	import Alert from '$lib/components/ui/Alert.svelte';
 	import type { PageData } from './$types';
 	import HealthTab from './HealthTab.svelte';
 	import NetworkTab from './NetworkTab.svelte';
@@ -134,11 +135,9 @@
 				canManage={data.permissions.canManageFiles}
 			/>
 		{:else if activeTab === 'settings' && data.permissions.canManageSystemHealth}
-			<SettingsTab settings={data.systemSettings} />
+			<SettingsTab settings={data.systemSettings} availableRoles={data.availableRoles} />
 		{:else}
-			<div class="alert alert-warning">
-				<span>You do not have permission to view this tab.</span>
-			</div>
+			<Alert type="warning">You do not have permission to view this tab.</Alert>
 		{/if}
 	</div>
 </div>

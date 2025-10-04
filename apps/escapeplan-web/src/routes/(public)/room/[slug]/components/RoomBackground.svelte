@@ -10,6 +10,16 @@
 
   let { background, config }: BackgroundProps = $props();
 
+  const GRADIENT_DIRECTION_MAP = {
+    'to-b': 'to bottom',
+    'to-t': 'to top',
+    'to-r': 'to right',
+    'to-l': 'to left',
+    'to-br': 'to bottom right',
+    'to-tl': 'to top left',
+    'radial': 'circle'
+  } as const;
+
   const opacity = $derived((config?.backgroundOpacity ?? 40) / 100);
 
   const bgStyle = $derived(() => {
@@ -17,8 +27,11 @@
       return `background-color: ${config.backgroundColor}; opacity: ${opacity};`;
     }
     if (config?.backgroundType === 'gradient' && config.gradientFrom && config.gradientTo) {
-      const direction = config.gradientDirection ?? 'to bottom';
-      return `background-image: linear-gradient(${direction}, ${config.gradientFrom}, ${config.gradientTo}); opacity: ${opacity};`;
+      const rawDirection = config.gradientDirection ?? 'to-b';
+      const cssDirection = GRADIENT_DIRECTION_MAP[rawDirection as keyof typeof GRADIENT_DIRECTION_MAP] ?? 'to bottom';
+      const gradientType = cssDirection === 'circle' ? 'radial-gradient' : 'linear-gradient';
+      const gradientDirection = cssDirection === 'circle' ? cssDirection : cssDirection;
+      return `background-image: ${gradientType}(${gradientDirection}, ${config.gradientFrom}, ${config.gradientTo}); opacity: ${opacity};`;
     }
     return '';
   });

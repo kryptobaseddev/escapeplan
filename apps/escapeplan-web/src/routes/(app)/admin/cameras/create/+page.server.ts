@@ -5,7 +5,8 @@ import type {
   Camera,
   CreateCameraRequest,
   TestCameraConnectionRequest,
-  GameDetails
+  GameDetails,
+  CameraTemplatesResponse
 } from '@escapeplan/contracts';
 
 export const load: PageServerLoad = async (event) => {
@@ -14,9 +15,12 @@ export const load: PageServerLoad = async (event) => {
   }
 
   const fetcher = makeServerFetcher(event);
-  const games = await fetcher<GameDetails[]>('/admin/games');
+  const [games, templates] = await Promise.all([
+    fetcher<GameDetails[]>('/admin/games'),
+    fetcher<CameraTemplatesResponse>('/admin/cameras/templates')
+  ]);
 
-  return { games };
+  return { games, templates };
 };
 
 export const actions: Actions = {
@@ -29,15 +33,32 @@ export const actions: Actions = {
 
     const payload: CreateCameraRequest = {
       name: String(form.get('name') ?? '').trim(),
+      brand: String(form.get('brand') ?? 'generic') as CreateCameraRequest['brand'],
+      model: form.get('model') ? String(form.get('model')).trim() : undefined,
       protocol: String(form.get('protocol') ?? 'rtsp') as CreateCameraRequest['protocol'],
       host: String(form.get('host') ?? '').trim(),
       port: Number(form.get('port')) || 554,
       username: form.get('username') ? String(form.get('username')).trim() : undefined,
       password: form.get('password') ? String(form.get('password')).trim() : undefined,
-      streamPath: form.get('streamPath') ? String(form.get('streamPath')).trim() : undefined,
+
+      // Dual stream support
+      mainStreamPath: form.get('mainStreamPath') ? String(form.get('mainStreamPath')).trim() : undefined,
+      subStreamPath: form.get('subStreamPath') ? String(form.get('subStreamPath')).trim() : undefined,
+      streamPath: form.get('streamPath') ? String(form.get('streamPath')).trim() : undefined, // Legacy fallback
+
       resolution: String(form.get('resolution') ?? '720p') as CreateCameraRequest['resolution'],
       frameRate: Number(form.get('frameRate')) || 15,
       transport: String(form.get('transport') ?? 'tcp') as CreateCameraRequest['transport'],
+
+      // Camera capabilities
+      hasPtz: form.get('hasPtz') === 'true',
+      hasAudio: form.get('hasAudio') === 'true',
+      hasIrControl: form.get('hasIrControl') === 'true',
+
+      // Feature settings
+      irMode: form.get('irMode') ? String(form.get('irMode')) as 'auto' | 'on' | 'off' : 'auto',
+      audioVolume: form.get('audioVolume') ? Number(form.get('audioVolume')) : 50,
+
       gameId: form.get('gameId') ? String(form.get('gameId')).trim() : undefined
     };
 
@@ -74,7 +95,11 @@ export const actions: Actions = {
       port: Number(form.get('port')) || 554,
       username: form.get('username') ? String(form.get('username')).trim() : undefined,
       password: form.get('password') ? String(form.get('password')).trim() : undefined,
-      streamPath: form.get('streamPath') ? String(form.get('streamPath')).trim() : undefined
+      streamPath: form.get('mainStreamPath')
+        ? String(form.get('mainStreamPath')).trim()
+        : form.get('streamPath')
+          ? String(form.get('streamPath')).trim()
+          : undefined
     };
 
     if (!payload.host) {

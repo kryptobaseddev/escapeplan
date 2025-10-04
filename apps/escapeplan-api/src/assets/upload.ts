@@ -96,21 +96,16 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       });
     }
 
-    // Validate file size
+    // Validate file size based on detected media type from MIME type
     let maxSize: number;
-    if (assetType === 'hint_media' || assetType === 'milestone_media') {
-      if (mediaType === 'image') {
-        maxSize = settings.getMaxImageSizeMB() * 1024 * 1024;
-      } else if (mediaType === 'audio') {
-        maxSize = settings.getMaxAudioSizeMB() * 1024 * 1024;
-      } else if (mediaType === 'video') {
-        maxSize = settings.getMaxVideoSizeMB() * 1024 * 1024;
-      } else {
-        // Default to image if mediaType is text or undefined
-        maxSize = settings.getMaxImageSizeMB() * 1024 * 1024;
-      }
+    if (data.mimetype.startsWith('image/')) {
+      maxSize = settings.getMaxImageSizeMB() * 1024 * 1024;
+    } else if (data.mimetype.startsWith('audio/')) {
+      maxSize = settings.getMaxAudioSizeMB() * 1024 * 1024;
+    } else if (data.mimetype.startsWith('video/')) {
+      maxSize = settings.getMaxVideoSizeMB() * 1024 * 1024;
     } else {
-      // All non-hint/milestone assets are images
+      // Default to image size for unknown types
       maxSize = settings.getMaxImageSizeMB() * 1024 * 1024;
     }
 
@@ -123,13 +118,25 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     }
 
     // Get game details for slug (try by ID first, then by slug)
-    let game = sqlite.prepare('SELECT id, slug, name FROM games WHERE id = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
-    if (!game) {
-      // Try by slug as fallback
-      game = sqlite.prepare('SELECT id, slug, name FROM games WHERE slug = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
-    }
-    if (!game) {
-      return reply.status(404).send({ statusCode: 404, message: 'Game not found' });
+    // Special case: "shared" means system-wide reusable assets (no game association)
+    let game: { id: string; slug: string; name: string } | undefined;
+
+    if (gameId !== 'shared') {
+      game = sqlite.prepare('SELECT id, slug, name FROM games WHERE id = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
+      if (!game) {
+        // Try by slug as fallback
+        game = sqlite.prepare('SELECT id, slug, name FROM games WHERE slug = ?').get(gameId) as { id: string; slug: string; name: string } | undefined;
+      }
+      if (!game) {
+        return reply.status(404).send({ statusCode: 404, message: 'Game not found' });
+      }
+    } else {
+      // For shared assets, create a virtual game object for file naming
+      game = {
+        id: 'shared',
+        slug: 'shared',
+        name: 'Shared Assets'
+      };
     }
 
     // Get puzzle details if needed
@@ -175,10 +182,10 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       asset_type: assetType,
       media_type: mediaType || null,
       file_path: path.join(subPath, filename),
-      game_id: isReusable ? null : game.id,
+      game_id: (isReusable || gameId === 'shared') ? null : game.id,
       puzzle_id: puzzleId || null,
       hint_order: order ? parseInt(String(order), 10) : null,
-      is_reusable: isReusable ? 1 : 0,
+      is_reusable: (isReusable || gameId === 'shared') ? 1 : 0,
       uploaded_by: session.user.id as string,
       uploaded_at: new Date().toISOString(),
       metadata: JSON.stringify(processed.metadata)

@@ -18,6 +18,7 @@
   import { createFormHandler } from '$lib/utils/forms';
   import { slugify, uid } from '$lib/utils/game';
   import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
   import GameBasicInfoForm from '$lib/components/games/GameBasicInfoForm.svelte';
   import GameMediaSection from '$lib/components/games/GameMediaSection.svelte';
   import GamePuzzlesSection from '$lib/components/games/GamePuzzlesSection.svelte';
@@ -467,9 +468,7 @@
       </div>
 
       {#if errorMessage}
-        <div class="alert alert-error mb-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
-        </div>
+        <Alert type="error" class="mb-4">{errorMessage}</Alert>
       {/if}
 
       <nav class="tabs tabs-boxed overflow-x-auto">

@@ -90,9 +90,12 @@ export const roomDisplayConfigSchema = z.object({
   backgroundOpacity: z.number().int().min(0).max(100).default(40),
   defaultMediaScale: z.number().int().min(10).max(100).default(90),
   showTimer: z.boolean().default(true),
-  timerPosition: z.enum(['center', 'top', 'bottom']).default('center'),
+  timerPosition: z.enum(['center', 'top-left', 'top-right', 'bottom-left', 'bottom-right']).default('center'),
   textHintTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#000000'),
-  textHintBackgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FFA500')
+  textHintBackgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FFA500'),
+  timerTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FFFFFF'),
+  timerBackgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#000000'),
+  timerOpacity: z.number().int().min(0).max(100).default(80)
 }).optional();
 
 // Pricing tier schema - Enhanced with per-tier models and scheduling
@@ -319,29 +322,74 @@ export type UpdateRoleRequest = z.infer<typeof updateRoleSchema>;
 export const createCameraSchema = z.object({
   name: z.string().min(1),
   gameId: z.string().optional().nullable(),
+
+  // Brand & Model
+  brand: z.enum(['reolink', 'hikvision', 'dahua', 'amcrest', 'axis', 'tapo', 'foscam', 'tplink', 'generic']).default('generic'),
+  model: z.string().optional().nullable(),
+
+  // Connection
   protocol: z.enum(['rtsp', 'mjpeg', 'onvif']),
   host: z.string().min(1),
   port: z.number().int().positive().default(554),
   username: z.string().optional().nullable(),
   password: z.string().optional().nullable(),
-  streamPath: z.string().optional().nullable(),
-  resolution: z.enum(['480p', '720p', '1080p', 'native']).default('720p'),
+
+  // Stream Paths (dual-stream support)
+  mainStreamPath: z.string().optional().nullable(),
+  subStreamPath: z.string().optional().nullable(),
+  streamPath: z.string().optional().nullable(), // DEPRECATED
+
+  // Stream Settings
+  resolution: z.enum(['480p', '720p', '1080p', '2k', '4k', 'native']).default('720p'),
   frameRate: z.number().int().positive().default(15),
-  transport: z.enum(['tcp', 'udp', 'http']).default('tcp')
+  transport: z.enum(['tcp', 'udp', 'http']).default('tcp'),
+
+  // Capabilities (usually auto-detected from brand/model template)
+  hasPtz: z.boolean().default(false),
+  hasAudio: z.boolean().default(false),
+  hasIrControl: z.boolean().default(false),
+
+  // Feature Settings
+  irMode: z.enum(['auto', 'on', 'off']).default('auto'),
+  audioVolume: z.number().int().min(0).max(100).default(80)
 });
 
 export const updateCameraSchema = z.object({
   name: z.string().min(1).optional(),
   gameId: z.string().optional().nullable(),
+
+  // Brand & Model
+  brand: z.enum(['reolink', 'hikvision', 'dahua', 'amcrest', 'axis', 'tapo', 'foscam', 'tplink', 'generic']).optional(),
+  model: z.string().optional().nullable(),
+
+  // Connection
   protocol: z.enum(['rtsp', 'mjpeg', 'onvif']).optional(),
   host: z.string().min(1).optional(),
   port: z.number().int().positive().optional(),
   username: z.string().optional().nullable(),
   password: z.string().optional().nullable(),
+
+  // Stream Paths
+  mainStreamPath: z.string().optional().nullable(),
+  subStreamPath: z.string().optional().nullable(),
   streamPath: z.string().optional().nullable(),
-  resolution: z.enum(['480p', '720p', '1080p', 'native']).optional(),
+
+  // Stream Settings
+  resolution: z.enum(['480p', '720p', '1080p', '2k', '4k', 'native']).optional(),
   frameRate: z.number().int().positive().optional(),
-  transport: z.enum(['tcp', 'udp', 'http']).optional()
+  transport: z.enum(['tcp', 'udp', 'http']).optional(),
+
+  // Capabilities
+  hasPtz: z.boolean().optional(),
+  hasAudio: z.boolean().optional(),
+  hasIrControl: z.boolean().optional(),
+
+  // Feature Settings
+  irMode: z.enum(['auto', 'on', 'off']).optional(),
+  audioVolume: z.number().int().min(0).max(100).optional(),
+  ptzPan: z.number().int().min(-180).max(180).optional(),
+  ptzTilt: z.number().int().min(-90).max(90).optional(),
+  ptzZoom: z.number().int().min(0).max(100).optional()
 });
 
 export type CreateCameraRequest = z.infer<typeof createCameraSchema>;

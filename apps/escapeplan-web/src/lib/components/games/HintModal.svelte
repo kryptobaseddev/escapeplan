@@ -78,6 +78,8 @@
   }
 
   function handleSave() {
+    console.log('[HintModal] handleSave called');
+    console.log('[HintModal] workingHint:', workingHint);
     const savedHint: GameHintDefinition = {
       uuid: workingHint.uuid,
       type: workingHint.type,
@@ -91,7 +93,10 @@
       loop: false,
       autoDismiss: false
     };
+    console.log('[HintModal] Calling onsave with:', savedHint);
+    console.log('[HintModal] onsave exists?', !!onsave);
     onsave?.(savedHint);
+    console.log('[HintModal] onsave called, now closing modal');
     close();
   }
 
@@ -435,14 +440,16 @@
     <button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={close} disabled={uploading}>
       Cancel
     </button>
-    <LoadingButton
-      type="submit"
-      variant="primary"
-      loading={uploading}
-      class="w-full sm:w-auto"
+    <button
+      type="button"
+      class="btn btn-primary w-full sm:w-auto"
+      disabled={uploading}
       onclick={handleSave}
     >
+      {#if uploading}
+        <span class="loading loading-infinity loading-sm"></span>
+      {/if}
       Save
-    </LoadingButton>
+    </button>
   {/snippet}
 </Modal>

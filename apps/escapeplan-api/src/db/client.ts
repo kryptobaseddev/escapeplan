@@ -1,14 +1,14 @@
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@escapeplan/contracts';
-import { getDatabasePath, ensureDataDirectory } from '@escapeplan/contracts/paths';
+import { getDatabasePath, ensureDataDirectorySync } from '@escapeplan/contracts/paths';
 
 // ============================================================================
 // DATABASE CONNECTION
 // ============================================================================
 
-// Ensure data directory exists before opening database
-await ensureDataDirectory();
+// Ensure data directory exists before opening database (synchronous to avoid top-level await)
+ensureDataDirectorySync();
 
 const dbFile = getDatabasePath();
 

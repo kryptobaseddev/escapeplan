@@ -71,7 +71,8 @@ import {
   updateRolePermissions,
   deleteRole,
   listPermissions,
-  getPermissionMatrix
+  getPermissionMatrix,
+  timerInterval
 } from './state.js';
 import { initializeSettings, settings } from './settings.js';
 import { seedSystemSettings } from './db/seed-settings.js';
@@ -707,7 +708,23 @@ export async function buildServer() {
       }
 
       try {
+        console.log('[DEBUG] Game update route - Parsed payload:', JSON.stringify({
+          puzzlesCount: parsed.data.puzzles?.length || 0,
+          puzzles: parsed.data.puzzles?.map(p => ({
+            id: p.id,
+            title: p.title,
+            hintsCount: p.hints?.length || 0,
+            hints: p.hints
+          })),
+          mediaConfig: parsed.data.media,
+          roomDisplayConfig: parsed.data.roomDisplayConfig
+        }, null, 2));
         const updated = updateGame(id, parsed.data);
+        console.log('[DEBUG] Game update route - Update completed, returning:', {
+          gameId: updated.id,
+          puzzlesCount: updated.puzzles.length,
+          puzzles: updated.puzzles.map(p => ({ id: p.id, title: p.title, hintsCount: p.hints?.length || 0 }))
+        });
         return updated;
       } catch (error) {
         request.log.error({ err: error }, 'Failed to update game');
@@ -876,6 +893,7 @@ export async function buildServer() {
     api.get('/admin/settings', async (request, reply) => {
       const session = await ensureAuth(request, reply);
       if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_system_health')) return;
 
       const { category } = request.query as { category?: string };
 
@@ -900,8 +918,8 @@ export async function buildServer() {
           return settingsMap;
         }
 
-        // Return all settings grouped by category
-        return allSettings;
+        // Return all settings grouped by category (wrapped for frontend compatibility)
+        return { settings: allSettings };
       } catch (error) {
         request.log.error({ err: error }, 'Failed to retrieve settings');
         return reply.status(500).send({ statusCode: 500, message: 'Failed to retrieve settings' });
@@ -911,6 +929,25 @@ export async function buildServer() {
     // =========================================================================
     // Camera Management Routes
     // =========================================================================
+
+    // Get camera templates (for auto-configuration)
+    api.get('/admin/cameras/templates', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_cameras')) return;
+
+      try {
+        const { readFile } = await import('node:fs/promises');
+        const { join } = await import('node:path');
+        const templatesPath = join(process.cwd(), 'data', 'camera-templates.json');
+        const templatesData = await readFile(templatesPath, 'utf-8');
+        const templates = JSON.parse(templatesData);
+        return templates;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to load camera templates');
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to load camera templates' });
+      }
+    });
 
     // Get all cameras
     api.get('/admin/cameras', async (request, reply) => {
@@ -923,18 +960,67 @@ export async function buildServer() {
         name: cameras.name,
         gameId: cameras.game_id,
         gameName: games.name,
+        brand: cameras.brand,
+        model: cameras.model,
         protocol: cameras.protocol,
         host: cameras.host,
         port: cameras.port,
         status: cameras.status,
         lastSeen: cameras.last_seen,
         hlsStreaming: cameras.hls_streaming,
+        hasPtz: cameras.has_ptz,
+        hasAudio: cameras.has_audio,
       })
         .from(cameras)
         .leftJoin(games, eq(cameras.game_id, games.id))
         .all();
 
       return { cameras: camerasWithGames };
+    });
+
+    // Get single camera by ID
+    api.get('/admin/cameras/:id', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_cameras')) return;
+
+      const { id } = request.params as { id: string };
+
+      const camera = db.select().from(cameras).where(eq(cameras.id, id)).get();
+      if (!camera) {
+        return reply.status(404).send({ statusCode: 404, message: 'Camera not found' });
+      }
+
+      // Return camera with camelCase field names to match TypeScript types
+      return {
+        id: camera.id,
+        name: camera.name,
+        gameId: camera.game_id,
+        brand: camera.brand,
+        model: camera.model,
+        protocol: camera.protocol,
+        host: camera.host,
+        port: camera.port,
+        username: camera.username,
+        mainStreamPath: camera.main_stream_path,
+        subStreamPath: camera.sub_stream_path,
+        resolution: camera.resolution,
+        frameRate: camera.frame_rate,
+        transport: camera.transport,
+        status: camera.status,
+        lastSeen: camera.last_seen,
+        hlsStreaming: camera.hls_streaming,
+        hasPtz: camera.has_ptz,
+        hasAudio: camera.has_audio,
+        hasIrControl: camera.has_ir_control,
+        irMode: camera.ir_mode,
+        audioVolume: camera.audio_volume,
+        ptzPan: camera.ptz_pan,
+        ptzTilt: camera.ptz_tilt,
+        ptzZoom: camera.ptz_zoom,
+        createdAt: camera.created_at,
+        updatedAt: camera.updated_at
+      };
     });
 
     // Create camera
@@ -964,20 +1050,43 @@ export async function buildServer() {
 
         const cameraId = nanoid();
 
-        // Create camera
+        // Create camera with all new fields
         db.insert(cameras).values({
           id: cameraId,
           name: parsed.data.name,
           game_id: parsed.data.gameId || null,
+
+          // Brand & Model
+          brand: parsed.data.brand,
+          model: parsed.data.model || null,
+
+          // Connection
           protocol: parsed.data.protocol,
           host: parsed.data.host,
           port: parsed.data.port,
           username: parsed.data.username || null,
           password_encrypted: passwordEncrypted,
-          stream_path: parsed.data.streamPath || null,
+
+          // Stream Paths
+          main_stream_path: parsed.data.mainStreamPath || null,
+          sub_stream_path: parsed.data.subStreamPath || null,
+          stream_path: parsed.data.streamPath || null, // Legacy
+
+          // Stream Settings
           resolution: parsed.data.resolution,
           frame_rate: parsed.data.frameRate,
           transport: parsed.data.transport,
+
+          // Capabilities
+          has_ptz: parsed.data.hasPtz,
+          has_audio: parsed.data.hasAudio,
+          has_ir_control: parsed.data.hasIrControl,
+
+          // Feature Settings
+          ir_mode: parsed.data.irMode,
+          audio_volume: parsed.data.audioVolume,
+
+          // Status
           status: 'offline',
           hls_streaming: false,
         }).run();
@@ -1027,16 +1136,42 @@ export async function buildServer() {
         const { encryptPassword } = await import('./cameras/encryption.js');
 
         const updates: any = {};
+
+        // Basic fields
         if (parsed.data.name !== undefined) updates.name = parsed.data.name;
+
+        // Brand & Model
+        if (parsed.data.brand !== undefined) updates.brand = parsed.data.brand;
+        if (parsed.data.model !== undefined) updates.model = parsed.data.model || null;
+
+        // Connection
         if (parsed.data.protocol !== undefined) updates.protocol = parsed.data.protocol;
         if (parsed.data.host !== undefined) updates.host = parsed.data.host;
         if (parsed.data.port !== undefined) updates.port = parsed.data.port;
         if (parsed.data.username !== undefined) updates.username = parsed.data.username || null;
         if (parsed.data.password !== undefined) updates.password_encrypted = parsed.data.password ? encryptPassword(parsed.data.password) : null;
+
+        // Stream Paths
+        if (parsed.data.mainStreamPath !== undefined) updates.main_stream_path = parsed.data.mainStreamPath || null;
+        if (parsed.data.subStreamPath !== undefined) updates.sub_stream_path = parsed.data.subStreamPath || null;
         if (parsed.data.streamPath !== undefined) updates.stream_path = parsed.data.streamPath || null;
+
+        // Stream Settings
         if (parsed.data.resolution !== undefined) updates.resolution = parsed.data.resolution;
         if (parsed.data.frameRate !== undefined) updates.frame_rate = parsed.data.frameRate;
         if (parsed.data.transport !== undefined) updates.transport = parsed.data.transport;
+
+        // Capabilities
+        if (parsed.data.hasPtz !== undefined) updates.has_ptz = parsed.data.hasPtz;
+        if (parsed.data.hasAudio !== undefined) updates.has_audio = parsed.data.hasAudio;
+        if (parsed.data.hasIrControl !== undefined) updates.has_ir_control = parsed.data.hasIrControl;
+
+        // Feature Settings
+        if (parsed.data.irMode !== undefined) updates.ir_mode = parsed.data.irMode;
+        if (parsed.data.audioVolume !== undefined) updates.audio_volume = parsed.data.audioVolume;
+        if (parsed.data.ptzPan !== undefined) updates.ptz_pan = parsed.data.ptzPan;
+        if (parsed.data.ptzTilt !== undefined) updates.ptz_tilt = parsed.data.ptzTilt;
+        if (parsed.data.ptzZoom !== undefined) updates.ptz_zoom = parsed.data.ptzZoom;
 
         // Handle game association change
         if (parsed.data.gameId !== undefined) {
@@ -1135,6 +1270,8 @@ export async function buildServer() {
         username: z.string().optional().nullable(),
         password: z.string().optional().nullable(),
         streamPath: z.string().optional().nullable(),
+        mainStreamPath: z.string().optional().nullable(),
+        subStreamPath: z.string().optional().nullable(),
       });
 
       const parsed = schema.safeParse(request.body);
@@ -1144,7 +1281,12 @@ export async function buildServer() {
 
       try {
         const { testCameraConnection } = await import('./cameras/connection.js');
-        const result = await testCameraConnection(parsed.data);
+        // Use mainStreamPath if provided, otherwise fall back to streamPath
+        const testData = {
+          ...parsed.data,
+          streamPath: parsed.data.mainStreamPath || parsed.data.streamPath
+        };
+        const result = await testCameraConnection(testData);
         return result;
       } catch (error) {
         request.log.error({ err: error }, 'Camera connection test failed');
@@ -1382,20 +1524,6 @@ export async function buildServer() {
     // SYSTEM SETTINGS MANAGEMENT
     // ============================================================================
 
-    api.get('/admin/settings', async (request, reply) => {
-      const session = await ensureAuth(request, reply);
-      if (!session) return;
-      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_system_health')) return;
-
-      try {
-        const grouped = await settings.getAll();
-        return { settings: grouped };
-      } catch (error) {
-        request.log.error({ err: error }, 'Failed to get settings');
-        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
-      }
-    });
-
     api.put('/admin/settings/:key', async (request, reply) => {
       const session = await ensureAuth(request, reply);
       if (!session) return;
@@ -1630,18 +1758,40 @@ const isVitest = typeof process.env.VITEST_WORKER_ID !== 'undefined';
 const isTestEnv = process.env.NODE_ENV === 'test' || isVitest;
 
 if (!skipAutostart && !isTestEnv) {
-  const server = await buildServer();
-  try {
-    // Seed default system settings if needed
-    await seedSystemSettings();
+  (async () => {
+    const server = await buildServer();
+    try {
+      // Seed default system settings if needed
+      await seedSystemSettings();
 
-    // Initialize settings manager
-    await initializeSettings();
+      // Initialize settings manager
+      await initializeSettings();
 
-    await server.listen({ port: DEFAULT_PORT, host: '0.0.0.0' });
-    server.log.info(`EscapePlan API listening on http://localhost:${DEFAULT_PORT}`);
-  } catch (error) {
-    server.log.error(error);
-    process.exit(1);
-  }
+      await server.listen({ port: DEFAULT_PORT, host: '0.0.0.0' });
+      server.log.info(`EscapePlan API listening on http://localhost:${DEFAULT_PORT}`);
+
+      // Graceful shutdown handlers for clean tsx watch restarts
+      const gracefulShutdown = async (signal: string) => {
+        server.log.info(`${signal} received, starting graceful shutdown...`);
+
+        // Clear timer interval
+        clearInterval(timerInterval);
+
+        // Close Fastify server
+        await server.close();
+
+        // Close database connection
+        sqlite.close();
+
+        server.log.info('Graceful shutdown complete');
+        // Don't call process.exit() - let tsx handle it
+      };
+
+      process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+      process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    } catch (error) {
+      server.log.error(error);
+      process.exit(1);
+    }
+  })();
 }

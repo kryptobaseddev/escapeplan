@@ -9,9 +9,12 @@
     gameName: string;
     sessionId: string;
     position?: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+    textColor?: string;
+    backgroundColor?: string;
+    opacity?: number;
   }
 
-  let { timer, gameName, sessionId, position = 'center' }: TimerProps = $props();
+  let { timer, gameName, sessionId, position = 'center', textColor = '#FFFFFF', backgroundColor = '#000000', opacity = 80 }: TimerProps = $props();
 
   const positionClasses = $derived(() => {
     switch (position) {
@@ -29,14 +32,31 @@
     }
   });
 
-  const timerColor = $derived(
-    timer.remainingSeconds <= 300 ? 'text-warning drop-shadow-[0_0_20px_rgba(251,191,36,0.5)]' : 'text-primary drop-shadow-[0_0_20px_rgba(139,92,246,0.5)]'
-  );
+  // Convert hex to RGB for opacity application
+  const hexToRgb = (hex: string): string => {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (result) {
+      const r = parseInt(result[1], 16);
+      const g = parseInt(result[2], 16);
+      const b = parseInt(result[3], 16);
+      return `${r}, ${g}, ${b}`;
+    }
+    return '0, 0, 0';
+  };
+
+  const bgColorRgb = $derived(hexToRgb(backgroundColor));
+  const bgOpacityValue = $derived(opacity / 100);
 </script>
 
 <div class="absolute flex flex-col gap-8 px-6 {positionClasses()}" style="z-index: 10;">
-  <div class="rounded-[3rem] border border-white/20 bg-black/40 px-16 py-8 shadow-2xl shadow-black/50 backdrop-blur-sm">
-    <span class="text-7xl font-display font-bold {timerColor}">
+  <div
+    class="rounded-[3rem] border border-white/20 px-16 py-8 shadow-2xl shadow-black/50 backdrop-blur-sm"
+    style="background-color: rgba({bgColorRgb}, {bgOpacityValue});"
+  >
+    <span
+      class="text-7xl font-display font-bold drop-shadow-[0_0_20px_rgba(0,0,0,0.5)]"
+      style="color: {textColor};"
+    >
       {formatTimer(timer.remainingSeconds)}
     </span>
   </div>

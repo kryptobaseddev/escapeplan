@@ -57,7 +57,7 @@
 	class="btn {variantClass} {sizeClass} {shapeClass} {className || ''}"
 	disabled={disabled || loading}
 	{form}
-	{onclick}
+	onclick={onclick}
 >
 	{#if loading}
 		<span class="loading loading-infinity loading-sm"></span>

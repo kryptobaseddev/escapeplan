@@ -72,14 +72,13 @@ export const actions: Actions = {
         method: 'PUT',
         body: JSON.stringify(result.payload)
       });
-      throw redirect(303, '/admin/games');
     } catch (err) {
-      if (err instanceof Response && err.status === 303) {
-        throw err; // Re-throw redirect
-      }
       console.error('Failed to update game - Full error:', err);
       const errorMessage = err instanceof Error ? err.message : 'Unable to update game.';
       return fail(500, { message: errorMessage });
     }
+
+    // Success - redirect to games list
+    throw redirect(303, '/admin/games');
   }
 };
