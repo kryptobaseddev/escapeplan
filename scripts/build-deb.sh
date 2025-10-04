@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# Get version from package.json
-VERSION=$(node -p "require('./package.json').version")
+# Get version from VERSION file
+VERSION=$(cat VERSION | tr -d '\n')
 ARCH="arm64"
 PKG_NAME="escapeplan"
 BUILD_DIR="build/deb"

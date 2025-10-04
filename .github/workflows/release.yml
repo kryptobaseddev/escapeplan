@@ -57,6 +57,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Validate VERSION Sync
+        if: steps.changesets.outputs.hasChangesets == 'true'
+        run: |
+          node scripts/check-version-sync.js
+          echo "✅ VERSION file synced with package.json"
+
       - name: Log Changesets Output
         if: always()
         run: |

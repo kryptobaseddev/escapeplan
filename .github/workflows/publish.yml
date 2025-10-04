@@ -61,8 +61,8 @@ jobs:
       - name: Generate checksums
         run: |
           cd dist
-          sha256sum escapeplan_*.deb > checksums.txt
-          cat checksums.txt
+          sha256sum escapeplan_*.deb > SHA256SUMS
+          cat SHA256SUMS
 
       # Release
       - name: Extract version
@@ -87,14 +87,14 @@ jobs:
             Download `escapeplan_${{ steps.version.outputs.version }}_arm64.deb` and verify:
 
             ```bash
-            sha256sum -c checksums.txt
+            sha256sum -c SHA256SUMS
             sudo dpkg -i escapeplan_${{ steps.version.outputs.version }}_arm64.deb
             ```
 
             See [CHANGELOG.md](./CHANGELOG.md) for full details.
           files: |
             dist/escapeplan_*.deb
-            dist/checksums.txt
+            dist/SHA256SUMS
           generate_release_notes: true
           draft: false
           prerelease: false
@@ -108,5 +108,5 @@ jobs:
           name: debian-package-${{ steps.version.outputs.version }}
           path: |
             dist/escapeplan_*.deb
-            dist/checksums.txt
+            dist/SHA256SUMS
           retention-days: 90

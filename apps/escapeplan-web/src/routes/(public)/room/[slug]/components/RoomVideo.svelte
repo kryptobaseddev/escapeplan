@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   interface VideoProps {
     src: string;
@@ -20,12 +20,10 @@
   let error = $state<string | null>(null);
   let errorTimer: ReturnType<typeof setTimeout> | null = $state(null);
 
-  // Single $effect to handle both initial playback AND src changes
-  $effect(() => {
-    if (videoElement && src) {
+  onMount(() => {
+    if (videoElement) {
       console.log('[RoomVideo] Playing video:', src);
       videoElement.volume = volumeLevel / 100;
-      videoElement.load(); // Force reload of media
       videoElement.play().catch((err) => {
         console.error('[RoomVideo] Play failed:', err);
         error = 'Failed to play video';
@@ -37,7 +35,7 @@
     }
   });
 
-  function handleVideoError(e: Event) {
+  function handleVideoError(e: Event): void {
     console.error('[RoomVideo] Load error:', e);
     error = 'Failed to load video file';
     // Auto-dismiss after error if configured
@@ -46,7 +44,7 @@
     }
   }
 
-  function handleEnded() {
+  function handleEnded(): void {
     playCount++;
 
     // Check if we should loop
@@ -68,7 +66,7 @@
     }
   }
 
-  function handleClick() {
+  function handleClick(): void {
     if (onFinish) {
       onFinish();
     }

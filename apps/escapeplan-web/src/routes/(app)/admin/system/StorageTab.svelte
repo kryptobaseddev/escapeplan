@@ -5,6 +5,7 @@
 	import AssetBrowser from '$lib/components/assets/AssetBrowser.svelte';
 	import AssetUpload from '$lib/components/assets/AssetUpload.svelte';
 	import Alert from '$lib/components/ui/Alert.svelte';
+	import type { BackupResponse } from '@escapeplan/contracts';
 
 	interface StorageMetrics {
 		total?: {
@@ -43,6 +44,9 @@
 	let backupInProgress = $state(false);
 	let backupError = $state<string | null>(null);
 	let backupSuccess = $state(false);
+	let backups = $state<BackupResponse[]>([]);
+	let loadingBackups = $state(false);
+	let deletingBackupId = $state<string | null>(null);
 
 	async function refreshMetrics() {
 		refreshing = true;
@@ -77,6 +81,50 @@
 			: 0
 	);
 
+	// Load backups when tab becomes active
+	$effect(() => {
+		if (activeTab === 'backups') {
+			loadBackups();
+		}
+	});
+
+	async function loadBackups() {
+		loadingBackups = true;
+		try {
+			const result = await apiFetch<BackupResponse[]>(fetch, '/admin/backups?destination=local', {
+				credentials: 'include'
+			});
+			backups = result;
+		} catch (err) {
+			console.error('Failed to load backups:', err);
+		} finally {
+			loadingBackups = false;
+		}
+	}
+
+	async function deleteBackupById(id: string) {
+		if (!confirm('Are you sure you want to delete this backup? This action cannot be undone.')) {
+			return;
+		}
+
+		deletingBackupId = id;
+		try {
+			await apiFetch(fetch, `/admin/backups/${id}`, {
+				method: 'DELETE',
+				credentials: 'include'
+			});
+			// Remove from local state
+			backups = backups.filter((b) => b.id !== id);
+			// Refresh metrics to update backup count
+			await refreshMetrics();
+		} catch (err) {
+			console.error('Failed to delete backup:', err);
+			alert('Failed to delete backup: ' + (err instanceof Error ? err.message : 'Unknown error'));
+		} finally {
+			deletingBackupId = null;
+		}
+	}
+
 	async function triggerBackup() {
 		backupInProgress = true;
 		backupError = null;
@@ -107,6 +155,8 @@
 			backupSuccess = true;
 			// Refresh metrics after backup
 			await refreshMetrics();
+			// Refresh backup list
+			await loadBackups();
 
 			// Clear success message after 3 seconds
 			setTimeout(() => {
@@ -565,28 +615,115 @@
 							</div>
 						</div>
 					</Alert>
-					<div
-						class="rounded-xl border border-dashed border-base-content/20 bg-base-100/70 p-12 text-center"
-					>
-						<svg
-							class="mx-auto h-12 w-12 text-base-content/40"
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
+
+					{#if loadingBackups}
+						<div class="flex items-center justify-center p-12">
+							<span class="loading loading-spinner loading-lg"></span>
+						</div>
+					{:else if backups.length > 0}
+						<div class="overflow-x-auto">
+							<table class="table table-sm">
+								<thead>
+									<tr>
+										<th>Date</th>
+										<th>Size</th>
+										<th>Type</th>
+										<th>Status</th>
+										<th class="text-right">Actions</th>
+									</tr>
+								</thead>
+								<tbody>
+									{#each backups as backup}
+										<tr class="hover">
+											<td>
+												<div class="font-medium">{formatDate(backup.createdAt)}</div>
+												{#if backup.completedAt}
+													<div class="text-xs text-base-content/60">
+														Completed: {formatDate(backup.completedAt)}
+													</div>
+												{/if}
+											</td>
+											<td>
+												{#if backup.fileSizeBytes}
+													{formatBytes(backup.fileSizeBytes)}
+												{:else}
+													-
+												{/if}
+											</td>
+											<td>
+												<div class="badge badge-sm">
+													{backup.type}
+												</div>
+											</td>
+											<td>
+												{#if backup.status === 'completed'}
+													<div class="badge badge-success badge-sm">Success</div>
+												{:else if backup.status === 'failed'}
+													<div class="badge badge-error badge-sm">Failed</div>
+												{:else}
+													<div class="badge badge-warning badge-sm">In Progress</div>
+												{/if}
+											</td>
+											<td class="text-right">
+												{#if canManage && backup.status === 'completed'}
+													<button
+														type="button"
+														class="btn btn-error btn-xs"
+														class:loading={deletingBackupId === backup.id}
+														onclick={() => deleteBackupById(backup.id)}
+														disabled={deletingBackupId === backup.id}
+													>
+														{#if deletingBackupId === backup.id}
+															Deleting...
+														{:else}
+															<svg
+																class="h-3 w-3"
+																xmlns="http://www.w3.org/2000/svg"
+																fill="none"
+																viewBox="0 0 24 24"
+																stroke="currentColor"
+															>
+																<path
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	stroke-width="2"
+																	d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+																/>
+															</svg>
+															Delete
+														{/if}
+													</button>
+												{/if}
+											</td>
+										</tr>
+									{/each}
+								</tbody>
+							</table>
+						</div>
+					{:else}
+						<div
+							class="rounded-xl border border-dashed border-base-content/20 bg-base-100/70 p-12 text-center"
 						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-							/>
-						</svg>
-						<p class="mt-4 text-sm text-base-content/60">No backups available yet</p>
-						<p class="mt-1 text-xs text-base-content/40">
-							Backups will appear here after the first automated run
-						</p>
-					</div>
+							<svg
+								class="mx-auto h-12 w-12 text-base-content/40"
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+								/>
+							</svg>
+							<p class="mt-4 text-sm text-base-content/60">No backups available yet</p>
+							<p class="mt-1 text-xs text-base-content/40">
+								Backups will appear here after the first automated run
+							</p>
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>

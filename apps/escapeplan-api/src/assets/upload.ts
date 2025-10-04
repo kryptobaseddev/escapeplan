@@ -303,10 +303,14 @@ async function updateStorageMetrics() {
   const totalSize = Object.values(byType).reduce((sum, t) => sum + t.size, 0);
   const totalFiles = Object.values(byType).reduce((sum, t) => sum + t.count, 0);
 
+  // Get last backup date
+  const { getLastBackupDate } = await import('../system/backup.js');
+  const lastBackupAt = await getLastBackupDate();
+
   // Insert new metrics record
   const stmt = sqlite.prepare(`
-    INSERT INTO storage_metrics (total_size_bytes, total_files, by_type, by_game, recorded_at)
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO storage_metrics (total_size_bytes, total_files, by_type, by_game, last_backup_at, recorded_at)
+    VALUES (?, ?, ?, ?, ?, ?)
   `);
 
   stmt.run(
@@ -314,6 +318,7 @@ async function updateStorageMetrics() {
     totalFiles,
     JSON.stringify(byType),
     JSON.stringify(byGame),
+    lastBackupAt,
     new Date().toISOString()
   );
 }

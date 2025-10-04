@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Muted→Unmuted Autoplay Pattern Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #00ff00;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 { color: #00ff00; }
+    h2 { color: #ffff00; margin-top: 30px; }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #333;
+      background: #0a0a0a;
+    }
+    button {
+      background: #00ff00;
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    button:hover { background: #00cc00; }
+    button:disabled { background: #666; cursor: not-allowed; }
+    .status { margin: 10px 0; padding: 10px; background: #000; }
+    .pass { color: #00ff00; }
+    .fail { color: #ff0000; }
+    .info { color: #00aaff; }
+    .warning { color: #ffaa00; }
+    video, audio { margin: 10px 0; }
+    #results {
+      margin-top: 30px;
+      padding: 20px;
+      background: #000;
+      border: 2px solid #00ff00;
+      white-space: pre-wrap;
+    }
+    .test-controls {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 10px 0;
+    }
+    .log {
+      background: #000;
+      padding: 10px;
+      margin: 10px 0;
+      max-height: 200px;
+      overflow-y: auto;
+      font-size: 12px;
+    }
+    .log-entry {
+      margin: 2px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>MUTED→UNMUTED AUTOPLAY PATTERN TEST</h1>
+
+  <div class="test-section">
+    <h2>TEST OBJECTIVE</h2>
+    <p>Determine if the muted→unmuted pattern can bypass browser autoplay restrictions:</p>
+    <ul>
+      <li>Start media with <code>muted</code> attribute (should autoplay)</li>
+      <li>Programmatically set <code>.muted = false</code> after playback starts</li>
+      <li>Verify if unmuting works WITHOUT additional user interaction</li>
+    </ul>
+  </div>
+
+  <!-- Pattern 1: HTML muted + JS unmute on canplay -->
+  <div class="test-section">
+    <h2>PATTERN 1: HTML muted attribute + unmute on canplay</h2>
+    <p class="info">Video has muted attribute in HTML, then unmuted via JS when canplay fires</p>
+
+    <video id="pattern1-video" width="640" muted autoplay playsinline>
+      <source src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" type="video/mp4">
+    </video>
+
+    <div class="test-controls">
+      <button onclick="resetPattern1()">Reset Test</button>
+      <button id="pattern1-unmute-btn" onclick="manualUnmute1()" disabled>Manual Unmute (requires interaction)</button>
+    </div>
+
+    <div id="pattern1-status" class="status"></div>
+    <div id="pattern1-log" class="log"></div>
+  </div>
+
+  <!-- Pattern 2: JS muted + unmute after play() resolves -->
+  <div class="test-section">
+    <h2>PATTERN 2: JS muted=true + unmute after play() promise</h2>
+    <p class="info">Video muted via JS, play() called, then unmuted in .then()</p>
+
+    <video id="pattern2-video" width="640" playsinline>
+      <source src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" type="video/mp4">
+    </video>
+
+    <div class="test-controls">
+      <button onclick="testPattern2()">Start Test (autoplay attempt)</button>
+      <button onclick="resetPattern2()">Reset Test</button>
+      <button id="pattern2-unmute-btn" onclick="manualUnmute2()" disabled>Manual Unmute (requires interaction)</button>
+    </div>
+
+    <div id="pattern2-status" class="status"></div>
+    <div id="pattern2-log" class="log"></div>
+  </div>
+
+  <!-- Pattern 3: Audio element with same approach -->
+  <div class="test-section">
+    <h2>PATTERN 3: Audio element - muted + unmute</h2>
+    <p class="info">Audio element with muted attribute, unmuted on canplay</p>
+
+    <audio id="pattern3-audio" controls muted autoplay>
+      <source src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="test-controls">
+      <button onclick="resetPattern3()">Reset Test</button>
+      <button id="pattern3-unmute-btn" onclick="manualUnmute3()" disabled>Manual Unmute (requires interaction)</button>
+    </div>
+
+    <div id="pattern3-status" class="status"></div>
+    <div id="pattern3-log" class="log"></div>
+  </div>
+
+  <!-- Pattern 4: Delayed unmute (simulate user might click) -->
+  <div class="test-section">
+    <h2>PATTERN 4: User gesture + delayed unmute</h2>
+    <p class="info">User clicks to start, then video unmutes after 2 seconds</p>
+
+    <video id="pattern4-video" width="640" playsinline>
+      <source src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" type="video/mp4">
+    </video>
+
+    <div class="test-controls">
+      <button onclick="testPattern4()">Start Muted Playback (user gesture)</button>
+      <button onclick="resetPattern4()">Reset Test</button>
+    </div>
+
+    <div id="pattern4-status" class="status"></div>
+    <div id="pattern4-log" class="log"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>COMPREHENSIVE RESULTS</h2>
+    <button onclick="generateReport()">Generate JSON Report</button>
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const testResults = {
+      pattern1: { logs: [], autoplaySuccess: null, unmuteSuccess: null, method: 'auto' },
+      pattern2: { logs: [], autoplaySuccess: null, unmuteSuccess: null, method: 'auto' },
+      pattern3: { logs: [], autoplaySuccess: null, unmuteSuccess: null, method: 'auto' },
+      pattern4: { logs: [], autoplaySuccess: null, unmuteSuccess: null, method: 'manual' },
+      browserInfo: {},
+      timestamp: null
+    };
+
+    function log(patternId, message, className = 'info') {
+      const logEl = document.getElementById(`${patternId}-log`);
+      const statusEl = document.getElementById(`${patternId}-status`);
+      const timestamp = new Date().toLocaleTimeString();
+      const entry = `[${timestamp}] ${message}`;
+
+      logEl.innerHTML += `<div class="log-entry ${className}">${entry}</div>`;
+      logEl.scrollTop = logEl.scrollHeight;
+
+      statusEl.innerHTML = `<div class="${className}">${message}</div>`;
+
+      const patternNum = patternId.replace('pattern', '');
+      testResults[patternId].logs.push({ timestamp, message, className });
+
+      console.log(`[${patternId}] ${message}`);
+    }
+
+    // PATTERN 1: HTML muted + unmute on canplay
+    const pattern1Video = document.getElementById('pattern1-video');
+    let pattern1UnmuteAttempted = false;
+
+    pattern1Video.addEventListener('loadstart', () => {
+      log('pattern1', 'Video loading started...', 'info');
+    });
+
+    pattern1Video.addEventListener('canplay', () => {
+      log('pattern1', 'canplay event fired - video ready to play', 'pass');
+
+      if (!pattern1UnmuteAttempted) {
+        pattern1UnmuteAttempted = true;
+        log('pattern1', `Current state: muted=${pattern1Video.muted}, paused=${pattern1Video.paused}`, 'info');
+
+        // Attempt to unmute WITHOUT user interaction
+        setTimeout(() => {
+          log('pattern1', 'Attempting to unmute automatically (no user interaction)...', 'warning');
+          const wasMuted = pattern1Video.muted;
+          pattern1Video.muted = false;
+
+          setTimeout(() => {
+            const isNowMuted = pattern1Video.muted;
+            const isPlaying = !pattern1Video.paused;
+            const hasVolume = pattern1Video.volume > 0;
+
+            if (!isNowMuted && isPlaying && hasVolume) {
+              log('pattern1', `✅ SUCCESS: Unmute worked! muted=${isNowMuted}, playing=${isPlaying}, volume=${pattern1Video.volume}`, 'pass');
+              testResults.pattern1.unmuteSuccess = true;
+              testResults.pattern1.autoplaySuccess = true;
+            } else {
+              log('pattern1', `❌ BLOCKED: Unmute failed or playback stopped. muted=${isNowMuted}, playing=${isPlaying}, volume=${pattern1Video.volume}`, 'fail');
+              testResults.pattern1.unmuteSuccess = false;
+              document.getElementById('pattern1-unmute-btn').disabled = false;
+            }
+          }, 100);
+        }, 500); // Wait 500ms to ensure playback started
+      }
+    });
+
+    pattern1Video.addEventListener('play', () => {
+      log('pattern1', `play event fired - muted=${pattern1Video.muted}`, 'info');
+    });
+
+    pattern1Video.addEventListener('volumechange', () => {
+      log('pattern1', `volumechange event - muted=${pattern1Video.muted}, volume=${pattern1Video.volume}`, 'info');
+    });
+
+    pattern1Video.addEventListener('error', (e) => {
+      log('pattern1', `ERROR: ${pattern1Video.error?.message || 'Unknown error'}`, 'fail');
+      testResults.pattern1.autoplaySuccess = false;
+    });
+
+    function resetPattern1() {
+      pattern1UnmuteAttempted = false;
+      pattern1Video.muted = true;
+      pattern1Video.pause();
+      pattern1Video.currentTime = 0;
+      pattern1Video.load();
+      document.getElementById('pattern1-log').innerHTML = '';
+      document.getElementById('pattern1-status').innerHTML = '';
+      document.getElementById('pattern1-unmute-btn').disabled = true;
+      log('pattern1', 'Test reset - reloading video', 'info');
+    }
+
+    function manualUnmute1() {
+      log('pattern1', 'User clicked manual unmute button', 'info');
+      pattern1Video.muted = false;
+      if (pattern1Video.paused) {
+        pattern1Video.play().then(() => {
+          log('pattern1', '✅ Playback started with manual unmute', 'pass');
+        }).catch(err => {
+          log('pattern1', `❌ Manual play failed: ${err.message}`, 'fail');
+        });
+      } else {
+        log('pattern1', '✅ Unmuted during playback', 'pass');
+      }
+    }
+
+    // PATTERN 2: JS muted + unmute in play() promise
+    const pattern2Video = document.getElementById('pattern2-video');
+
+    function testPattern2() {
+      document.getElementById('pattern2-log').innerHTML = '';
+      document.getElementById('pattern2-status').innerHTML = '';
+
+      log('pattern2', 'Setting video.muted = true', 'info');
+      pattern2Video.muted = true;
+
+      log('pattern2', 'Calling video.play()...', 'info');
+      pattern2Video.play()
+        .then(() => {
+          log('pattern2', '✅ play() promise resolved - video is playing muted', 'pass');
+          testResults.pattern2.autoplaySuccess = true;
+
+          log('pattern2', 'Attempting to unmute (no user interaction)...', 'warning');
+          pattern2Video.muted = false;
+
+          setTimeout(() => {
+            const isNowMuted = pattern2Video.muted;
+            const isPlaying = !pattern2Video.paused;
+            const hasVolume = pattern2Video.volume > 0;
+
+            if (!isNowMuted && isPlaying && hasVolume) {
+              log('pattern2', `✅ SUCCESS: Unmute worked! muted=${isNowMuted}, playing=${isPlaying}, volume=${pattern2Video.volume}`, 'pass');
+              testResults.pattern2.unmuteSuccess = true;
+            } else {
+              log('pattern2', `❌ BLOCKED: Unmute failed. muted=${isNowMuted}, playing=${isPlaying}, volume=${pattern2Video.volume}`, 'fail');
+              testResults.pattern2.unmuteSuccess = false;
+              document.getElementById('pattern2-unmute-btn').disabled = false;
+            }
+          }, 100);
+        })
+        .catch(err => {
+          log('pattern2', `❌ play() promise rejected: ${err.name} - ${err.message}`, 'fail');
+          testResults.pattern2.autoplaySuccess = false;
+        });
+    }
+
+    function resetPattern2() {
+      pattern2Video.pause();
+      pattern2Video.currentTime = 0;
+      document.getElementById('pattern2-log').innerHTML = '';
+      document.getElementById('pattern2-status').innerHTML = '';
+      document.getElementById('pattern2-unmute-btn').disabled = true;
+      log('pattern2', 'Test reset', 'info');
+    }
+
+    function manualUnmute2() {
+      log('pattern2', 'User clicked manual unmute button', 'info');
+      pattern2Video.muted = false;
+      log('pattern2', `✅ Manually unmuted - muted=${pattern2Video.muted}`, 'pass');
+    }
+
+    // PATTERN 3: Audio with muted attribute
+    const pattern3Audio = document.getElementById('pattern3-audio');
+    let pattern3UnmuteAttempted = false;
+
+    pattern3Audio.addEventListener('canplay', () => {
+      log('pattern3', 'canplay event fired - audio ready', 'pass');
+
+      if (!pattern3UnmuteAttempted) {
+        pattern3UnmuteAttempted = true;
+        log('pattern3', `Current state: muted=${pattern3Audio.muted}, paused=${pattern3Audio.paused}`, 'info');
+
+        setTimeout(() => {
+          log('pattern3', 'Attempting to unmute audio automatically...', 'warning');
+          pattern3Audio.muted = false;
+
+          setTimeout(() => {
+            const isNowMuted = pattern3Audio.muted;
+            const isPlaying = !pattern3Audio.paused;
+
+            if (!isNowMuted && isPlaying) {
+              log('pattern3', `✅ SUCCESS: Audio unmuted! muted=${isNowMuted}, playing=${isPlaying}`, 'pass');
+              testResults.pattern3.unmuteSuccess = true;
+              testResults.pattern3.autoplaySuccess = true;
+            } else {
+              log('pattern3', `❌ BLOCKED: Audio unmute failed. muted=${isNowMuted}, playing=${isPlaying}`, 'fail');
+              testResults.pattern3.unmuteSuccess = false;
+              document.getElementById('pattern3-unmute-btn').disabled = false;
+            }
+          }, 100);
+        }, 500);
+      }
+    });
+
+    pattern3Audio.addEventListener('play', () => {
+      log('pattern3', `play event fired - muted=${pattern3Audio.muted}`, 'info');
+    });
+
+    function resetPattern3() {
+      pattern3UnmuteAttempted = false;
+      pattern3Audio.muted = true;
+      pattern3Audio.pause();
+      pattern3Audio.currentTime = 0;
+      pattern3Audio.load();
+      document.getElementById('pattern3-log').innerHTML = '';
+      document.getElementById('pattern3-status').innerHTML = '';
+      document.getElementById('pattern3-unmute-btn').disabled = true;
+      log('pattern3', 'Test reset - reloading audio', 'info');
+    }
+
+    function manualUnmute3() {
+      log('pattern3', 'User clicked manual unmute button', 'info');
+      pattern3Audio.muted = false;
+      log('pattern3', `✅ Manually unmuted - muted=${pattern3Audio.muted}`, 'pass');
+    }
+
+    // PATTERN 4: User gesture + delayed unmute
+    const pattern4Video = document.getElementById('pattern4-video');
+
+    function testPattern4() {
+      document.getElementById('pattern4-log').innerHTML = '';
+      document.getElementById('pattern4-status').innerHTML = '';
+
+      log('pattern4', 'User clicked button (user gesture captured)', 'pass');
+
+      pattern4Video.muted = true;
+      pattern4Video.play()
+        .then(() => {
+          log('pattern4', '✅ Muted playback started with user gesture', 'pass');
+          testResults.pattern4.autoplaySuccess = true;
+
+          log('pattern4', 'Waiting 2 seconds before unmuting...', 'info');
+
+          setTimeout(() => {
+            log('pattern4', 'Attempting delayed unmute (no new user interaction)...', 'warning');
+            pattern4Video.muted = false;
+
+            setTimeout(() => {
+              const isNowMuted = pattern4Video.muted;
+              const isPlaying = !pattern4Video.paused;
+
+              if (!isNowMuted && isPlaying) {
+                log('pattern4', `✅ SUCCESS: Delayed unmute worked! muted=${isNowMuted}, playing=${isPlaying}`, 'pass');
+                testResults.pattern4.unmuteSuccess = true;
+              } else {
+                log('pattern4', `❌ BLOCKED: Delayed unmute failed. muted=${isNowMuted}, playing=${isPlaying}`, 'fail');
+                testResults.pattern4.unmuteSuccess = false;
+              }
+            }, 100);
+          }, 2000);
+        })
+        .catch(err => {
+          log('pattern4', `❌ play() failed: ${err.message}`, 'fail');
+          testResults.pattern4.autoplaySuccess = false;
+        });
+    }
+
+    function resetPattern4() {
+      pattern4Video.pause();
+      pattern4Video.currentTime = 0;
+      document.getElementById('pattern4-log').innerHTML = '';
+      document.getElementById('pattern4-status').innerHTML = '';
+      log('pattern4', 'Test reset', 'info');
+    }
+
+    // Generate comprehensive report
+    function generateReport() {
+      testResults.timestamp = new Date().toISOString();
+      testResults.browserInfo = {
+        userAgent: navigator.userAgent,
+        vendor: navigator.vendor,
+        platform: navigator.platform,
+        language: navigator.language
+      };
+
+      const report = {
+        ...testResults,
+        summary: {
+          pattern1: testResults.pattern1.unmuteSuccess === true ? 'SUCCESS' :
+                    testResults.pattern1.unmuteSuccess === false ? 'FAILED' : 'NOT_TESTED',
+          pattern2: testResults.pattern2.unmuteSuccess === true ? 'SUCCESS' :
+                    testResults.pattern2.unmuteSuccess === false ? 'FAILED' : 'NOT_TESTED',
+          pattern3: testResults.pattern3.unmuteSuccess === true ? 'SUCCESS' :
+                    testResults.pattern3.unmuteSuccess === false ? 'FAILED' : 'NOT_TESTED',
+          pattern4: testResults.pattern4.unmuteSuccess === true ? 'SUCCESS' :
+                    testResults.pattern4.unmuteSuccess === false ? 'FAILED' : 'NOT_TESTED'
+        },
+        conclusion: determineConclusion(),
+        recommendation: generateRecommendation()
+      };
+
+      document.getElementById('results').textContent = JSON.stringify(report, null, 2);
+      console.log('FULL TEST REPORT:', report);
+    }
+
+    function determineConclusion() {
+      const patterns = [
+        testResults.pattern1.unmuteSuccess,
+        testResults.pattern2.unmuteSuccess,
+        testResults.pattern3.unmuteSuccess,
+        testResults.pattern4.unmuteSuccess
+      ];
+
+      const successes = patterns.filter(p => p === true).length;
+      const failures = patterns.filter(p => p === false).length;
+
+      if (successes === 0 && failures > 0) {
+        return "MYTH CONFIRMED: Muted→unmuted pattern does NOT bypass autoplay policies. All automatic unmute attempts were blocked.";
+      } else if (successes > 0 && testResults.pattern4.unmuteSuccess === true) {
+        return "WORKAROUND WORKS: Unmuting AFTER user gesture succeeds. The user must click/tap first, then unmute can happen programmatically.";
+      } else if (successes > 0) {
+        return "PARTIAL SUCCESS: Some patterns worked. Review individual pattern results.";
+      } else {
+        return "INCONCLUSIVE: Tests were not run or results are mixed.";
+      }
+    }
+
+    function generateRecommendation() {
+      const recommendations = [];
+
+      if (testResults.pattern1.unmuteSuccess === false || testResults.pattern2.unmuteSuccess === false) {
+        recommendations.push("Automatic unmuting without user interaction is BLOCKED by browser policy");
+      }
+
+      if (testResults.pattern4.unmuteSuccess === true) {
+        recommendations.push("User gesture is REQUIRED before unmuting - provide a UI button for users to start playback");
+      }
+
+      if (testResults.pattern1.autoplaySuccess === true) {
+        recommendations.push("Muted autoplay DOES work - use this for background videos");
+      }
+
+      recommendations.push("Recommended approach: Start muted on user click, provide unmute toggle for users");
+
+      return recommendations;
+    }
+
+    // Initialize
+    window.addEventListener('load', () => {
+      console.log('=== MUTED→UNMUTED AUTOPLAY PATTERN TEST LOADED ===');
+      console.log('Pattern 1 will auto-test on load');
+      console.log('Patterns 2-4 require manual button clicks');
+    });
+  </script>
+</body>
+</html>

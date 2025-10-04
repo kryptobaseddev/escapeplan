@@ -6,7 +6,8 @@
   import { openConfirmDialog } from '$lib/components/confirm-dialog';
   import SkeletonLoader from '$lib/components/ui/SkeletonLoader.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
-  import type { CameraSummary } from '@escapeplan/contracts';
+  import CameraViewer from '$lib/components/CameraViewer.svelte';
+  import type { CameraSummary, Camera } from '@escapeplan/contracts';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
@@ -14,6 +15,8 @@
   let isSubmitting = $state(false);
   let feedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
   let isLoading = $state(true);
+  let selectedCamera = $state<Camera | null>(null);
+  let viewerModal: HTMLDialogElement;
 
   const canViewCameras = $derived(data.canViewCameras);
   const canManageCameras = $derived(data.canManageCameras);
@@ -115,6 +118,18 @@
         return protocol.toUpperCase();
     }
   }
+
+  async function openCameraViewer(cameraId: string) {
+    try {
+      const response = await fetch(`/api/admin/cameras/${cameraId}`);
+      if (!response.ok) throw new Error('Failed to fetch camera details');
+      selectedCamera = await response.json();
+      viewerModal?.showModal();
+    } catch (error) {
+      console.error('Failed to load camera:', error);
+      feedback = { type: 'error', message: 'Failed to load camera details' };
+    }
+  }
 </script>
 
 <section class="space-y-8">
@@ -160,7 +175,10 @@
     <!-- Mobile Cards -->
     <div class="space-y-4 sm:hidden">
       {#each data.cameras as camera (camera.id)}
-        <article class="rounded-2xl border border-white/10 bg-base-200/70 p-5">
+        <article
+          class="rounded-2xl border border-white/10 bg-base-200/70 p-5 cursor-pointer hover:bg-base-200 transition-colors"
+          onclick={() => openCameraViewer(camera.id)}
+        >
           <header class="flex items-start justify-between">
             <div class="flex-1">
               <h3 class="text-base font-semibold text-base-content">{camera.name}</h3>
@@ -250,7 +268,7 @@
           </thead>
           <tbody>
             {#each data.cameras as camera (camera.id)}
-              <tr class="text-sm">
+              <tr class="text-sm cursor-pointer hover:bg-base-300/50 transition-colors" onclick={() => openCameraViewer(camera.id)}>
                 <td>
                   <div class="flex items-center gap-3">
                     <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-base-300">
@@ -349,3 +367,19 @@
     </div>
   {/if}
 </section>
+
+<!-- Camera Viewer Modal -->
+<dialog bind:this={viewerModal} class="modal">
+  <div class="modal-box max-w-5xl">
+    <form method="dialog">
+      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2">✕</button>
+    </form>
+    {#if selectedCamera}
+      <h3 class="font-bold text-lg mb-4">{selectedCamera.name}</h3>
+      <CameraViewer camera={selectedCamera} showControls={true} autoplay={true} />
+    {/if}
+  </div>
+  <form method="dialog" class="modal-backdrop">
+    <button>close</button>
+  </form>
+</dialog>

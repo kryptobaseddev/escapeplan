@@ -87,6 +87,18 @@ import { handleAssetUpload, getStorageMetrics, deleteAsset, listAssets, linkReus
 import { logToDatabase, dismissAlert } from './logging/index.js';
 import { setupUpdateRoutes } from './updates.js';
 
+// Augment Socket.IO types for custom socket.data properties
+declare module 'socket.io' {
+  interface SocketData {
+    user: {
+      id: string;
+      role: OperatorRole;
+      permissions: OperatorPermission[];
+    } & Record<string, unknown> | null;
+    authenticated: boolean;
+  }
+}
+
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
 
 const operatorRoleValues = ['admin', 'manager', 'game_master', 'customer'] as const;
@@ -1327,6 +1339,133 @@ export async function buildServer() {
       }
     });
 
+    // Camera PTZ control
+    api.patch('/admin/cameras/:id/ptz', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_cameras')) return;
+
+      const { id } = request.params as { id: string };
+      const schema = z.object({
+        pan: z.number().int().min(-180).max(180).optional(),
+        tilt: z.number().int().min(-90).max(90).optional(),
+        zoom: z.number().int().min(0).max(100).optional(),
+      });
+
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        const camera = db.select().from(cameras).where(eq(cameras.id, id)).get();
+        if (!camera) {
+          return reply.status(404).send({ statusCode: 404, message: 'Camera not found' });
+        }
+
+        const updates: any = {};
+        if (parsed.data.pan !== undefined) updates.ptz_pan = parsed.data.pan;
+        if (parsed.data.tilt !== undefined) updates.ptz_tilt = parsed.data.tilt;
+        if (parsed.data.zoom !== undefined) updates.ptz_zoom = parsed.data.zoom;
+
+        db.update(cameras).set(updates).where(eq(cameras.id, id)).run();
+
+        return { success: true };
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to update PTZ');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Camera IR control
+    api.patch('/admin/cameras/:id/ir', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_cameras')) return;
+
+      const { id } = request.params as { id: string };
+      const schema = z.object({
+        irMode: z.enum(['auto', 'on', 'off']),
+      });
+
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        const camera = db.select().from(cameras).where(eq(cameras.id, id)).get();
+        if (!camera) {
+          return reply.status(404).send({ statusCode: 404, message: 'Camera not found' });
+        }
+
+        db.update(cameras).set({ ir_mode: parsed.data.irMode }).where(eq(cameras.id, id)).run();
+
+        return { success: true };
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to update IR mode');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Camera audio control
+    api.patch('/admin/cameras/:id/audio', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_cameras')) return;
+
+      const { id } = request.params as { id: string };
+      const schema = z.object({
+        volume: z.number().int().min(0).max(100),
+      });
+
+      const parsed = schema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
+      }
+
+      try {
+        const camera = db.select().from(cameras).where(eq(cameras.id, id)).get();
+        if (!camera) {
+          return reply.status(404).send({ statusCode: 404, message: 'Camera not found' });
+        }
+
+        db.update(cameras).set({ audio_volume: parsed.data.volume }).where(eq(cameras.id, id)).run();
+
+        return { success: true };
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to update audio volume');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Camera HLS stream endpoint
+    api.get('/admin/cameras/:id/stream.m3u8', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_cameras')) return;
+
+      const { id } = request.params as { id: string };
+
+      try {
+        const camera = db.select().from(cameras).where(eq(cameras.id, id)).get();
+        if (!camera) {
+          return reply.status(404).send({ statusCode: 404, message: 'Camera not found' });
+        }
+
+        // For now, return a message indicating no stream is available
+        // In production, this would be generated by ffmpeg systemd service
+        // that converts RTSP → HLS
+        return reply.status(503).send({
+          statusCode: 503,
+          message: 'HLS streaming not yet configured. This requires ffmpeg transcoding service to convert RTSP to HLS.'
+        });
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to get camera stream');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
     // =========================================================================
     // Logging & Alerting System Routes
     // =========================================================================
@@ -1803,19 +1942,30 @@ export async function buildServer() {
   io.use(async (socket, next) => {
     try {
       const session = await requireSession(socket.handshake.headers as Record<string, string | string[] | undefined>);
-      if (!session) {
-        return next(new Error('Unauthorized'));
+      if (session) {
+        // Authenticated connection - set user and mark as authenticated
+        socket.data.user = session.user;
+        socket.data.authenticated = true;
+      } else {
+        // Unauthenticated connection - allow for public room displays
+        socket.data.user = null;
+        socket.data.authenticated = false;
       }
-      socket.data.user = session.user;
       next();
     } catch (error) {
-      next(new Error('Unauthorized'));
+      // On error, treat as unauthenticated but still allow connection
+      socket.data.user = null;
+      socket.data.authenticated = false;
+      next();
     }
   });
 
   io.on('connection', (socket) => {
-    socket.emit('dashboard:update', getDashboard());
-    socket.emit('session:update:init', listActiveSessions().sessions);
+    // Only send operator-specific events to authenticated sockets
+    if (socket.data.authenticated === true) {
+      socket.emit('dashboard:update', getDashboard());
+      socket.emit('session:update:init', listActiveSessions().sessions);
+    }
 
     // Handle room display status updates
     socket.on('room-display:status', async (statusEvent: import('@escapeplan/contracts').RoomDisplayStatusEvent) => {

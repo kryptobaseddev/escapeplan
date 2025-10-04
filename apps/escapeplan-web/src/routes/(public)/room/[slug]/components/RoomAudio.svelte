@@ -1,7 +1,7 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
 
   interface AudioProps {
     src: string;
@@ -17,19 +17,17 @@
   let audioElement: HTMLAudioElement | null = $state(null);
   let playCount = $state(0);
 
-  // Single $effect to handle both initial playback AND src changes
-  $effect(() => {
-    if (audioElement && src) {
+  onMount(() => {
+    if (audioElement) {
       console.log('[RoomAudio] Playing audio:', src);
       audioElement.volume = volumeLevel / 100;
-      audioElement.load(); // Force reload of media
-      audioElement.play().catch(err => {
+      audioElement.play().catch((err) => {
         console.error('[RoomAudio] Play failed:', err);
       });
     }
   });
 
-  function handleEnded() {
+  function handleEnded(): void {
     playCount++;
 
     if (loop) {
@@ -51,6 +49,7 @@
     if (audioElement) {
       audioElement.pause();
       audioElement.src = '';
+      audioElement = null;
     }
   });
 </script>
