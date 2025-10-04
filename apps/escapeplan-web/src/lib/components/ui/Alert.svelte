@@ -22,12 +22,12 @@
 
 	let visible = $state(true);
 
-	// Derived type class
+	// Derived type classes with enhanced styling
 	const typeClasses = {
-		info: 'alert-info',
-		success: 'alert-success',
-		warning: 'alert-warning',
-		error: 'alert-error'
+		info: 'alert-info border border-info/30 bg-info/10',
+		success: 'alert-success border border-success/30 bg-success/10',
+		warning: 'alert-warning border border-warning/30 bg-warning/10',
+		error: 'alert-error border border-error/30 bg-error/10'
 	};
 	let typeClass = $derived(typeClasses[type as keyof typeof typeClasses]);
 

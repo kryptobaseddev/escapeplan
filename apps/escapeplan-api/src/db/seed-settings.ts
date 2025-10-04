@@ -14,6 +14,7 @@ import {
   DEFAULT_GITHUB_REPO,
   DEFAULT_AUTO_UPDATE_ENABLED,
   BUSINESS_DEFAULTS,
+  USER_VALIDATION_DEFAULTS,
   FALLBACK_VERSION
 } from '@escapeplan/contracts';
 import { readFileSync } from 'node:fs';
@@ -143,6 +144,53 @@ export async function seedSystemSettings() {
       category: 'business',
       label: 'Default Booking Window (Days)',
       description: 'How far in advance bookings can be made',
+      is_editable: true
+    },
+
+    // ========== USER VALIDATION SETTINGS ==========
+    {
+      key: SETTING_KEYS.USER_VALIDATION.EMAIL_REQUIRED,
+      value: String(USER_VALIDATION_DEFAULTS.EMAIL_REQUIRED),
+      type: 'boolean',
+      category: 'user_validation',
+      label: 'Email Required',
+      description: 'Require email address when creating new users',
+      is_editable: true
+    },
+    {
+      key: SETTING_KEYS.USER_VALIDATION.PASSWORD_MIN_LENGTH,
+      value: String(USER_VALIDATION_DEFAULTS.PASSWORD_MIN_LENGTH),
+      type: 'number',
+      category: 'user_validation',
+      label: 'Minimum Password Length',
+      description: 'Minimum number of characters required for passwords',
+      is_editable: true
+    },
+    {
+      key: SETTING_KEYS.USER_VALIDATION.PASSWORD_MAX_LENGTH,
+      value: String(USER_VALIDATION_DEFAULTS.PASSWORD_MAX_LENGTH),
+      type: 'number',
+      category: 'user_validation',
+      label: 'Maximum Password Length',
+      description: 'Maximum number of characters allowed for passwords',
+      is_editable: true
+    },
+    {
+      key: SETTING_KEYS.USER_VALIDATION.CAPITALIZE_DISPLAY_NAME,
+      value: String(USER_VALIDATION_DEFAULTS.CAPITALIZE_DISPLAY_NAME),
+      type: 'boolean',
+      category: 'user_validation',
+      label: 'Auto-Capitalize Display Names',
+      description: 'Automatically capitalize the first letter of each word in display names',
+      is_editable: true
+    },
+    {
+      key: SETTING_KEYS.USER_VALIDATION.DEFAULT_ROLE,
+      value: USER_VALIDATION_DEFAULTS.DEFAULT_ROLE,
+      type: 'string',
+      category: 'user_validation',
+      label: 'Default Role',
+      description: 'Default role assigned to new users',
       is_editable: true
     },
 

@@ -18,7 +18,8 @@ import type {
   CreateRoleRequest,
   UpdateRoleRequest,
   CreateCameraRequest,
-  UpdateCameraRequest
+  UpdateCameraRequest,
+  SettingCategory
 } from '@escapeplan/contracts';
 import {
   saveGameSchema,
@@ -340,6 +341,34 @@ export async function buildServer() {
           }
         : { role: 'all' as const, status: 'active' as const };
       return listOperatorSummaries(filters);
+    });
+
+    api.get('/admin/users/check-username', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
+      const { username } = request.query as { username?: string };
+      if (!username || username.trim().length < 3) {
+        return reply.status(400).send({ statusCode: 400, message: 'Username must be at least 3 characters' });
+      }
+      const existing = sqlite
+        .prepare(`SELECT id FROM user WHERE username = ? LIMIT 1`)
+        .get(username.trim()) as { id: string } | undefined;
+      return { available: !existing };
+    });
+
+    api.get('/admin/users/check-email', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_users')) return;
+      const { email } = request.query as { email?: string };
+      if (!email || email.trim().length === 0) {
+        return reply.status(400).send({ statusCode: 400, message: 'Email is required' });
+      }
+      const existing = sqlite
+        .prepare(`SELECT id FROM user WHERE email = ? LIMIT 1`)
+        .get(email.trim()) as { id: string } | undefined;
+      return { available: !existing };
     });
 
     api.post('/admin/users', async (request, reply) => {
@@ -836,6 +865,46 @@ export async function buildServer() {
       } catch (error) {
         request.log.error({ err: error }, 'WiFi disconnection failed');
         return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // =========================================================================
+    // Settings Routes
+    // =========================================================================
+
+    // Get settings by category
+    api.get('/admin/settings', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+
+      const { category } = request.query as { category?: string };
+
+      try {
+        const allSettings = await settings.getAll();
+
+        if (category) {
+          // Return settings for specific category as key-value pairs
+          const categorySettings = allSettings[category as SettingCategory];
+          if (!categorySettings) {
+            return reply.status(400).send({ statusCode: 400, message: `Invalid category: ${category}` });
+          }
+
+          // Convert to simple key-value object for easier consumption
+          const settingsMap: Record<string, any> = {};
+          for (const setting of categorySettings) {
+            // Extract just the key name (e.g., "email_required" from "user_validation.email_required")
+            const keyName = setting.key.split('.').pop() || setting.key;
+            settingsMap[keyName] = setting.value;
+          }
+
+          return settingsMap;
+        }
+
+        // Return all settings grouped by category
+        return allSettings;
+      } catch (error) {
+        request.log.error({ err: error }, 'Failed to retrieve settings');
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to retrieve settings' });
       }
     });
 

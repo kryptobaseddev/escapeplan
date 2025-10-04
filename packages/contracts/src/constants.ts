@@ -56,6 +56,20 @@ export const BUSINESS_DEFAULTS = {
   DEFAULT_BOOKING_WINDOW_DAYS: 90
 } as const;
 
+/** User validation defaults */
+export const USER_VALIDATION_DEFAULTS = {
+  /** Email field required for user creation */
+  EMAIL_REQUIRED: true,
+  /** Minimum password length */
+  PASSWORD_MIN_LENGTH: 12,
+  /** Maximum password length */
+  PASSWORD_MAX_LENGTH: 128,
+  /** Auto-capitalize display name */
+  CAPITALIZE_DISPLAY_NAME: true,
+  /** Default role for new users */
+  DEFAULT_ROLE: 'game_master'
+} as const;
+
 /** Application name */
 export const APP_NAME = 'EscapePlan';
 
@@ -96,6 +110,14 @@ export const SETTING_KEYS = {
     DEFAULT_BOOKING_BUFFER_MINUTES: 'business.default_booking_buffer_minutes',
     DEFAULT_BOOKING_WINDOW_DAYS: 'business.default_booking_window_days'
   },
+  /** User validation settings */
+  USER_VALIDATION: {
+    EMAIL_REQUIRED: 'user_validation.email_required',
+    PASSWORD_MIN_LENGTH: 'user_validation.password_min_length',
+    PASSWORD_MAX_LENGTH: 'user_validation.password_max_length',
+    CAPITALIZE_DISPLAY_NAME: 'user_validation.capitalize_display_name',
+    DEFAULT_ROLE: 'user_validation.default_role'
+  },
   /** System information (read-only) */
   SYSTEM: {
     INSTALL_PATH: 'system.install_path',
@@ -110,6 +132,7 @@ export const SETTING_CATEGORIES = {
   BACKUP: 'backup',
   UPDATES: 'updates',
   BUSINESS: 'business',
+  USER_VALIDATION: 'user_validation',
   SYSTEM: 'system',
   GENERAL: 'general'
 } as const;

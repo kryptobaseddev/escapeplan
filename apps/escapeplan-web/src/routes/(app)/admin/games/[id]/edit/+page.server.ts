@@ -78,9 +78,8 @@ export const actions: Actions = {
         throw err; // Re-throw redirect
       }
       console.error('Failed to update game - Full error:', err);
-      console.error('Error details:', JSON.stringify(err, null, 2));
       const errorMessage = err instanceof Error ? err.message : 'Unable to update game.';
-      return fail(500, { message: errorMessage, details: err });
+      return fail(500, { message: errorMessage });
     }
   }
 };

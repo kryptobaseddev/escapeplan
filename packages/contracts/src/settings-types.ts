@@ -56,6 +56,13 @@ export interface SystemSettingValues {
   'business.default_booking_buffer_minutes': number;
   'business.default_booking_window_days': number;
 
+  // User validation
+  'user_validation.email_required': boolean;
+  'user_validation.password_min_length': number;
+  'user_validation.password_max_length': number;
+  'user_validation.capitalize_display_name': boolean;
+  'user_validation.default_role': string;
+
   // System (read-only)
   'system.install_path': string;
   'system.version': string;

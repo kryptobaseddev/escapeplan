@@ -8,15 +8,32 @@
   import Avatar from '$lib/avatar/Avatar.svelte';
   import { randomSeed, randomizeAvatarConfig } from '$lib/avatar/avatar-utils';
   import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
+  import HelpTooltip from '$lib/components/ui/HelpTooltip.svelte';
   import { createFormHandler } from '$lib/utils/forms';
+  import { apiFetch } from '$lib/api/client';
   import type { PageData } from './$types';
 
   let { data }: { data: PageData } = $props();
+
+  // Extract user validation settings
+  const settings = data.userValidationSettings;
+  const emailRequired = settings.email_required;
+  const passwordMinLength = settings.password_min_length;
+  const passwordMaxLength = settings.password_max_length;
+  const capitalizeDisplayName = settings.capitalize_display_name;
+  const defaultRole = settings.default_role as OperatorRole;
 
   const roleOptions: OperatorRole[] = ['admin', 'manager', 'game_master', 'customer'];
 
   let errorMessage = $state<string | null>(null);
   let isSubmitting = $state(false);
+  let usernameCheckTimeout: ReturnType<typeof setTimeout> | null = null;
+  let usernameValidationMessage = $state<string | null>(null);
+  let isCheckingUsername = $state(false);
+  let emailCheckTimeout: ReturnType<typeof setTimeout> | null = null;
+  let emailValidationMessage = $state<string | null>(null);
+  let isCheckingEmail = $state(false);
 
   // Form fields
   let nameValue = $state('');
@@ -24,7 +41,7 @@
   let emailValue = $state('');
   let passwordValue = $state('');
   let bioValue = $state('');
-  let selectedRole = $state<OperatorRole>('manager');
+  let selectedRole = $state<OperatorRole>(defaultRole);
   let mustReset = $state(true);
 
   // Avatar state
@@ -87,6 +104,95 @@
     }
   });
 
+  // Debounced username validation
+  async function checkUsernameAvailability(username: string) {
+    if (username.trim().length < 3) {
+      usernameValidationMessage = null;
+      return;
+    }
+
+    isCheckingUsername = true;
+    try {
+      const result = await apiFetch<{ available: boolean }>(
+        fetch,
+        `/admin/users/check-username?username=${encodeURIComponent(username.trim())}`
+      );
+      if (result.available) {
+        usernameValidationMessage = null;
+      } else {
+        usernameValidationMessage = 'Username already exists';
+      }
+    } catch (error) {
+      console.error('Failed to check username:', error);
+      usernameValidationMessage = null;
+    } finally {
+      isCheckingUsername = false;
+    }
+  }
+
+  function handleUsernameInput() {
+    if (usernameCheckTimeout) {
+      clearTimeout(usernameCheckTimeout);
+    }
+    usernameValidationMessage = null;
+
+    usernameCheckTimeout = setTimeout(() => {
+      checkUsernameAvailability(usernameValue);
+    }, 500);
+  }
+
+  // Debounced email validation
+  async function checkEmailAvailability(email: string) {
+    const trimmed = email.trim();
+    if (!trimmed || !trimmed.includes('@')) {
+      emailValidationMessage = null;
+      return;
+    }
+
+    isCheckingEmail = true;
+    try {
+      const result = await apiFetch<{ available: boolean }>(
+        fetch,
+        `/admin/users/check-email?email=${encodeURIComponent(trimmed)}`
+      );
+      if (result.available) {
+        emailValidationMessage = null;
+      } else {
+        emailValidationMessage = 'Email is associated with an account already';
+      }
+    } catch (error) {
+      console.error('Failed to check email:', error);
+      emailValidationMessage = null;
+    } finally {
+      isCheckingEmail = false;
+    }
+  }
+
+  function handleEmailInput() {
+    if (emailCheckTimeout) {
+      clearTimeout(emailCheckTimeout);
+    }
+    emailValidationMessage = null;
+
+    emailCheckTimeout = setTimeout(() => {
+      checkEmailAvailability(emailValue);
+    }, 500);
+  }
+
+  // Capitalize display name if setting is enabled
+  function handleNameInput() {
+    if (capitalizeDisplayName) {
+      const words = nameValue.split(' ');
+      const capitalized = words
+        .map(word => {
+          if (word.length === 0) return word;
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(' ');
+      nameValue = capitalized;
+    }
+  }
+
   const handleSubmit = createFormHandler({
     onSubmit: () => {
       isSubmitting = true;
@@ -122,9 +228,9 @@
       </div>
 
       {#if errorMessage}
-        <div class="alert alert-error mb-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
-        </div>
+        <Alert type="error" dismissible={true} onDismiss={() => (errorMessage = null)}>
+          {errorMessage}
+        </Alert>
       {/if}
     </div>
   </header>
@@ -143,16 +249,23 @@
             <label class="form-control">
               <span class="label-text">Username <span class="text-error">*</span></span>
               <input
-                class="input input-bordered validator"
+                class="input input-bordered validator {usernameValidationMessage ? 'input-error' : ''}"
                 name="username"
                 type="text"
                 required
                 minlength="3"
                 pattern="^[a-zA-Z0-9._\-]+$"
                 bind:value={usernameValue}
+                oninput={handleUsernameInput}
                 placeholder="liv.operator"
               />
-              <div class="label-text-alt text-xs">At least 3 characters, alphanumeric with dots, dashes, or underscores</div>
+              {#if isCheckingUsername}
+                <div class="label-text-alt text-xs text-info">Checking availability...</div>
+              {:else if usernameValidationMessage}
+                <div class="label-text-alt text-xs text-error">{usernameValidationMessage}</div>
+              {:else}
+                <div class="label-text-alt text-xs">At least 3 characters, alphanumeric with dots, dashes, or underscores</div>
+              {/if}
             </label>
 
             <label class="form-control">
@@ -164,22 +277,30 @@
                 required
                 minlength="2"
                 bind:value={nameValue}
+                oninput={handleNameInput}
                 placeholder="Liv Operator"
               />
               <div class="label-text-alt text-xs">At least 2 characters</div>
             </label>
 
             <label class="form-control">
-              <span class="label-text">Email <span class="text-error">*</span></span>
+              <span class="label-text">Email {#if emailRequired}<span class="text-error">*</span>{/if}</span>
               <input
-                class="input input-bordered validator"
+                class="input input-bordered validator {emailValidationMessage ? 'input-error' : ''}"
                 type="email"
                 name="email"
-                required
+                required={emailRequired}
                 bind:value={emailValue}
+                oninput={handleEmailInput}
                 placeholder="liv@escapeplan.local"
               />
-              <div class="label-text-alt text-xs">Enter a valid email address</div>
+              {#if isCheckingEmail}
+                <div class="label-text-alt text-xs text-info">Checking availability...</div>
+              {:else if emailValidationMessage}
+                <div class="label-text-alt text-xs text-error">{emailValidationMessage}</div>
+              {:else}
+                <div class="label-text-alt text-xs">{emailRequired ? 'Enter a valid email address' : 'Optional email address'}</div>
+              {/if}
             </label>
 
             <label class="form-control">
@@ -188,12 +309,15 @@
                 class="input input-bordered validator"
                 type="password"
                 name="password"
-                minlength="12"
+                minlength={passwordMinLength}
+                maxlength={passwordMaxLength}
                 required
                 bind:value={passwordValue}
-                placeholder="At least 12 characters"
+                placeholder={`At least ${passwordMinLength} characters`}
               />
-              <div class="label-text-alt text-xs">Minimum 12 characters required</div>
+              <div class="label-text-alt text-xs">
+                {passwordMinLength} to {passwordMaxLength} characters required
+              </div>
             </label>
           </div>
         </fieldset>
@@ -255,7 +379,13 @@
           <legend class="fieldset-legend">Access Control</legend>
           <div class="grid gap-4 sm:grid-cols-2">
             <label class="form-control">
-              <span class="label-text">Role <span class="text-error">*</span></span>
+              <div class="flex items-center gap-1">
+                <span class="label-text">Role <span class="text-error">*</span></span>
+                <HelpTooltip
+                  text={roleDefaults(selectedRole).map(permissionLabel).join(', ') || 'No default permissions'}
+                  position="right"
+                />
+              </div>
               <select
                 class="select select-bordered validator"
                 name="role"
@@ -271,9 +401,6 @@
                   </option>
                 {/each}
               </select>
-              <div class="label-text-alt text-xs">
-                Defaults: {roleDefaults(selectedRole).map(permissionLabel).join(', ') || 'No default permissions'}
-              </div>
             </label>
 
             <label class="form-control">

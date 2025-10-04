@@ -12,8 +12,33 @@ export const load: PageServerLoad = async (event) => {
     throw error(403, 'Permission denied');
   }
 
+  const fetcher = makeServerFetcher(event);
+
+  // Fetch user validation settings
+  let userValidationSettings = {
+    email_required: true,
+    password_min_length: 12,
+    password_max_length: 128,
+    capitalize_display_name: true,
+    default_role: 'game_master'
+  };
+
+  try {
+    const settings = await fetcher<{
+      email_required: boolean;
+      password_min_length: number;
+      password_max_length: number;
+      capitalize_display_name: boolean;
+      default_role: string;
+    }>('/admin/settings?category=user_validation');
+    userValidationSettings = settings;
+  } catch (err) {
+    console.error('Failed to fetch user validation settings, using defaults:', err);
+  }
+
   return {
-    canAssignAdmin: event.locals.user?.role === 'admin'
+    canAssignAdmin: event.locals.user?.role === 'admin',
+    userValidationSettings
   };
 };
 
@@ -59,20 +84,19 @@ export const actions: Actions = {
       return fail(400, { message: 'Username, name, and password are required.' });
     }
 
+    const fetcher = makeServerFetcher(event);
+
     try {
-      const fetcher = makeServerFetcher(event);
       await fetcher<OperatorSummary>('/admin/users', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
-
-      throw redirect(303, '/admin/users');
-    } catch (err) {
-      if (err instanceof Response && err.status === 303) {
-        throw err; // Re-throw redirect
-      }
+    } catch (err: any) {
       console.error('Failed to create operator', err);
-      return fail(500, { message: 'Unable to create user.' });
+      const message = err?.details?.message || err?.message || 'Unable to create user.';
+      return fail(err?.status || 500, { message });
     }
+
+    throw redirect(303, '/admin/users');
   }
 };
