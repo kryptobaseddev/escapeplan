@@ -24,3 +24,7 @@ packages/contracts/dist/
 # OS files
 .DS_Store
 
+# Changesets (keep config, ignore pending changesets)
+.changeset/*.md
+!.changeset/README.md
+

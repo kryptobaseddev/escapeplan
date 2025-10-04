@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Video Test</title>
+</head>
+<body>
+  <h1>Video Playback Test</h1>
+
+  <h2>Test 1: Basic Video Element</h2>
+  <video controls src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" width="640"></video>
+
+  <h2>Test 2: Programmatic Play</h2>
+  <button id="play-btn">Play Video</button>
+  <video id="test-video" src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" width="640"></video>
+
+  <h2>Test 3: With load() Call</h2>
+  <video id="load-video" src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" width="640"></video>
+  <button id="play-load">Load and Play</button>
+
+  <script>
+    // Test 2
+    document.getElementById('play-btn').onclick = () => {
+      const video = document.getElementById('test-video');
+      video.play().then(() => {
+        console.log('Test 2: Video play succeeded');
+      }).catch(err => {
+        console.error('Test 2: Video play failed:', err);
+      });
+    };
+
+    // Test 3
+    document.getElementById('play-load').onclick = () => {
+      const video = document.getElementById('load-video');
+      video.load();
+      video.play().then(() => {
+        console.log('Test 3: Video play after load() succeeded');
+      }).catch(err => {
+        console.error('Test 3: Video play after load() failed:', err);
+      });
+    };
+  </script>
+</body>
+</html>

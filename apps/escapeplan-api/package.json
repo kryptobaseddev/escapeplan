@@ -11,7 +11,10 @@
     "test": "vitest",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:fresh": "tsx src/db/seed.ts --clear",
-    "db:seed:settings": "tsx src/db/seed-settings.ts"
+    "db:seed:settings": "tsx src/db/seed-settings.ts",
+    "backup": "tsx scripts/backup.ts",
+    "backup:list": "tsx scripts/list-backups.ts",
+    "backup:restore": "tsx scripts/restore.ts"
   },
   "dependencies": {
     "@dicebear/bottts": "^9.2.4",

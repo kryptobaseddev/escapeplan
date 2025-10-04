@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Audio Test</title>
+</head>
+<body>
+  <h1>Audio Playback Test</h1>
+
+  <h2>Test 1: Basic Audio Element</h2>
+  <audio controls src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3"></audio>
+
+  <h2>Test 2: Programmatic Play</h2>
+  <button id="play-btn">Play Audio</button>
+  <audio id="test-audio" src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3"></audio>
+
+  <h2>Test 3: Hidden Audio</h2>
+  <audio id="hidden-audio" src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3" style="display:none;"></audio>
+  <button id="play-hidden">Play Hidden Audio</button>
+
+  <h2>Test 4: With load() Call</h2>
+  <audio id="load-audio" src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3"></audio>
+  <button id="play-load">Load and Play</button>
+
+  <script>
+    // Test 2
+    document.getElementById('play-btn').onclick = () => {
+      const audio = document.getElementById('test-audio');
+      audio.play().then(() => {
+        console.log('Test 2: Play succeeded');
+      }).catch(err => {
+        console.error('Test 2: Play failed:', err);
+      });
+    };
+
+    // Test 3
+    document.getElementById('play-hidden').onclick = () => {
+      const audio = document.getElementById('hidden-audio');
+      audio.play().then(() => {
+        console.log('Test 3: Hidden play succeeded');
+      }).catch(err => {
+        console.error('Test 3: Hidden play failed:', err);
+      });
+    };
+
+    // Test 4
+    document.getElementById('play-load').onclick = () => {
+      const audio = document.getElementById('load-audio');
+      audio.load();
+      audio.play().then(() => {
+        console.log('Test 4: Play after load() succeeded');
+      }).catch(err => {
+        console.error('Test 4: Play after load() failed:', err);
+      });
+    };
+  </script>
+</body>
+</html>

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Comprehensive Media Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #00ff00;
+    }
+    h1 { color: #00ff00; }
+    h2 { color: #ffff00; margin-top: 30px; }
+    .test-section {
+      margin: 20px 0;
+      padding: 15px;
+      border: 1px solid #333;
+      background: #0a0a0a;
+    }
+    button {
+      background: #00ff00;
+      color: #000;
+      border: none;
+      padding: 10px 20px;
+      margin: 5px;
+      cursor: pointer;
+      font-family: monospace;
+      font-weight: bold;
+    }
+    button:hover { background: #00cc00; }
+    .status { margin: 10px 0; }
+    .pass { color: #00ff00; }
+    .fail { color: #ff0000; }
+    .info { color: #00aaff; }
+    video, audio { margin: 10px 0; }
+    #results {
+      margin-top: 30px;
+      padding: 20px;
+      background: #000;
+      border: 2px solid #00ff00;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>COMPREHENSIVE HTML5 MEDIA PLAYBACK TEST</h1>
+
+  <div class="test-section">
+    <h2>FILE ACCESSIBILITY TEST</h2>
+    <div id="file-status"></div>
+    <button onclick="testFileAccessibility()">Test File Access</button>
+  </div>
+
+  <div class="test-section">
+    <h2>AUDIO TEST 1: Basic Controls</h2>
+    <audio id="audio1" controls src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3"></audio>
+    <div id="audio1-status" class="status"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>AUDIO TEST 2: Programmatic Play (User Click Required)</h2>
+    <button onclick="testAudio2()">Play Audio</button>
+    <audio id="audio2" src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3"></audio>
+    <div id="audio2-status" class="status"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>AUDIO TEST 3: Hidden Audio Element</h2>
+    <button onclick="testAudio3()">Play Hidden Audio</button>
+    <audio id="audio3" src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3" style="display:none;"></audio>
+    <div id="audio3-status" class="status"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>AUDIO TEST 4: With load() Call</h2>
+    <button onclick="testAudio4()">Load and Play</button>
+    <audio id="audio4" src="/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3"></audio>
+    <div id="audio4-status" class="status"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>VIDEO TEST 1: Basic Controls</h2>
+    <video id="video1" controls src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" width="640"></video>
+    <div id="video1-status" class="status"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>VIDEO TEST 2: Programmatic Play</h2>
+    <button onclick="testVideo2()">Play Video</button>
+    <video id="video2" src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" width="640"></video>
+    <div id="video2-status" class="status"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>VIDEO TEST 3: With load() Call</h2>
+    <button onclick="testVideo3()">Load and Play</button>
+    <video id="video3" src="/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4" width="640"></video>
+    <div id="video3-status" class="status"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>AUTOPLAY TEST (Expected to Fail)</h2>
+    <button onclick="testAutoplay()">Test Autoplay Policies</button>
+    <div id="autoplay-status" class="status"></div>
+  </div>
+
+  <div class="test-section">
+    <h2>COMPLETE TEST REPORT</h2>
+    <button onclick="generateReport()">Generate JSON Report</button>
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const testResults = {
+      fileAccessibility: {},
+      audio: {},
+      video: {},
+      autoplay: {},
+      errors: []
+    };
+
+    // File accessibility test
+    async function testFileAccessibility() {
+      const statusEl = document.getElementById('file-status');
+      statusEl.innerHTML = '<div class="info">Testing file accessibility...</div>';
+
+      const audioUrl = '/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3';
+      const videoUrl = '/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4';
+
+      try {
+        const audioRes = await fetch(audioUrl, { method: 'HEAD' });
+        const audioExists = audioRes.ok;
+        const audioMime = audioRes.headers.get('content-type');
+        const audioSize = audioRes.headers.get('content-length');
+
+        const videoRes = await fetch(videoUrl, { method: 'HEAD' });
+        const videoExists = videoRes.ok;
+        const videoMime = videoRes.headers.get('content-type');
+        const videoSize = videoRes.headers.get('content-length');
+
+        testResults.fileAccessibility = {
+          audio: {
+            exists: audioExists,
+            status: audioRes.status,
+            mimeType: audioMime,
+            size: audioSize
+          },
+          video: {
+            exists: videoExists,
+            status: videoRes.status,
+            mimeType: videoMime,
+            size: videoSize
+          }
+        };
+
+        statusEl.innerHTML = `
+          <div class="${audioExists ? 'pass' : 'fail'}">Audio: ${audioRes.status} ${audioMime} (${audioSize} bytes)</div>
+          <div class="${videoExists ? 'pass' : 'fail'}">Video: ${videoRes.status} ${videoMime} (${videoSize} bytes)</div>
+        `;
+      } catch (err) {
+        statusEl.innerHTML = `<div class="fail">Error: ${err.message}</div>`;
+        testResults.errors.push(`File accessibility: ${err.message}`);
+      }
+    }
+
+    // Audio tests
+    function testAudio2() {
+      const audio = document.getElementById('audio2');
+      const statusEl = document.getElementById('audio2-status');
+
+      audio.play().then(() => {
+        statusEl.innerHTML = '<div class="pass">PASS: Programmatic play succeeded</div>';
+        testResults.audio.test2_programmatic = 'PASS';
+        console.log('Audio Test 2: PASS');
+      }).catch(err => {
+        statusEl.innerHTML = `<div class="fail">FAIL: ${err.name} - ${err.message}</div>`;
+        testResults.audio.test2_programmatic = 'FAIL';
+        testResults.errors.push(`Audio Test 2: ${err.message}`);
+        console.error('Audio Test 2: FAIL', err);
+      });
+    }
+
+    function testAudio3() {
+      const audio = document.getElementById('audio3');
+      const statusEl = document.getElementById('audio3-status');
+
+      audio.play().then(() => {
+        statusEl.innerHTML = '<div class="pass">PASS: Hidden audio play succeeded</div>';
+        testResults.audio.test3_hidden = 'PASS';
+        console.log('Audio Test 3: PASS');
+      }).catch(err => {
+        statusEl.innerHTML = `<div class="fail">FAIL: ${err.name} - ${err.message}</div>`;
+        testResults.audio.test3_hidden = 'FAIL';
+        testResults.errors.push(`Audio Test 3: ${err.message}`);
+        console.error('Audio Test 3: FAIL', err);
+      });
+    }
+
+    function testAudio4() {
+      const audio = document.getElementById('audio4');
+      const statusEl = document.getElementById('audio4-status');
+
+      audio.load();
+      audio.play().then(() => {
+        statusEl.innerHTML = '<div class="pass">PASS: Play after load() succeeded</div>';
+        testResults.audio.test4_with_load = 'PASS';
+        console.log('Audio Test 4: PASS');
+      }).catch(err => {
+        statusEl.innerHTML = `<div class="fail">FAIL: ${err.name} - ${err.message}</div>`;
+        testResults.audio.test4_with_load = 'FAIL';
+        testResults.errors.push(`Audio Test 4: ${err.message}`);
+        console.error('Audio Test 4: FAIL', err);
+      });
+    }
+
+    // Video tests
+    function testVideo2() {
+      const video = document.getElementById('video2');
+      const statusEl = document.getElementById('video2-status');
+
+      video.play().then(() => {
+        statusEl.innerHTML = '<div class="pass">PASS: Programmatic video play succeeded</div>';
+        testResults.video.test2_programmatic = 'PASS';
+        console.log('Video Test 2: PASS');
+      }).catch(err => {
+        statusEl.innerHTML = `<div class="fail">FAIL: ${err.name} - ${err.message}</div>`;
+        testResults.video.test2_programmatic = 'FAIL';
+        testResults.errors.push(`Video Test 2: ${err.message}`);
+        console.error('Video Test 2: FAIL', err);
+      });
+    }
+
+    function testVideo3() {
+      const video = document.getElementById('video3');
+      const statusEl = document.getElementById('video3-status');
+
+      video.load();
+      video.play().then(() => {
+        statusEl.innerHTML = '<div class="pass">PASS: Video play after load() succeeded</div>';
+        testResults.video.test3_with_load = 'PASS';
+        console.log('Video Test 3: PASS');
+      }).catch(err => {
+        statusEl.innerHTML = `<div class="fail">FAIL: ${err.name} - ${err.message}</div>`;
+        testResults.video.test3_with_load = 'FAIL';
+        testResults.errors.push(`Video Test 3: ${err.message}`);
+        console.error('Video Test 3: FAIL', err);
+      });
+    }
+
+    // Autoplay test
+    async function testAutoplay() {
+      const statusEl = document.getElementById('autoplay-status');
+      statusEl.innerHTML = '<div class="info">Testing autoplay policies...</div>';
+
+      const autoAudio = new Audio('/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3');
+      const autoVideo = document.createElement('video');
+      autoVideo.src = '/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4';
+      autoVideo.muted = true;
+
+      let audioAutoplayBlocked = false;
+      let videoAutoplayBlocked = false;
+      let mutedVideoAutoplayBlocked = false;
+
+      try {
+        await autoAudio.play();
+        statusEl.innerHTML = '<div class="info">Audio autoplay: ALLOWED (unexpected)</div>';
+      } catch (err) {
+        audioAutoplayBlocked = true;
+        statusEl.innerHTML = '<div class="pass">Audio autoplay: BLOCKED (expected)</div>';
+      }
+
+      const autoVideoUnmuted = document.createElement('video');
+      autoVideoUnmuted.src = '/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4';
+      try {
+        await autoVideoUnmuted.play();
+        statusEl.innerHTML += '<div class="info">Video autoplay (unmuted): ALLOWED (unexpected)</div>';
+      } catch (err) {
+        videoAutoplayBlocked = true;
+        statusEl.innerHTML += '<div class="pass">Video autoplay (unmuted): BLOCKED (expected)</div>';
+      }
+
+      try {
+        await autoVideo.play();
+        statusEl.innerHTML += '<div class="pass">Video autoplay (muted): ALLOWED (expected)</div>';
+      } catch (err) {
+        mutedVideoAutoplayBlocked = true;
+        statusEl.innerHTML += '<div class="info">Video autoplay (muted): BLOCKED (unexpected)</div>';
+      }
+
+      testResults.autoplay = {
+        audio_blocked: audioAutoplayBlocked,
+        video_unmuted_blocked: videoAutoplayBlocked,
+        video_muted_blocked: mutedVideoAutoplayBlocked,
+        requires_user_interaction: audioAutoplayBlocked && videoAutoplayBlocked
+      };
+    }
+
+    // Monitor audio/video elements for errors and loading
+    document.querySelectorAll('audio, video').forEach((el, idx) => {
+      const type = el.tagName.toLowerCase();
+      const id = el.id || `${type}-${idx}`;
+
+      el.addEventListener('loadeddata', () => {
+        console.log(`${id}: loadeddata event fired`);
+      });
+
+      el.addEventListener('canplay', () => {
+        console.log(`${id}: canplay event fired`);
+      });
+
+      el.addEventListener('error', (e) => {
+        const error = el.error;
+        const msg = error ? `${error.code}: ${error.message}` : 'Unknown error';
+        console.error(`${id}: error event - ${msg}`);
+        testResults.errors.push(`${id}: ${msg}`);
+      });
+
+      el.addEventListener('play', () => {
+        console.log(`${id}: play event fired`);
+      });
+    });
+
+    // Generate final report
+    function generateReport() {
+      const resultsEl = document.getElementById('results');
+
+      const report = {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        basic_html_tests: {
+          audio: testResults.audio,
+          video: testResults.video
+        },
+        file_accessibility: testResults.fileAccessibility,
+        autoplay_policy: testResults.autoplay,
+        errors: testResults.errors,
+        conclusion: determineConclusion(),
+        recommendation: generateRecommendation()
+      };
+
+      resultsEl.textContent = JSON.stringify(report, null, 2);
+      console.log('FULL TEST REPORT:', report);
+    }
+
+    function determineConclusion() {
+      if (testResults.errors.length === 0) {
+        return "All basic HTML5 audio/video playback works correctly. Issue is likely in Svelte component implementation.";
+      } else if (testResults.fileAccessibility.audio?.exists === false || testResults.fileAccessibility.video?.exists === false) {
+        return "Media files are not accessible - check server configuration and file paths.";
+      } else {
+        return `${testResults.errors.length} errors detected in basic HTML5 playback.`;
+      }
+    }
+
+    function generateRecommendation() {
+      const recs = [];
+
+      if (testResults.autoplay?.requires_user_interaction) {
+        recs.push("Browser requires user interaction before playing media - ensure Svelte components call play() only after user click/tap");
+      }
+
+      if (testResults.audio?.test3_hidden === 'PASS') {
+        recs.push("Hidden audio elements work - display:none is safe to use");
+      }
+
+      if (testResults.audio?.test4_with_load === 'PASS') {
+        recs.push("Calling load() before play() works - consider using this pattern in Svelte components");
+      }
+
+      return recs.join('; ') || "No specific recommendations - basic HTML5 playback working correctly";
+    }
+
+    // Auto-run file accessibility test on load
+    window.addEventListener('load', () => {
+      testFileAccessibility();
+      console.log('=== COMPREHENSIVE MEDIA TEST LOADED ===');
+      console.log('Run manual tests by clicking buttons');
+      console.log('Generate final report with "Generate JSON Report" button');
+    });
+  </script>
+</body>
+</html>

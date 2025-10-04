@@ -1,0 +1,52 @@
+[Unit]
+Description=EscapePlan Daily Backup Service
+Documentation=https://github.com/kryptobaseddev/escapeplan-app
+After=network.target escapeplan-api.service
+Wants=network.target
+OnFailure=escapeplan-backup-notify@failure.service
+
+[Service]
+Type=oneshot
+User=escapeplan
+Group=escapeplan
+WorkingDirectory=/var/lib/escapeplan
+
+# Environment variables
+Environment=NODE_ENV=production
+Environment=ESCAPEPLAN_DATA_DIR=/var/lib/escapeplan
+Environment=ESCAPEPLAN_BACKUP_DIR=/var/backups/escapeplan
+Environment=BACKUP_RETENTION_DAYS=7
+
+# Execute backup script with 'daily' parameter
+ExecStart=/opt/escapeplan/scripts/backup.sh daily
+
+# Logging to systemd journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=escapeplan-backup
+
+# Timeout settings (backup can take time with large databases)
+TimeoutStartSec=600
+TimeoutStopSec=30
+
+# Security hardening
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/escapeplan /var/backups/escapeplan /mnt/escapeplan-backup
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+MemoryDenyWriteExecute=yes
+
+# Resource limits (prevent backup from consuming too much memory)
+MemoryMax=512M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target

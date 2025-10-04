@@ -1,34 +1,141 @@
 name: CI
 
 on:
-  push:
-    branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+# Cancel outdated runs for the same branch/PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 10.12.4
+  NODE_VERSION: 24
 
 jobs:
+  # ────────────────────────────────────────────────────────────
+  # JOB: Lint and Test (Matrix across 3 packages)
+  # ────────────────────────────────────────────────────────────
   lint-and-test:
+    name: Lint & Test (${{ matrix.package }})
     runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - contracts
+          - api
+          - web
+        include:
+          - package: contracts
+            path: packages/contracts
+            lint_cmd: pnpm --filter @escapeplan/contracts exec tsc --noEmit
+            test_cmd: echo "No tests for contracts package"
+
+          - package: api
+            path: apps/escapeplan-api
+            lint_cmd: pnpm --filter escapeplan-api run lint
+            test_cmd: pnpm --filter escapeplan-api run test
+
+          - package: web
+            path: apps/escapeplan-web
+            lint_cmd: pnpm --filter escapeplan-web run check
+            test_cmd: pnpm --filter escapeplan-web run test
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          version: 10
+          version: ${{ env.PNPM_VERSION }}
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm run lint
+      - name: Lint ${{ matrix.package }}
+        run: ${{ matrix.lint_cmd }}
 
-      - name: Build
-        run: pnpm run build
+      - name: Test ${{ matrix.package }}
+        run: ${{ matrix.test_cmd }}
 
-      - name: Test
-        run: pnpm run test
+  # ────────────────────────────────────────────────────────────
+  # JOB: Build (Sequential dependency order)
+  # ────────────────────────────────────────────────────────────
+  build:
+    name: Build Monorepo
+    runs-on: ubuntu-latest
+    needs: [lint-and-test]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build contracts
+        run: pnpm --filter @escapeplan/contracts build
+
+      - name: Build API
+        run: pnpm --filter escapeplan-api build
+
+      - name: Build Web
+        run: pnpm --filter escapeplan-web build
+
+      - name: Upload build artifacts
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-outputs
+          path: |
+            packages/contracts/dist
+            apps/escapeplan-api/dist
+            apps/escapeplan-web/.svelte-kit/output
+          retention-days: 7
+
+  # ────────────────────────────────────────────────────────────
+  # JOB: CI Summary
+  # ────────────────────────────────────────────────────────────
+  ci-summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [lint-and-test, build]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lintResult = '${{ needs.lint-and-test.result }}'
+            const buildResult = '${{ needs.build.result }}'
+
+            let summary = '## CI Results\n\n'
+            summary += `- Lint & Test: ${lintResult === 'success' ? '✅' : '❌'} ${lintResult}\n`
+            summary += `- Build: ${buildResult === 'success' ? '✅' : '❌'} ${buildResult}\n`
+
+            core.summary.addRaw(summary).write()

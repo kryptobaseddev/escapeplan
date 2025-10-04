@@ -13,6 +13,11 @@
     "build": "pnpm -r run build",
     "build:deb": "pnpm run build && bash scripts/build-deb.sh",
     "test": "pnpm -r run test",
+    "changeset": "changeset",
+    "changeset:add": "changeset add",
+    "changeset:status": "changeset status",
+    "version": "changeset version && node scripts/sync-version.js",
+    "check:version": "node scripts/check-version-sync.js",
     "release": "pnpm run build:deb"
   },
   "pnpm": {
@@ -23,5 +28,9 @@
     "ignoredBuiltDependencies": [
       "argon2"
     ]
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.5.1",
+    "@changesets/cli": "^2.29.7"
   }
 }

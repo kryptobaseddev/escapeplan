@@ -1,0 +1,23 @@
+[Unit]
+Description=EscapePlan Daily Backup Timer
+Documentation=https://github.com/kryptobaseddev/escapeplan-app
+Requires=escapeplan-backup.service
+
+[Timer]
+# Run daily at 03:00 AM local time
+OnCalendar=daily
+OnCalendar=*-*-* 03:00:00
+
+# Run missed timers on boot (within 15 minutes)
+# This ensures backups aren't skipped if system was powered off
+Persistent=true
+
+# Randomize start time by up to 5 minutes (300 seconds)
+# Helps spread load if multiple timers are configured
+RandomizedDelaySec=300
+
+# Don't accumulate missed runs - only run once if multiple were missed
+AccuracySec=1h
+
+[Install]
+WantedBy=timers.target

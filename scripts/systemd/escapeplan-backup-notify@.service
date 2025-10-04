@@ -1,0 +1,51 @@
+[Unit]
+Description=EscapePlan Backup Notification Service (%i)
+Documentation=https://github.com/kryptobaseddev/escapeplan-app
+After=network.target
+
+[Service]
+Type=oneshot
+User=escapeplan
+Group=escapeplan
+
+# Log notification to journal with high priority
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=escapeplan-backup-notify
+
+# Notification script execution
+# %i will be replaced with the instance name (e.g., 'failure')
+ExecStart=/bin/sh -c 'echo "BACKUP ALERT: EscapePlan backup %i at $(date). Check journalctl -u escapeplan-backup.service for details." | systemd-cat -t escapeplan-backup-alert -p err'
+
+# Optional: Send notification via local system tools if available
+# Uncomment and customize based on your notification preferences:
+# ExecStart=/usr/bin/wall "EscapePlan backup %i - check system logs"
+# ExecStart=/usr/bin/logger -t escapeplan -p user.err "Backup %i detected"
+
+# Future enhancement: API callback to log alert in EscapePlan database
+# This could be implemented when network is available:
+# ExecStart=/usr/bin/curl -X POST http://localhost:4000/api/admin/alerts \
+#   -H "Content-Type: application/json" \
+#   -d '{"type":"backup_%i","severity":"error","message":"Backup process %i"}'
+
+# Timeout settings
+TimeoutStartSec=30
+
+# Security hardening
+PrivateTmp=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictRealtime=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+# Resource limits
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

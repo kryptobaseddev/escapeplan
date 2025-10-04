@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Headless Media Test</title>
+</head>
+<body>
+  <h1>Automated Test Running...</h1>
+  <div id="output"></div>
+
+  <script>
+    const results = {
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      file_accessibility: {},
+      media_capabilities: {},
+      errors: []
+    };
+
+    async function runTests() {
+      const output = document.getElementById('output');
+
+      // Test 1: File accessibility
+      output.innerHTML += '<p>Testing file accessibility...</p>';
+      try {
+        const audioRes = await fetch('/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3', { method: 'HEAD' });
+        const videoRes = await fetch('/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4', { method: 'HEAD' });
+
+        results.file_accessibility = {
+          audio: {
+            exists: audioRes.ok,
+            status: audioRes.status,
+            mimeType: audioRes.headers.get('content-type'),
+            size: audioRes.headers.get('content-length'),
+            acceptRanges: audioRes.headers.get('accept-ranges')
+          },
+          video: {
+            exists: videoRes.ok,
+            status: videoRes.status,
+            mimeType: videoRes.headers.get('content-type'),
+            size: videoRes.headers.get('content-length'),
+            acceptRanges: videoRes.headers.get('accept-ranges')
+          }
+        };
+
+        output.innerHTML += `<p>✅ Audio: ${audioRes.status} ${audioRes.headers.get('content-type')} (${audioRes.headers.get('content-length')} bytes)</p>`;
+        output.innerHTML += `<p>✅ Video: ${videoRes.status} ${videoRes.headers.get('content-type')} (${videoRes.headers.get('content-length')} bytes)</p>`;
+      } catch (err) {
+        results.errors.push(`File access: ${err.message}`);
+        output.innerHTML += `<p>❌ Error: ${err.message}</p>`;
+      }
+
+      // Test 2: Media capabilities
+      output.innerHTML += '<p>Testing media capabilities...</p>';
+
+      const audioFormats = [
+        { type: 'audio/mpeg', label: 'MP3' },
+        { type: 'audio/mp4', label: 'MP4 Audio' },
+        { type: 'audio/ogg', label: 'OGG' },
+        { type: 'audio/wav', label: 'WAV' }
+      ];
+
+      const videoFormats = [
+        { type: 'video/mp4; codecs="avc1.42E01E"', label: 'MP4 H.264' },
+        { type: 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"', label: 'MP4 H.264+AAC' },
+        { type: 'video/webm', label: 'WebM' },
+        { type: 'video/ogg', label: 'OGG' }
+      ];
+
+      const audio = document.createElement('audio');
+      const video = document.createElement('video');
+
+      results.media_capabilities.audio = {};
+      audioFormats.forEach(format => {
+        const support = audio.canPlayType(format.type);
+        results.media_capabilities.audio[format.label] = support;
+        output.innerHTML += `<p>Audio ${format.label}: ${support || 'NO'}</p>`;
+      });
+
+      results.media_capabilities.video = {};
+      videoFormats.forEach(format => {
+        const support = video.canPlayType(format.type);
+        results.media_capabilities.video[format.label] = support;
+        output.innerHTML += `<p>Video ${format.label}: ${support || 'NO'}</p>`;
+      });
+
+      // Test 3: Element creation and loading
+      output.innerHTML += '<p>Testing element creation...</p>';
+
+      const testAudio = new Audio('/assets/audio/hint-media/pirate-mutiny-find-map-hint-audio-1-82c63c35.mp3');
+      const testVideo = document.createElement('video');
+      testVideo.src = '/assets/video/milestone-media/pirate-mutiny-milestone-video-371b7f87.mp4';
+
+      // Wait for metadata
+      const audioLoaded = new Promise((resolve, reject) => {
+        testAudio.addEventListener('loadedmetadata', () => resolve('loaded'));
+        testAudio.addEventListener('error', () => reject(testAudio.error));
+        setTimeout(() => reject(new Error('timeout')), 5000);
+      });
+
+      const videoLoaded = new Promise((resolve, reject) => {
+        testVideo.addEventListener('loadedmetadata', () => resolve('loaded'));
+        testVideo.addEventListener('error', () => reject(testVideo.error));
+        setTimeout(() => reject(new Error('timeout')), 5000);
+      });
+
+      try {
+        await audioLoaded;
+        results.media_capabilities.audio_element = {
+          loaded: true,
+          duration: testAudio.duration,
+          readyState: testAudio.readyState
+        };
+        output.innerHTML += `<p>✅ Audio loaded: ${testAudio.duration.toFixed(2)}s</p>`;
+      } catch (err) {
+        results.media_capabilities.audio_element = { loaded: false, error: err.message };
+        results.errors.push(`Audio element: ${err.message}`);
+        output.innerHTML += `<p>❌ Audio load failed: ${err.message}</p>`;
+      }
+
+      try {
+        await videoLoaded;
+        results.media_capabilities.video_element = {
+          loaded: true,
+          duration: testVideo.duration,
+          width: testVideo.videoWidth,
+          height: testVideo.videoHeight,
+          readyState: testVideo.readyState
+        };
+        output.innerHTML += `<p>✅ Video loaded: ${testVideo.duration.toFixed(2)}s (${testVideo.videoWidth}x${testVideo.videoHeight})</p>`;
+      } catch (err) {
+        results.media_capabilities.video_element = { loaded: false, error: err.message };
+        results.errors.push(`Video element: ${err.message}`);
+        output.innerHTML += `<p>❌ Video load failed: ${err.message}</p>`;
+      }
+
+      // Final report
+      output.innerHTML += '<hr><h2>Final Report</h2>';
+      output.innerHTML += `<pre>${JSON.stringify(results, null, 2)}</pre>`;
+
+      console.log('=== HEADLESS TEST RESULTS ===');
+      console.log(JSON.stringify(results, null, 2));
+    }
+
+    window.addEventListener('load', runTests);
+  </script>
+</body>
+</html>

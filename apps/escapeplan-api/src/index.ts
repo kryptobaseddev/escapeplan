@@ -1087,6 +1087,11 @@ export async function buildServer() {
           ir_mode: parsed.data.irMode,
           audio_volume: parsed.data.audioVolume,
 
+          // PTZ Settings
+          ptz_pan: parsed.data.ptzPan ?? 0,
+          ptz_tilt: parsed.data.ptzTilt ?? 0,
+          ptz_zoom: parsed.data.ptzZoom ?? 0,
+
           // Status
           status: 'offline',
           hls_streaming: false,
@@ -1107,7 +1112,34 @@ export async function buildServer() {
           }
         }
 
-        const created = db.select().from(cameras).where(eq(cameras.id, cameraId)).get();
+        const created = db.select({
+          id: cameras.id,
+          name: cameras.name,
+          gameId: cameras.game_id,
+          brand: cameras.brand,
+          model: cameras.model,
+          protocol: cameras.protocol,
+          host: cameras.host,
+          port: cameras.port,
+          username: cameras.username,
+          mainStreamPath: cameras.main_stream_path,
+          subStreamPath: cameras.sub_stream_path,
+          streamPath: cameras.stream_path,
+          resolution: cameras.resolution,
+          frameRate: cameras.frame_rate,
+          transport: cameras.transport,
+          hasPtz: cameras.has_ptz,
+          hasAudio: cameras.has_audio,
+          hasIrControl: cameras.has_ir_control,
+          irMode: cameras.ir_mode,
+          audioVolume: cameras.audio_volume,
+          ptzPan: cameras.ptz_pan,
+          ptzTilt: cameras.ptz_tilt,
+          ptzZoom: cameras.ptz_zoom,
+          status: cameras.status,
+          lastSeen: cameras.last_seen,
+          hlsStreaming: cameras.hls_streaming,
+        }).from(cameras).where(eq(cameras.id, cameraId)).get();
         return reply.status(201).send(created);
       } catch (error) {
         request.log.error({ err: error }, 'Failed to create camera');

@@ -12,6 +12,8 @@
  */
 
 import { z } from 'zod';
+import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
+import { backupHistory, backupMetrics } from './schema.js';
 
 // ============================================================================
 // GAMES
@@ -652,3 +654,49 @@ export const updateDiscountCodeSchema = z.object({
 
 export type CreateDiscountCodeRequest = z.infer<typeof createDiscountCodeSchema>;
 export type UpdateDiscountCodeRequest = z.infer<typeof updateDiscountCodeSchema>;
+
+// ============================================================================
+// BACKUP TRACKING
+// ============================================================================
+
+/**
+ * Backup History Schemas
+ * Tracks all backup operations with detailed metrics
+ */
+export const insertBackupHistorySchema = createInsertSchema(backupHistory, {
+  trigger: (schema) => schema.refine((val) => ['manual', 'scheduled', 'pre-update'].includes(val), {
+    message: 'Trigger must be one of: manual, scheduled, pre-update'
+  }),
+  timestamp: (schema) => schema.datetime(),
+  backup_path: (schema) => schema.min(1),
+  size_bytes: (schema) => schema.nonnegative(),
+  checksum_sha256: (schema) => schema.regex(/^[a-f0-9]{64}$/i, 'Must be a valid SHA-256 hash'),
+  retention_days: (schema) => schema.positive()
+});
+
+export const selectBackupHistorySchema = createSelectSchema(backupHistory);
+
+/**
+ * Backup Metrics Schemas
+ * Tracks performance and success/failure of backup operations
+ */
+export const insertBackupMetricsSchema = createInsertSchema(backupMetrics, {
+  trigger: (schema) => schema.refine((val) => ['manual', 'scheduled', 'pre-update'].includes(val), {
+    message: 'Trigger must be one of: manual, scheduled, pre-update'
+  }),
+  duration_ms: (schema) => schema.nonnegative()
+});
+
+export const selectBackupMetricsSchema = createSelectSchema(backupMetrics);
+
+/**
+ * Inferred types for Backup schemas
+ * Note: drizzle-zod's BuildSchema type doesn't fully extend ZodType,
+ * so we use manual type inference from the resolved schema
+ */
+type InferSchema<T> = T extends { _input: infer I } ? I : never;
+
+export type InsertBackupHistory = InferSchema<typeof insertBackupHistorySchema>;
+export type SelectBackupHistory = InferSchema<typeof selectBackupHistorySchema>;
+export type InsertBackupMetrics = InferSchema<typeof insertBackupMetricsSchema>;
+export type SelectBackupMetrics = InferSchema<typeof selectBackupMetricsSchema>;

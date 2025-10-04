@@ -1,0 +1,112 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v0.2.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  PNPM_VERSION: 10.12.4
+  NODE_VERSION: 24
+
+jobs:
+  build-and-publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      # Setup
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      # Build
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build all packages
+        run: |
+          pnpm --filter @escapeplan/contracts build
+          pnpm --filter escapeplan-api build
+          pnpm --filter escapeplan-web build
+
+      - name: Run tests
+        run: pnpm run test
+
+      # Package
+      - name: Build Debian package
+        run: |
+          chmod +x scripts/build-deb.sh
+          ./scripts/build-deb.sh
+
+      - name: Generate checksums
+        run: |
+          cd dist
+          sha256sum escapeplan_*.deb > checksums.txt
+          cat checksums.txt
+
+      # Release
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: EscapePlan ${{ steps.version.outputs.version }}
+          body: |
+            ## Installation
+
+            Download `escapeplan_${{ steps.version.outputs.version }}_arm64.deb` and verify:
+
+            ```bash
+            sha256sum -c checksums.txt
+            sudo dpkg -i escapeplan_${{ steps.version.outputs.version }}_arm64.deb
+            ```
+
+            See [CHANGELOG.md](./CHANGELOG.md) for full details.
+          files: |
+            dist/escapeplan_*.deb
+            dist/checksums.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Artifacts
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package-${{ steps.version.outputs.version }}
+          path: |
+            dist/escapeplan_*.deb
+            dist/checksums.txt
+          retention-days: 90

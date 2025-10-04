@@ -30,18 +30,10 @@ async function getOnvifStreamUrl(
   });
 
   // Initialize device with 5-second timeout
-  await device.init(5000);
+  await device.init();
 
-  // Get stream URI (defaults to first profile with TCP transport)
-  const streamUriResponse = await device.getStreamUri({
-    protocol: 'RTSP'
-  });
-
-  if (!streamUriResponse || !streamUriResponse.uri) {
-    throw new Error('No stream URI returned from ONVIF device');
-  }
-
-  let rtspUrl = streamUriResponse.uri;
+  // Get stream URI using the correct node-onvif method
+  let rtspUrl = device.getUdpStreamUrl();
 
   // Inject credentials into RTSP URL if not already present
   if (username && password) {

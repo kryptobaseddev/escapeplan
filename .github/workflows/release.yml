@@ -2,53 +2,69 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
+    branches:
+      - main
+  workflow_dispatch:
+
+# Prevent concurrent releases
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
-  packages: write
+  pull-requests: write
+
+env:
+  PNPM_VERSION: 10.12.4
+  NODE_VERSION: 24
 
 jobs:
-  build-deb:
+  # ────────────────────────────────────────────────────────────
+  # JOB: Create/update Version Packages PR via Changesets
+  # ────────────────────────────────────────────────────────────
+  release:
+    name: Create Release PR
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
         with:
-          version: 10
+          fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
         with:
-          node-version: '20'
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build all packages
-        run: pnpm run build
-
-      - name: Run tests
-        run: pnpm run test
-
-      - name: Build .deb package
-        run: |
-          chmod +x scripts/build-deb.sh
-          ./scripts/build-deb.sh
-
-      - name: Upload .deb artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Release Pull Request
+        id: changesets
+        uses: changesets/action@v1
         with:
-          name: debian-package
-          path: dist/*.deb
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.deb
-          generate_release_notes: true
-          draft: false
+          version: pnpm version
+          commit: "chore: version packages"
+          title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Log Changesets Output
+        if: always()
+        run: |
+          echo "Has Changesets: ${{ steps.changesets.outputs.hasChangesets }}"
+          echo "Published: ${{ steps.changesets.outputs.published }}"
+          echo "Published Packages: ${{ steps.changesets.outputs.publishedPackages }}"
+
+      - name: Output Release Info
+        if: steps.changesets.outputs.hasChangesets == 'true'
+        run: |
+          echo "::notice::Release PR created/updated. Review and merge to trigger publish workflow."

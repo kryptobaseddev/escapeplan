@@ -620,7 +620,7 @@
           variant="primary"
           loading={isSubmitting}
           onclick={() => {
-            const form = document.querySelector('form[method="POST"]:not([action])') as HTMLFormElement;
+            const form = document.querySelector('form[action="?/create"]') as HTMLFormElement;
             form?.requestSubmit();
           }}
         >

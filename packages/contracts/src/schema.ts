@@ -541,6 +541,39 @@ export const systemSettings = sqliteTable('system_settings', {
   updated_by: text('updated_by').references(() => user.id)
 });
 
+// Backup History - Track all backup operations with detailed metrics
+export const backupHistory = sqliteTable('backup_history', {
+  id: text('id').primaryKey(),
+  trigger: text('trigger').notNull(), // 'manual' | 'scheduled' | 'pre-update'
+  timestamp: text('timestamp').notNull(), // ISO 8601 timestamp when backup was created
+  backup_path: text('backup_path').notNull(), // Full path to backup file
+  size_bytes: integer('size_bytes').notNull(),
+  checksum_sha256: text('checksum_sha256').notNull(),
+  compressed: integer('compressed', { mode: 'boolean' }).notNull().default(sql`0`),
+  verified: integer('verified', { mode: 'boolean' }).notNull().default(sql`0`),
+  app_version: text('app_version'), // Version of app at time of backup
+  retention_days: integer('retention_days').notNull(),
+  deleted_at: text('deleted_at'), // Soft delete timestamp
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  triggerIdx: index('idx_backup_history_trigger').on(table.trigger),
+  timestampIdx: index('idx_backup_history_timestamp').on(table.timestamp),
+  deletedAtIdx: index('idx_backup_history_deleted_at').on(table.deleted_at)
+}));
+
+// Backup Metrics - Track performance and success/failure of backup operations
+export const backupMetrics = sqliteTable('backup_metrics', {
+  id: text('id').primaryKey(),
+  trigger: text('trigger').notNull(), // 'manual' | 'scheduled' | 'pre-update'
+  success: integer('success', { mode: 'boolean' }).notNull(),
+  duration_ms: integer('duration_ms').notNull(),
+  error_message: text('error_message'),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  triggerIdx: index('idx_backup_metrics_trigger').on(table.trigger),
+  createdAtIdx: index('idx_backup_metrics_created_at').on(table.created_at)
+}));
+
 // ============================================================================
 // CAMERAS
 // ============================================================================
@@ -633,6 +666,8 @@ export const schema = {
   systemHealth,
   backups,
   usbDevices,
+  backupHistory,
+  backupMetrics,
   // Network
   networkProfiles,
   networkHealth,
