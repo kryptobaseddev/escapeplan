@@ -72,8 +72,9 @@ import {
   deleteRole,
   listPermissions,
   getPermissionMatrix,
-  timerInterval
-} from './state.js';
+  startTimerInterval,
+  stopTimerInterval
+} from './state/index.js';
 import { initializeSettings, settings } from './settings.js';
 import { seedSystemSettings } from './db/seed-settings.js';
 import { auth, requireSession } from './auth.js';
@@ -1770,12 +1771,15 @@ if (!skipAutostart && !isTestEnv) {
       await server.listen({ port: DEFAULT_PORT, host: '0.0.0.0' });
       server.log.info(`EscapePlan API listening on http://localhost:${DEFAULT_PORT}`);
 
+      // Start timer interval for all running sessions
+      startTimerInterval();
+
       // Graceful shutdown handlers for clean tsx watch restarts
       const gracefulShutdown = async (signal: string) => {
         server.log.info(`${signal} received, starting graceful shutdown...`);
 
-        // Clear timer interval
-        clearInterval(timerInterval);
+        // Stop timer interval
+        stopTimerInterval();
 
         // Close Fastify server
         await server.close();

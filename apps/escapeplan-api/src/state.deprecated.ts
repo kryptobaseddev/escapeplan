@@ -1,3 +1,28 @@
+/**
+ * @file state.deprecated.ts
+ *
+ * ⚠️ DEPRECATED - DO NOT USE ⚠️
+ *
+ * This file has been refactored into a modular domain-driven architecture.
+ * All functions have been migrated to the ./state/ directory.
+ *
+ * Migration completed: 2025-10-04
+ *
+ * NEW IMPORT PATH: import { ... } from './state/index.js';
+ *
+ * Domain modules:
+ * - ./state/network/      - WiFi management, network profiles
+ * - ./state/games/        - Game CRUD, puzzles, pricing
+ * - ./state/operators/    - User accounts, roles, permissions
+ * - ./state/sessions/     - Active sessions, timer, commands
+ * - ./state/bookings/     - Calendar bookings, scheduling
+ * - ./state/dashboard/    - Real-time aggregation
+ *
+ * See ./state/README.md for architecture documentation.
+ *
+ * This file is kept for reference only and will be removed in a future cleanup.
+ */
+
 import { randomUUID } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { sqlite } from './db/client.js';
@@ -2402,298 +2427,8 @@ function tickTimers() {
 // ============================================================================
 // RBAC MANAGEMENT
 // ============================================================================
-
-/**
- * List all roles with their permission counts
- */
-export function listRoles(): import('@escapeplan/contracts').RoleWithPermissions[] {
-  const roles = sqlite.prepare(`
-    SELECT
-      r.id,
-      r.name,
-      r.description,
-      r.is_system as isSystem,
-      r.created_at as createdAt,
-      r.updated_at as updatedAt
-    FROM roles r
-    ORDER BY r.is_system DESC, r.name ASC
-  `).all() as Array<{
-    id: string;
-    name: string;
-    description: string | null;
-    isSystem: number;
-    createdAt: string;
-    updatedAt: string;
-  }>;
-
-  return roles.map(role => {
-    const permissions = sqlite.prepare(`
-      SELECT p.id, p.name, p.label, p.category, p.description, p.created_at as createdAt
-      FROM permissions p
-      INNER JOIN role_permissions rp ON p.id = rp.permission_id
-      WHERE rp.role_id = ?
-      ORDER BY p.category, p.name
-    `).all(role.id) as Array<{
-      id: string;
-      name: string;
-      label: string;
-      category: string;
-      description: string | null;
-      createdAt: string;
-    }>;
-
-    return {
-      id: role.id,
-      name: role.name,
-      description: role.description,
-      isSystem: Boolean(role.isSystem),
-      createdAt: role.createdAt,
-      updatedAt: role.updatedAt,
-      permissions: permissions.map(p => ({
-        ...p,
-        name: p.name as import('@escapeplan/contracts').OperatorPermission,
-        category: p.category as import('@escapeplan/contracts').PermissionCategory
-      }))
-    };
-  });
-}
-
-/**
- * Get a single role with its permissions
- */
-export function getRoleById(roleId: string): import('@escapeplan/contracts').RoleWithPermissions | null {
-  const role = sqlite.prepare(`
-    SELECT
-      r.id,
-      r.name,
-      r.description,
-      r.is_system as isSystem,
-      r.created_at as createdAt,
-      r.updated_at as updatedAt
-    FROM roles r
-    WHERE r.id = ?
-  `).get(roleId) as {
-    id: string;
-    name: string;
-    description: string | null;
-    isSystem: number;
-    createdAt: string;
-    updatedAt: string;
-  } | undefined;
-
-  if (!role) {
-    return null;
-  }
-
-  const permissions = sqlite.prepare(`
-    SELECT p.id, p.name, p.label, p.category, p.description, p.created_at as createdAt
-    FROM permissions p
-    INNER JOIN role_permissions rp ON p.id = rp.permission_id
-    WHERE rp.role_id = ?
-    ORDER BY p.category, p.name
-  `).all(roleId) as Array<{
-    id: string;
-    name: string;
-    label: string;
-    category: string;
-    description: string | null;
-    createdAt: string;
-  }>;
-
-  return {
-    id: role.id,
-    name: role.name,
-    description: role.description,
-    isSystem: Boolean(role.isSystem),
-    createdAt: role.createdAt,
-    updatedAt: role.updatedAt,
-    permissions: permissions.map(p => ({
-      ...p,
-      name: p.name as import('@escapeplan/contracts').OperatorPermission,
-      category: p.category as import('@escapeplan/contracts').PermissionCategory
-    }))
-  };
-}
-
-/**
- * Create a new custom role
- */
-export function createRole(data: import('@escapeplan/contracts').CreateRoleRequest): import('@escapeplan/contracts').RoleWithPermissions {
-  const roleId = randomUUID();
-  const now = new Date().toISOString();
-
-  // Insert role
-  sqlite.prepare(`
-    INSERT INTO roles (id, name, description, is_system, created_at, updated_at)
-    VALUES (?, ?, ?, 0, ?, ?)
-  `).run(roleId, data.name, data.description ?? null, now, now);
-
-  // Insert permissions if provided
-  if (data.permissionIds && data.permissionIds.length > 0) {
-    const insertPermStmt = sqlite.prepare(`
-      INSERT INTO role_permissions (id, role_id, permission_id, granted_at)
-      VALUES (?, ?, ?, ?)
-    `);
-
-    for (const permissionId of data.permissionIds) {
-      insertPermStmt.run(randomUUID(), roleId, permissionId, now);
-    }
-  }
-
-  logToDatabase('info', 'rbac', `Created custom role: ${data.name}`, { roleId, roleName: data.name });
-
-  const created = getRoleById(roleId);
-  if (!created) {
-    throw new Error('Failed to retrieve created role');
-  }
-
-  return created;
-}
-
-/**
- * Update a role's metadata (name, description)
- */
-export function updateRole(roleId: string, data: import('@escapeplan/contracts').UpdateRoleRequest): import('@escapeplan/contracts').RoleWithPermissions {
-  const existing = getRoleById(roleId);
-  if (!existing) {
-    throw new Error('Role not found');
-  }
-
-  if (existing.isSystem) {
-    throw new Error('Cannot modify system roles');
-  }
-
-  const now = new Date().toISOString();
-  const name = data.name ?? existing.name;
-  const description = data.description !== undefined ? data.description : existing.description;
-
-  sqlite.prepare(`
-    UPDATE roles
-    SET name = ?, description = ?, updated_at = ?
-    WHERE id = ?
-  `).run(name, description, now, roleId);
-
-  logToDatabase('info', 'rbac', `Updated role: ${name}`, { roleId, changes: data });
-
-  const updated = getRoleById(roleId);
-  if (!updated) {
-    throw new Error('Failed to retrieve updated role');
-  }
-
-  return updated;
-}
-
-/**
- * Update a role's permissions
- */
-export function updateRolePermissions(roleId: string, data: import('@escapeplan/contracts').UpdateRolePermissionsRequest, grantedBy?: string): import('@escapeplan/contracts').RoleWithPermissions {
-  const existing = getRoleById(roleId);
-  if (!existing) {
-    throw new Error('Role not found');
-  }
-
-  if (existing.isSystem) {
-    throw new Error('Cannot modify permissions for system roles');
-  }
-
-  const now = new Date().toISOString();
-
-  // Transaction: delete existing permissions, then insert new ones
-  sqlite.prepare('DELETE FROM role_permissions WHERE role_id = ?').run(roleId);
-
-  if (data.permissionIds && data.permissionIds.length > 0) {
-    const insertStmt = sqlite.prepare(`
-      INSERT INTO role_permissions (id, role_id, permission_id, granted_at, granted_by)
-      VALUES (?, ?, ?, ?, ?)
-    `);
-
-    for (const permissionId of data.permissionIds) {
-      insertStmt.run(randomUUID(), roleId, permissionId, now, grantedBy ?? null);
-    }
-  }
-
-  // Update role's updated_at timestamp
-  sqlite.prepare('UPDATE roles SET updated_at = ? WHERE id = ?').run(now, roleId);
-
-  logToDatabase('info', 'rbac', `Updated permissions for role: ${existing.name}`, {
-    roleId,
-    permissionCount: data.permissionIds?.length ?? 0,
-    grantedBy
-  });
-
-  const updated = getRoleById(roleId);
-  if (!updated) {
-    throw new Error('Failed to retrieve updated role');
-  }
-
-  return updated;
-}
-
-/**
- * Delete a custom role
- */
-export function deleteRole(roleId: string): void {
-  const existing = getRoleById(roleId);
-  if (!existing) {
-    throw new Error('Role not found');
-  }
-
-  if (existing.isSystem) {
-    throw new Error('Cannot delete system roles');
-  }
-
-  // Check if any operators are using this role
-  const operatorsUsingRole = sqlite.prepare('SELECT COUNT(*) as count FROM user WHERE role_id = ?').get(roleId) as { count: number };
-  if (operatorsUsingRole.count > 0) {
-    throw new Error(`Cannot delete role: ${operatorsUsingRole.count} operator(s) are assigned to this role`);
-  }
-
-  sqlite.prepare('DELETE FROM roles WHERE id = ?').run(roleId);
-
-  logToDatabase('info', 'rbac', `Deleted custom role: ${existing.name}`, { roleId });
-}
-
-/**
- * List all permissions
- */
-export function listPermissions(): import('@escapeplan/contracts').PermissionSummary[] {
-  const permissions = sqlite.prepare(`
-    SELECT
-      p.id,
-      p.name,
-      p.label,
-      p.category,
-      p.description,
-      p.created_at as createdAt,
-      (SELECT COUNT(*) FROM role_permissions WHERE permission_id = p.id) as assignedToRoles
-    FROM permissions p
-    ORDER BY p.category, p.name
-  `).all() as Array<{
-    id: string;
-    name: string;
-    label: string;
-    category: string;
-    description: string | null;
-    createdAt: string;
-    assignedToRoles: number;
-  }>;
-
-  return permissions.map(p => ({
-    ...p,
-    name: p.name as import('@escapeplan/contracts').OperatorPermission,
-    category: p.category as import('@escapeplan/contracts').PermissionCategory
-  }));
-}
-
-/**
- * Get permission matrix (all roles with all permissions)
- */
-export function getPermissionMatrix(): import('@escapeplan/contracts').GetPermissionsResponse & import('@escapeplan/contracts').GetRolesResponse {
-  return {
-    permissions: listPermissions(),
-    roles: listRoles()
-  };
-}
+// MIGRATED to ./state/operators/roles.svelte.ts
+// Import from: import { listRoles, getRoleById, createRole, updateRole, updateRolePermissions, deleteRole, listPermissions, getPermissionMatrix } from './state/index.js';
 
 // Start the ticker - runs every 1000ms (1 second)
 export const timerInterval = setInterval(tickTimers, 1000);

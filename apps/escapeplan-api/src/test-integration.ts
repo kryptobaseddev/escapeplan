@@ -4,7 +4,7 @@
  */
 
 import { sqlite } from './db/client.js';
-import { applyCommand, quickStartSession, getDashboard } from './state.js';
+import { applyCommand, quickStartSession, getDashboard } from './state/index.js';
 import { getActiveAlerts, getSessionAlerts } from './logging/index.js';
 
 console.log('\n🧪 Starting Integration Test - Logging & Alerting Phase 2\n');

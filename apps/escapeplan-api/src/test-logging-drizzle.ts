@@ -16,7 +16,7 @@ import {
   getActiveAlerts,
   getSessionAlerts
 } from './logging/alerts.js';
-import { quickStartSession, applyCommand, getDashboard } from './state.js';
+import { quickStartSession, applyCommand, getDashboard } from './state/index.js';
 import type { AlertLevel, AlertCategory, LogLevel, LogCategory } from '@escapeplan/contracts';
 
 console.log('\n🧪 Comprehensive Drizzle ORM Test - Logging & Alerting System\n');
