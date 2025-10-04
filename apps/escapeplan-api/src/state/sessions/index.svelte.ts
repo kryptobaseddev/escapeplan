@@ -26,10 +26,53 @@ import type {
   MilestoneTriggerType,
   QuickStartSessionRequest,
   QuickStartSessionResponse,
-  TimerBroadcast
+  TimerBroadcast,
+  RoomDisplayPlaybackStatus
 } from '@escapeplan/contracts';
 import type { SessionRow } from './types.js';
 import type { GameRow, GamePuzzleRow, GameMilestoneRow } from '../games/types.js';
+
+/**
+ * In-memory map tracking current room display playback status per session
+ * Key: sessionId, Value: current media playback state
+ */
+const roomDisplayPlaybackState = new Map<string, {
+  mediaType: 'text' | 'image' | 'audio' | 'video';
+  source: 'hint' | 'milestone';
+  status: RoomDisplayPlaybackStatus;
+  triggeredAt: string;
+} | null>();
+
+/**
+ * Update room display playback state for a session
+ */
+export function updateRoomDisplayPlayback(
+  sessionId: string,
+  state: {
+    mediaType: 'text' | 'image' | 'audio' | 'video';
+    source: 'hint' | 'milestone';
+    status: RoomDisplayPlaybackStatus;
+    triggeredAt: string;
+  } | null
+): void {
+  if (state === null) {
+    roomDisplayPlaybackState.delete(sessionId);
+  } else {
+    roomDisplayPlaybackState.set(sessionId, state);
+  }
+}
+
+/**
+ * Get current room display playback state for a session
+ */
+export function getRoomDisplayPlayback(sessionId: string): {
+  mediaType: 'text' | 'image' | 'audio' | 'video';
+  source: 'hint' | 'milestone';
+  status: RoomDisplayPlaybackStatus;
+  triggeredAt: string;
+} | null {
+  return roomDisplayPlaybackState.get(sessionId) ?? null;
+}
 
 /**
  * Helper function to safely parse JSON from database
@@ -77,10 +120,46 @@ const milestonesByGameStmt = sqlite.prepare(
    FROM game_milestones WHERE game_id = ? ORDER BY display_order ASC`
 );
 
+const triggeredMilestonesStmt = sqlite.prepare(
+  `SELECT milestone_id FROM session_milestones WHERE session_id = ?`
+);
+
+/**
+ * Populates availableMilestones for a session
+ * This should be called for all session detail responses to ensure milestones
+ * are visible regardless of timer state (stopped, paused, running)
+ */
+function populateMilestones(sessionId: string, gameId: string): GameMilestone[] {
+  const triggeredMilestones = triggeredMilestonesStmt.all(sessionId) as { milestone_id: string }[];
+  const triggeredIds = new Set(triggeredMilestones.map(m => m.milestone_id));
+
+  const gameMilestones = milestonesByGameStmt.all(gameId) as GameMilestoneRow[];
+  return gameMilestones
+    .filter(m => m.enabled)
+    .map(m => ({
+      id: m.id,
+      gameId: m.game_id,
+      type: m.type as MilestoneType,
+      name: m.name,
+      mediaType: (m.media_type as MilestoneMediaType) ?? null,
+      content: m.content ?? null,
+      assetId: m.asset_id ?? null,
+      volumeLevel: m.volume_level,
+      displayOrder: m.display_order,
+      triggerType: m.trigger_type as MilestoneTriggerType,
+      triggerConfig: m.trigger_config ? (JSON.parse(m.trigger_config) as GameMilestoneTriggerConfig) : null,
+      enabled: Boolean(m.enabled),
+      triggered: triggeredIds.has(m.id),
+      createdAt: m.created_at,
+      updatedAt: m.updated_at
+    }));
+}
+
 /**
  * Maps a database SessionRow to a GameSessionDetails domain object
  */
 function mapSessionRow(row: SessionRow): GameSessionDetails {
+  const playbackState = getRoomDisplayPlayback(row.session_id);
   return {
     id: row.session_id,
     gameId: row.game_id,
@@ -115,7 +194,8 @@ function mapSessionRow(row: SessionRow): GameSessionDetails {
     crew: {
       primary: row.crew_primary,
       support: row.crew_support ?? undefined
-    }
+    },
+    currentRoomDisplayMedia: playbackState
   };
 }
 
@@ -194,6 +274,8 @@ class SessionsState {
         deliveredBy: hint.delivered_by,
         deliveredAt: hint.delivered_at
       }));
+      // Populate milestones for all sessions regardless of timer state
+      details.availableMilestones = populateMilestones(row.session_id, row.game_id);
       return details;
     });
 
@@ -300,6 +382,8 @@ class SessionsState {
         deliveredBy: hint.delivered_by,
         deliveredAt: hint.delivered_at
       }));
+      // Populate milestones for all sessions regardless of timer state
+      details.availableMilestones = populateMilestones(row.session_id, row.game_id);
       return details;
     });
 
@@ -369,31 +453,8 @@ class SessionsState {
       deliveredAt: hint.delivered_at
     }));
 
-    // Get available milestones (enabled, not yet triggered)
-    const triggeredMilestones = sqlite
-      .prepare('SELECT milestone_id FROM session_milestones WHERE session_id = ?')
-      .all(id) as { milestone_id: string }[];
-    const triggeredIds = new Set(triggeredMilestones.map(m => m.milestone_id));
-
-    const gameMilestones = milestonesByGameStmt.all(row.game_id) as GameMilestoneRow[];
-    details.availableMilestones = gameMilestones
-      .filter(m => m.enabled && !triggeredIds.has(m.id))
-      .map(m => ({
-        id: m.id,
-        gameId: m.game_id,
-        type: m.type as MilestoneType,
-        name: m.name,
-        mediaType: (m.media_type as MilestoneMediaType) ?? null,
-        content: m.content ?? null,
-        assetId: m.asset_id ?? null,
-        volumeLevel: m.volume_level,
-        displayOrder: m.display_order,
-        triggerType: m.trigger_type as MilestoneTriggerType,
-        triggerConfig: m.trigger_config ? (JSON.parse(m.trigger_config) as GameMilestoneTriggerConfig) : null,
-        enabled: Boolean(m.enabled),
-        createdAt: m.created_at,
-        updatedAt: m.updated_at
-      }));
+    // Populate milestones for all sessions regardless of timer state
+    details.availableMilestones = populateMilestones(id, row.game_id);
 
     return details;
   }
@@ -459,6 +520,8 @@ class SessionsState {
       deliveredBy: hint.delivered_by,
       deliveredAt: hint.delivered_at
     }));
+    // Populate milestones for all sessions regardless of timer state
+    details.availableMilestones = populateMilestones(row.session_id, row.game_id);
     return { session: details, slug: row.slug, narrative: row.narrative ?? undefined };
   }
 
@@ -629,8 +692,8 @@ class SessionsState {
     sqlite
       .prepare(
         `INSERT INTO timer_slugs (slug, session_id, narrative)
-         ON CONFLICT(slug) DO UPDATE SET session_id = excluded.session_id, narrative = excluded.narrative
-         VALUES (@slug, @session_id, @narrative)`
+         VALUES (@slug, @session_id, @narrative)
+         ON CONFLICT(slug) DO UPDATE SET session_id = excluded.session_id, narrative = excluded.narrative`
       )
       .run({
         slug: gameRow.slug,

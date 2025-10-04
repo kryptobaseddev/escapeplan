@@ -129,7 +129,7 @@ Fields:
 
 **Tab 2: Images & Media**
 - Game thumbnail (image upload, preview, recommended: 16:9, 1200×675px)
-- Room screen background (image or video upload, preview, used on timer display page)
+- Room screen background (image or video upload, preview, used on room display page)
 - Gallery images (multi-upload, drag-to-reorder, used for marketing/booking page)
 - Theme token (dropdown: escapeplan-pirate, escapeplan-space, escapeplan-noir, etc.)
 - All uploads:
@@ -302,7 +302,7 @@ Fields:
   - **Copy Link**: Copies `https://escapeplan.local/{game.slug}` to clipboard
     - Shows toast: "Room link copied!"
     - Link format: `${window.location.origin}/${session.game.slug}`
-  - **Open Room**: Opens room timer page in new window/tab
+  - **Open Room**: Opens room display page in new window/tab
     - Target: `_blank`
     - Window features: fullscreen on desktop, regular tab on mobile
 - Session health indicators:

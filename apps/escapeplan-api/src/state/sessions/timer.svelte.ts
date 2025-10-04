@@ -85,7 +85,7 @@ class TimerState {
    * 6. Evaluates alert rules for low time warnings
    * 7. Updates the dashboard with current state
    */
-  tickTimers(): void {
+  async tickTimers(): Promise<void> {
     try {
       // Get all running timers
       const runningSessions = sqlite
@@ -154,7 +154,7 @@ class TimerState {
           }
 
           emitSessionUpdate(updated);
-          this.broadcastTimerSessions(session.id, updated);
+          await this.broadcastTimerSessions(session.id, updated);
         }
       }
 
@@ -174,10 +174,10 @@ class TimerState {
    * @param sessionId - The session ID to broadcast
    * @param details - The session details to broadcast
    */
-  private broadcastTimerSessions(sessionId: string, details: import('@escapeplan/contracts').GameSessionDetails): void {
-    // Import dynamically to avoid circular dependency
-    const { emitTimerUpdate } = require('../../realtime.js');
-    const { toTimerBroadcast } = require('./index.svelte.js');
+  private async broadcastTimerSessions(sessionId: string, details: import('@escapeplan/contracts').GameSessionDetails): Promise<void> {
+    // Dynamic import to avoid circular dependency
+    const { emitTimerUpdate } = await import('../../realtime.js');
+    const { toTimerBroadcast } = await import('./index.svelte.js');
 
     const timerSlugBySessionStmt = sqlite.prepare(`SELECT slug, narrative FROM timer_slugs WHERE session_id = ?`);
 
@@ -209,5 +209,5 @@ export const timerState = new TimerState();
  */
 export const startTimerInterval = () => timerState.startTimerInterval();
 export const stopTimerInterval = () => timerState.stopTimerInterval();
-export const tickTimers = () => timerState.tickTimers();
+export const tickTimers = async () => await timerState.tickTimers();
 export const getTimerStatus = () => timerState.getStatus();

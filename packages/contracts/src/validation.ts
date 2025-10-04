@@ -287,9 +287,11 @@ export const sessionCommandSchema = z.object({
     'pause_timer',
     'resume_timer',
     'reset_timer',
+    'stop_session',
     'send_hint',
     'mark_puzzle',
-    'trigger_milestone'
+    'trigger_milestone',
+    'reset_milestone'
   ]),
   payload: z.record(z.any()).optional()
 });

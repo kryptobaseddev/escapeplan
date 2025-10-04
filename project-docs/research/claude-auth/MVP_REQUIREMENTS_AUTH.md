@@ -400,7 +400,7 @@
 > 4. System runs 8h continuously with 2+ streams and 2 sessions active without crash.
 > 5. All data persisted in SQLite and survives reboot; HLS resumes after restart.
 > 6. Booking flow supports discount codes, deposits, and marks games as mobile when applicable.
-> 7. Public timer at `https://escapeplan.local/{game-slug}` renders room background and hint updates without login.
+> 7. Public room display at `https://escapeplan.local/{game-slug}` renders room background and hint updates without login.
 > 8. Self-signed HTTPS certificate trusted on target tablets/phones; mDNS resolves `escapeplan.local` from iOS/macOS/Windows clients.
 
 ---

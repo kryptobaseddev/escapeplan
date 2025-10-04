@@ -10,7 +10,7 @@ Always reference our @DATABASE_SYSTEM.md file when making database changes.
 
 EscapePlan is an offline-first escape room management system running on Raspberry Pi. The system consists of:
 - **Fastify API** (`apps/escapeplan-api`) - Backend service with WebSocket support
-- **SvelteKit PWA** (`apps/escapeplan-web`) - Operator console and public timer pages
+- **SvelteKit PWA** (`apps/escapeplan-web`) - Operator console and public room display pages
 - **Shared Contracts** (`packages/contracts`) - TypeScript types and RBAC definitions shared between API and web
 
 The platform runs on a Pi-hosted Wi-Fi network (10.10.10.0/24) accessible via mDNS at `escapeplan.local`. It manages games, bookings, live sessions, real-time hints, camera streams (RTSP→HLS), and supports both fixed storefronts and mobile escape room kits.
@@ -106,7 +106,7 @@ pnpm db:seed
 - Bookings: `/api/bookings?date=YYYY-MM-DD&scope=all|mobile`
 - Sessions: `/api/sessions`, `/api/sessions/:id/commands`
 - Network: `/api/admin/network` (PATCH to update SSID/channel)
-- Public timer: `/api/public/timer/:slug` (unauthenticated)
+- Public room display: `/api/public/room/:slug` (unauthenticated)
 - Dashboard: `/api/dashboard` (aggregated session/booking status)
 
 ### Client-Side Routing

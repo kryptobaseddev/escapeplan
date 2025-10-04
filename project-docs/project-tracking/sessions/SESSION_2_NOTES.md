@@ -91,7 +91,7 @@
 - **US-013** Scheduling bookings. Calendar + conflict highlighting implemented with seeded data.
 - **US-014** Game runner with timers/hints. Console UI ready; awaiting live sync.
 - **US-016** Operator dashboard view. Metrics and alerts surfaced from SQLite.
-- **US-017** Public timer slug. Branded timer page now reflects new theme.
+- **US-017** Public room display slug. Branded room display page now reflects new theme.
 
 ## Team Collaboration
 - Session notes produced; TODO/user-story trackers updated to match progress.
@@ -149,4 +149,4 @@
 
 ---
 
-**Session Summary**: Established the EscapePlan dark-mode PWA shell, themed dashboard/bookings/game-runner/timer flows, and migrated the Fastify API to a seeded better-sqlite3 store with username-based auth. TODOs and user stories updated to reflect Phase 4 progress.
+**Session Summary**: Established the EscapePlan dark-mode PWA shell, themed dashboard/bookings/game-runner/room-display flows, and migrated the Fastify API to a seeded better-sqlite3 store with username-based auth. TODOs and user stories updated to reflect Phase 4 progress.

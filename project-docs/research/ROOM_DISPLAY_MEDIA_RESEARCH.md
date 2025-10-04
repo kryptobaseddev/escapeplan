@@ -3,6 +3,10 @@
 **Date:** 2025-10-03
 **Purpose:** Research how Room Display timer, backgrounds, and media hints currently work, and identify requirements for sending headless media (audio/video/image) to the Room Display screen.
 
+**Note:** This document contains historical research. Routes have since been renamed:
+- Frontend: `/timer/[slug]` → `/room/[slug]`
+- API: `/api/public/timer/:slug` → `/api/public/room/:slug`
+
 ---
 
 ## 1. Current Room Display Implementation

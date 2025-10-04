@@ -272,6 +272,12 @@ export interface GameSessionDetails extends ActiveSessionSummary {
   gameSlug?: string;
   roomId?: string;
   gameDefaultVolume?: number; // Game-wide default volume
+  currentRoomDisplayMedia?: {
+    mediaType: 'text' | 'image' | 'audio' | 'video';
+    source: 'hint' | 'milestone';
+    status: RoomDisplayPlaybackStatus;
+    triggeredAt: string;
+  } | null; // Currently playing media on room display
 }
 
 export interface RoomDisplayConfig {
@@ -308,6 +314,18 @@ export interface RoomDisplayMediaEvent {
     textColor: string;
     backgroundColor: string;
   };
+}
+
+export type RoomDisplayPlaybackStatus = 'playing' | 'finished' | 'dismissed';
+
+export interface RoomDisplayStatusEvent {
+  slug: string;
+  sessionId: string;
+  mediaType: 'text' | 'image' | 'audio' | 'video';
+  source: 'hint' | 'milestone';
+  status: RoomDisplayPlaybackStatus;
+  triggeredAt: string; // Original trigger timestamp to match the media event
+  statusUpdatedAt: string; // When this status update occurred
 }
 
 export interface TimerBroadcast {
@@ -367,7 +385,7 @@ export interface AuthSessionEnvelope {
 }
 
 export interface CommandRequest {
-  command: 'start_timer' | 'pause_timer' | 'resume_timer' | 'reset_timer' | 'send_hint' | 'mark_puzzle' | 'trigger_milestone';
+  command: 'start_timer' | 'pause_timer' | 'resume_timer' | 'reset_timer' | 'stop_session' | 'send_hint' | 'mark_puzzle' | 'trigger_milestone' | 'reset_milestone';
   payload?: Record<string, unknown>;
 }
 
@@ -446,6 +464,7 @@ export interface GameMilestone {
   triggerType: MilestoneTriggerType;
   triggerConfig?: GameMilestoneTriggerConfig | null;
   enabled: boolean;
+  triggered?: boolean; // Whether this milestone has been triggered in the current session
   createdAt: string;
   updatedAt: string;
 }

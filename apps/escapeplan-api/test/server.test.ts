@@ -91,7 +91,7 @@ describe('EscapePlan API', () => {
 
     const response = await server.inject({
       method: 'GET',
-      url: `/api/public/timer/${sessionFixture!.timerSlug}`
+      url: `/api/public/room/${sessionFixture!.timerSlug}`
     });
     expect(response.statusCode).toBe(200);
     const json = response.json() as { slug: string };

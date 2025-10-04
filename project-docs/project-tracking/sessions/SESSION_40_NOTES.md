@@ -763,7 +763,7 @@ available → in_progress → completed
 1. Add volume input to hint forms
 2. Add volume slider to GameModal hint editor
 3. Update API to send volume with hints
-4. Implement volume control in Room Display (/timer/:slug)
+4. Implement volume control in Room Display (/room/:slug)
 5. Test audio/video playback at different volumes
 
 ---

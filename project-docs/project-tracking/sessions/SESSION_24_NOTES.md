@@ -8,7 +8,7 @@
 ## Objectives
 
 1. **Unify session cards** - Make cards exactly identical between Dashboard and Games pages
-2. **Fix timer button positioning** - Position timer controls near/below timer display
+2. **Fix timer button positioning** - Position timer controls near/below session timer
 3. **Fix timer button 404 errors** - Correct API fetch calls to use apiFetch
 4. **Add session filtering** - Allow viewing completed sessions with search and sorting
 
@@ -271,10 +271,10 @@ Completely restructured the game session detail page header:
 │ 4 players                          RUNNING          │
 │                                   Total: 7:28       │
 │ Started: 2:15 PM                                    │
-│ Scheduled end: 3:15 PM            ⏯ ⏸ 🔄           │
+│ Sched end: 3:15 PM                 ⏯ ⏸ 🔄           │
 │ Hints used: 2                                       │
 │                                   Room Display:     │
-│ [View booking]                     📋 🔗           │
+│ [View booking]                      📋 🔗           │
 └─────────────────────────────────────────────────────┘
 ```
 

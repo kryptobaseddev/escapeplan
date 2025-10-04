@@ -26,7 +26,7 @@ import {
 import { logToDatabase } from '../../logging/index.js';
 import { evaluateAlertRules, autoDismissAlerts } from '../../logging/alerts.js';
 import { getDashboard } from '../dashboard/index.svelte.js';
-import { getSessionById } from './index.svelte.js';
+import { getSessionById, updateRoomDisplayPlayback } from './index.svelte.js';
 import { getGameDetails } from '../games/index.svelte.js';
 import type { CommandRequest, CommandResponse, GameSessionDetails } from '@escapeplan/contracts';
 import type { GameMilestoneRow } from '../games/types.js';
@@ -63,7 +63,7 @@ class CommandsState {
    * @returns CommandResponse with updated session state
    * @throws Error if session not found or command fails
    */
-  applyCommand(sessionId: string, command: CommandRequest): CommandResponse {
+  async applyCommand(sessionId: string, command: CommandRequest): Promise<CommandResponse> {
     const session = getSessionById(sessionId);
     if (!session) {
       throw new Error('Session not found');
@@ -88,6 +88,10 @@ class CommandsState {
         this.handleResetTimer(sessionId, session);
         break;
 
+      case 'stop_session':
+        this.handleStopSession(sessionId, session);
+        break;
+
       case 'send_hint':
         this.handleSendHint(sessionId, session, command.payload, nowIso);
         break;
@@ -98,6 +102,10 @@ class CommandsState {
 
       case 'trigger_milestone':
         this.handleTriggerMilestone(sessionId, session, command.payload, nowIso);
+        break;
+
+      case 'reset_milestone':
+        this.handleResetMilestone(sessionId, session, command.payload);
         break;
 
       default:
@@ -118,7 +126,7 @@ class CommandsState {
     emitSessionUpdate(updated);
     emitCommandAck(response);
     emitDashboardUpdate(getDashboard());
-    this.broadcastTimerSessions(sessionId, updated);
+    await this.broadcastTimerSessions(sessionId, updated);
 
     return response;
   }
@@ -201,6 +209,44 @@ class CommandsState {
   }
 
   /**
+   * Handles stop_session command
+   * Ends the game session by setting timer to zero and status to completed
+   */
+  private handleStopSession(sessionId: string, session: GameSessionDetails): void {
+    try {
+      // Set timer to zero and mark session as completed
+      sqlite
+        .prepare(
+          `UPDATE sessions
+           SET timer_remaining_seconds = 0,
+               timer_status = 'completed',
+               status = 'completed'
+           WHERE id = ?`
+        )
+        .run(sessionId);
+
+      logToDatabase('info', 'session', 'Session stopped by operator', {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName
+      });
+
+      evaluateAlertRules('session_stopped', {
+        sessionId,
+        gameName: session.gameName,
+        roomName: session.roomName,
+        time: new Date().toLocaleTimeString()
+      });
+    } catch (error) {
+      logToDatabase('error', 'session', 'Failed to stop session', {
+        sessionId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Handles send_hint command
    */
   private handleSendHint(
@@ -209,18 +255,29 @@ class CommandsState {
     payload: Record<string, unknown> | undefined,
     nowIso: string
   ): void {
-    const message = String(payload?.message ?? '').trim();
-    if (!message) {
-      throw new Error('Hint message required');
-    }
-
     const medium = String(payload?.medium ?? 'text');
-    const assetUrl = payload?.assetUrl ? String(payload.assetUrl) : null;
+    const message = String(payload?.message ?? '').trim();
+    const assetUrl = payload?.assetUrl ? String(payload.assetUrl).trim() : null;
     const volumeLevel = payload?.volumeLevel ? Number(payload.volumeLevel) : null;
     const puzzleId = payload?.puzzleId ? String(payload.puzzleId) : null;
     const displayDurationSeconds = payload?.displayDurationSeconds ? Number(payload.displayDurationSeconds) : undefined;
     const loop = payload?.loop ? Boolean(payload.loop) : false;
     const loopCount = payload?.loopCount ? Number(payload.loopCount) : undefined;
+
+    // Validate based on medium type
+    if (medium === 'text') {
+      // Text hints require non-empty message
+      if (!message || message.length === 0) {
+        throw new Error('Hint message required for text hints');
+      }
+    } else if (medium === 'audio' || medium === 'image' || medium === 'video') {
+      // Audio/image/video hints require assetUrl
+      if (!assetUrl || assetUrl.length === 0) {
+        throw new Error(`Asset URL required for ${medium} hints`);
+      }
+    } else {
+      throw new Error(`Invalid hint medium: ${medium}`);
+    }
 
     // Store hint in session_hints
     sqlite
@@ -236,6 +293,14 @@ class CommandsState {
     if (countAsHint) {
       sqlite.prepare(`UPDATE sessions SET hints_used = hints_used + 1 WHERE id = ?`).run(sessionId);
     }
+
+    // Set playback state to 'playing'
+    updateRoomDisplayPlayback(sessionId, {
+      mediaType: medium as 'text' | 'image' | 'audio' | 'video',
+      source: 'hint',
+      status: 'playing',
+      triggeredAt: nowIso
+    });
 
     // Emit to Room Display
     const timerSlugs = timerSlugBySessionStmt.all(sessionId) as { slug: string }[];
@@ -317,7 +382,21 @@ class CommandsState {
       throw new Error('Milestone already triggered');
     }
 
-    const assetUrl = milestone.asset_id ? `/api/assets/${milestone.asset_id}` : null;
+    // Look up asset file_path if asset_id exists
+    let assetUrl: string | null = null;
+    if (milestone.asset_id) {
+      const asset = sqlite.prepare('SELECT file_path FROM assets WHERE id = ?').get(milestone.asset_id) as
+        | { file_path: string }
+        | undefined;
+      if (asset) {
+        assetUrl = `/assets/${asset.file_path}`;
+      } else {
+        logToDatabase('warn', 'session', `Milestone asset not found: ${milestone.asset_id}`, {
+          milestoneId: milestone.id,
+          assetId: milestone.asset_id
+        });
+      }
+    }
 
     // Insert milestone trigger record
     sqlite
@@ -340,6 +419,14 @@ class CommandsState {
         nowIso,
         payload?.operatorId ?? null
       );
+
+    // Set playback state to 'playing'
+    updateRoomDisplayPlayback(sessionId, {
+      mediaType: (milestone.media_type ?? 'text') as 'text' | 'image' | 'audio' | 'video',
+      source: 'milestone',
+      status: 'playing',
+      triggeredAt: nowIso
+    });
 
     // Emit to Room Display
     const timerSlugs = timerSlugBySessionStmt.all(sessionId) as { slug: string }[];
@@ -376,16 +463,52 @@ class CommandsState {
   }
 
   /**
+   * Handles reset_milestone command
+   * Removes the milestone trigger record from session_milestones table,
+   * making the milestone available to trigger again in the session.
+   */
+  private handleResetMilestone(
+    sessionId: string,
+    session: GameSessionDetails,
+    payload: Record<string, unknown> | undefined
+  ): void {
+    const milestoneId = String(payload?.milestoneId ?? '').trim();
+    if (!milestoneId) {
+      throw new Error('Milestone ID required');
+    }
+
+    // Verify milestone exists and was triggered
+    const existingTrigger = sqlite
+      .prepare('SELECT id, milestone_name FROM session_milestones WHERE session_id = ? AND milestone_id = ?')
+      .get(sessionId, milestoneId) as { id: string; milestone_name: string } | undefined;
+
+    if (!existingTrigger) {
+      throw new Error('Milestone not triggered in this session');
+    }
+
+    // Delete the trigger record to make milestone available again
+    sqlite
+      .prepare('DELETE FROM session_milestones WHERE session_id = ? AND milestone_id = ?')
+      .run(sessionId, milestoneId);
+
+    logToDatabase('info', 'session', `Milestone reset: ${existingTrigger.milestone_name}`, {
+      sessionId,
+      gameName: session.gameName,
+      milestoneId
+    });
+  }
+
+  /**
    * Broadcasts timer updates for a session to all timer display clients
    * This is called after every command to keep timer displays in sync
    *
    * @param sessionId - The session ID to broadcast
    * @param details - The session details to broadcast
    */
-  private broadcastTimerSessions(sessionId: string, details: GameSessionDetails): void {
-    // Import dynamically to avoid circular dependency
-    const { emitTimerUpdate } = require('../../realtime.js');
-    const { toTimerBroadcast } = require('./index.svelte.js');
+  private async broadcastTimerSessions(sessionId: string, details: GameSessionDetails): Promise<void> {
+    // Dynamic import to avoid circular dependency
+    const { emitTimerUpdate } = await import('../../realtime.js');
+    const { toTimerBroadcast } = await import('./index.svelte.js');
 
     const rows = timerSlugBySessionStmt.all(sessionId) as { slug: string; narrative: string | null }[];
     for (const row of rows) {
@@ -403,4 +526,4 @@ export const commandsState = new CommandsState();
 /**
  * Export individual methods as standalone functions for backward compatibility
  */
-export const applyCommand = (sessionId: string, command: CommandRequest) => commandsState.applyCommand(sessionId, command);
+export const applyCommand = async (sessionId: string, command: CommandRequest) => await commandsState.applyCommand(sessionId, command);

@@ -5,11 +5,16 @@ This guide covers migrating from the old timer-only display to the new media-ena
 
 ## Breaking Changes
 
-### Route Change
+### Route Changes
+**Frontend:**
 - OLD: `/timer/[slug]`
 - NEW: `/room/[slug]`
 
-**Action:** Update bookmarks, QR codes, documentation
+**API:**
+- OLD: `/api/public/timer/:slug`
+- NEW: `/api/public/room/:slug`
+
+**Action:** Update bookmarks, QR codes, documentation, API client calls
 
 ### Schema Changes
 

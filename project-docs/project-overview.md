@@ -35,12 +35,6 @@ Escape room operators need a **self-contained** local system that can be used to
 
 **EscapePlan Differentiators:** fully offline Pi appliance, unified booking → session workflow, live camera orchestration, and dedicated support for mobile escape room kits. MVP scope prioritizes these strengths over CRM add-ons.
 
-Escape room operators need a **self-contained** local system that can be used to manage their escape room business. The system should be able to:
-
-* Runs entirely over a **private Wi‑Fi** network hosted by the Raspberry Pi.
-* Serves a **web application** to manage games, staff, bookings, puzzles, hints, and cameras.
-* Integrates **network cameras** per room for live monitoring without internet.
-
 ### 1.2 Goals / Non‑Goals
 
 * **Goals**
@@ -83,7 +77,7 @@ Escape room operators need a **self-contained** local system that can be used to
 - Raspberry Pi OS image (`escapeplan-base`) provisioning hostapd/dnsmasq AP, Avahi mDNS, nginx (HTTPS with self-signed cert), Fastify API + Socket.IO, ffmpeg workers, backups, OTA hooks.
 - SQLite schema with Drizzle migrations and seed scripts covering Users, Roles, Rooms, Games, GameSessions, Bookings, Puzzles, Hints, PricingModels, PricingTiers, Cameras, Resources, Events, HintSends, Assets, MobileKits.
 - SvelteKit PWA (`escapeplan-web`) themed via DaisyUI, responsive on tablets/phones, providing operator dashboard, admin consoles, mobile workflow, and public game slug timer pages.
-- Observability and ops tooling: local health endpoint, journald log rotation, alerting for camera downtime/timer stalls, nightly backups with retention policies.
+- Observability and ops tooling: local health endpoint, journald log rotation, alerting for camera downtime/session stalls, nightly backups with retention policies.
 
 ### 1.5 Success Metrics (initial)
 
@@ -151,7 +145,7 @@ Escape room operators need a **self-contained** local system that can be used to
 
 ### 2.4 Network & Host Configuration
 
-* **Hostname & mDNS**: advertise `escapeplan.local` via Avahi; dashboard served at `https://escapeplan.local/` with optional alternate alias per deployment. Game timer pages surface at `https://escapeplan.local/{game-slug}` and remain publicly accessible on the LAN (no auth required).
+* **Hostname & mDNS**: advertise `escapeplan.local` via Avahi; dashboard served at `https://escapeplan.local/` with optional alternate alias per deployment. Room display pages surface at `https://escapeplan.local/{game-slug}` and remain publicly accessible on the LAN (no auth required).
 * **Wi-Fi Access Point**: hostapd WPA2-PSK SSID `EscapePlan` (configurable) with strong randomly generated passphrase; DHCP 10.10.10.0/24 via dnsmasq. WPA3 support is deferred.
 * **Certificates**: self-signed certificate pair generated on first boot, installed in nginx, and exported for operators to trust on iOS/iPadOS/macOS/Windows devices. HTTP redirects to HTTPS inside the LAN.
 * **Service discovery**: `_http._tcp` and `_escapeplan._tcp` mDNS records broadcast for dashboard and API endpoints to simplify device pairing.
@@ -163,7 +157,7 @@ Escape room operators need a **self-contained** local system that can be used to
 * **Storage**: 128 GB UHS‑I microSD (A2) or NVMe SSD via PCIe hat for improved durability; daily SQLite backups stored to `/var/lib/escapeplan/backups` and optional USB drive.
 * **Networking**: USB AC600M Wi‑Fi adapter (AP mode) with external antenna; include approved alternates list for procurement resiliency.
 * **Power**: 27 W USB‑C PD supply with inline UPS or battery backup recommended for brownout protection.
-* **Peripherals**: HDMI-connected operator display (optional), USB audio output for room cues, and QR-code sticker set for quick URL access to timer pages.
+* **Peripherals**: HDMI-connected operator display (optional), USB audio output for room cues, and QR-code sticker set for quick URL access to room display pages.
 
 ---
 
@@ -449,15 +443,15 @@ CREATE INDEX idx_sessions_status ON game_sessions(status);
 * `GET /bookings?date=YYYY-MM-DD&scope=` → storefront/mobile scheduling view.
 * `GET /sessions/active` / `GET /sessions/:sessionId` → live session payloads.
 * `POST /sessions/:sessionId/commands` → timer/hint/puzzle commands (queue offline-safe).
-* `GET /public/timer/:slug` → timer broadcast payload for room displays.
+* `GET /public/room/:slug` → room display broadcast payload for room displays.
 * `POST /sessions` { bookingId } → create session (SCHEDULED)
 * `POST /sessions/:id/start` / `POST /sessions/:id/pause` / `POST /sessions/:id/end`
 * `POST /sessions/:id/hints` { puzzleId, hintId, channel } → log + broadcast
 * `WS /ws` → events: `session.update`, `camera.online`, `hint.sent`
 
-### 4.7 Public Room Timer Pages
+### 4.7 Public Room Display Pages
 
-* `GET /:gameSlug` → unauthenticated timer/hint board with room background, theme colors, optional audio cue playback, and hint history.
+* `GET /:gameSlug` → unauthenticated room display with timer/hint board, room background, theme colors, optional audio cue playback, and hint history.
 * `GET /:gameSlug/theme.json` → theme manifest for TV browsers (optional).
 
 ### 4.8 Settings & Health
@@ -857,7 +851,7 @@ POST /api/sessions/55/hints { "puzzleId": 9, "hintId": 27 }
 4. System runs 8h continuously with 2+ streams and 2 sessions active without crash.
 5. All data persisted in SQLite and survives reboot; HLS resumes after restart.
 6. Booking flow supports discount codes, deposits, and marks games as mobile when applicable.
-7. Public timer at `https://escapeplan.local/{game-slug}` renders room background and hint updates without login.
+7. Public room display at `https://escapeplan.local/{game-slug}` renders room background and hint updates without login.
 8. Self-signed HTTPS certificate trusted on target tablets/phones; mDNS resolves `escapeplan.local` from iOS/macOS/Windows clients.
 
 ---

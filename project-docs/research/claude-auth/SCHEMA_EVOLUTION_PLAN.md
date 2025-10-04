@@ -410,7 +410,7 @@ The following tables remain **local-only** and do NOT need cloud sync fields:
 | `sessionPuzzles` | Runtime session state, not synced |
 | `sessionHints` | Session history, not synced (archived with session) |
 | `sessionMilestones` | Session history, not synced |
-| `timerSlugs` | Ephemeral public timer URLs, not synced |
+| `timerSlugs` | Ephemeral public room display URLs, not synced |
 | `gamePuzzles` | Child of `games`, synced via parent relationship |
 | `gameMilestones` | Child of `games`, synced via parent relationship |
 | `discountCodeGames` | Junction table, synced via parent `discountCodes` |

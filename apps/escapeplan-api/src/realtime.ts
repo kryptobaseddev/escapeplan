@@ -4,7 +4,8 @@ import type {
   DashboardResponse,
   GameSessionDetails,
   TimerBroadcast,
-  RoomDisplayMediaEvent
+  RoomDisplayMediaEvent,
+  RoomDisplayStatusEvent
 } from '@escapeplan/contracts';
 import type { Server } from 'socket.io';
 
@@ -36,4 +37,8 @@ export function emitBookingsUpdate(payload: BookingCalendarResponse) {
 
 export function emitRoomDisplayMedia(event: RoomDisplayMediaEvent) {
   io?.emit('room-display:media', event);
+}
+
+export function emitRoomDisplayStatus(status: RoomDisplayStatusEvent) {
+  io?.emit('room-display:status', status);
 }

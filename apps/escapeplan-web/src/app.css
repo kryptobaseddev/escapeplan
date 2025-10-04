@@ -104,3 +104,20 @@ a:not(.btn) {
 [data-theme='escapeplan'] .hero-title {
   @apply text-4xl font-display tracking-tight text-base-content;
 }
+
+/* Pulsing yellow border animation for active media playback */
+@keyframes pulse-yellow-border {
+  0%, 100% {
+    border-color: rgba(251, 191, 36, 0.6);
+    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+  }
+  50% {
+    border-color: rgba(251, 191, 36, 1);
+    box-shadow: 0 0 0 4px rgba(251, 191, 36, 0.2);
+  }
+}
+
+.media-playing {
+  animation: pulse-yellow-border 2s ease-in-out infinite;
+  border: 2px solid rgba(251, 191, 36, 0.6);
+}

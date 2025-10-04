@@ -835,7 +835,7 @@ const { games, rooms, gamePuzzles, user, assets } = schema;
 12. sessions
 13. session_puzzles
 14. session_hints
-15. timer_slugs
+15. timer_slugs (internal table name; exposed publicly via /room routes)
 16. assets
 17. asset_usage
 18. storage_metrics

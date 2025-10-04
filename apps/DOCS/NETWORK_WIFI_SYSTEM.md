@@ -25,7 +25,7 @@
 
 EscapePlan uses a **dual WiFi architecture** to provide:
 
-1. **Internal WiFi AP** - Hosts a private network for operators and players to access the management console and timer pages
+1. **Internal WiFi AP** - Hosts a private network for operators and players to access the management console and room display pages
 2. **External WiFi Client** - Connects to external WiFi networks for internet access (OTA updates, cloud sync)
 
 **Primary Use Case:**
@@ -97,8 +97,8 @@ EscapePlan uses a **dual WiFi architecture** to provide:
 
 Provides a **private, offline-first network** for:
 - Operator tablets accessing the management console
-- Room timer displays showing game progress
-- Customer devices viewing timer pages (optional)
+- Room displays showing game progress
+- Customer devices viewing room display pages (optional)
 
 ### Technology Stack
 

@@ -61,7 +61,7 @@ recentAlert: text('recent_alert')
 - ⏸ Game paused - [Game Name]
 - ⏱ Low time remaining (<5 min) - [Game Name]
 - 🔔 Excessive hints (3+ in 5 minutes) - [Game Name]
-- ⏰ Session overrun (past scheduled end)
+- ⏰ Session overrun (past sched end)
 
 **Info (Optional/Logs Only):**
 - Session completed

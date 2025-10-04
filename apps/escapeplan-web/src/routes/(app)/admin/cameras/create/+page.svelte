@@ -507,7 +507,7 @@
       </form>
 
       <!-- Main Submit Form -->
-      <form method="POST" use:enhance={handleSubmit}>
+      <form method="POST" action="?/create" use:enhance={handleSubmit}>
         <!-- Hidden fields to carry over values -->
         <input type="hidden" name="name" value={nameValue} />
         <input type="hidden" name="brand" value={selectedBrand} />

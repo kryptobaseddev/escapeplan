@@ -20,7 +20,7 @@
   - Files: `apps/escapeplan-api/src/db/client.ts`, `apps/escapeplan-api/src/db/seed.ts`, `apps/escapeplan-api/migrations/000_initial.sql`, root `package.json`.  
   - Tracking: TODO.us updated under `P3-002`.
 - [x] Socket.IO scaffolding across API + webapp  
-  - Implementation: `socket.io` server mounted in Fastify; new realtime stores and socket helpers drive dashboard, runner, bookings, and public timer pages.  
+  - Implementation: `socket.io` server mounted in Fastify; new realtime stores and socket helpers drive dashboard, runner, bookings, and public room display pages.  
   - Files: `apps/escapeplan-api/src/index.ts`, `apps/escapeplan-api/src/realtime.ts`, `apps/escapeplan-web/src/lib/realtime/*`, multiple route files.
 
 ### ✅ Secondary Tasks

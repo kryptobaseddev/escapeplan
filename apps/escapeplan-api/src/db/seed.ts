@@ -42,7 +42,7 @@ const pirateGame = {
   story_intro:
     'The Captain has decided to keep 90% of the treasure. This is unacceptable—recover the map and make the captain walk the plank.',
   duration_minutes: 20,
-  difficulty: '3/5',
+  difficulty: 'Medium',
   game_type: 'storefront',
   pricing_model: 'PER_PERSON',
   categories: JSON.stringify(['Person', 'Private']),

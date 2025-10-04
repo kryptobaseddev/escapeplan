@@ -119,10 +119,10 @@ components:
       - "escapeplan_api"
     exports:
       - "Operator PWA (installable on tablets)"
-      - "Room timer pages (/{game.slug})"
+      - "Room display pages (/{game.slug})"
     consumers:
       - "Operators (tablets, desktops)"
-      - "Room displays (timer kiosks)"
+      - "Room displays (kiosks)"
 
   database:
     description: "SQLite embedded database with Drizzle ORM"
@@ -197,7 +197,7 @@ data_flow:
       action: "Dashboard receives event, updates active sessions grid"
     - step: 6
       component: escapeplan_web
-      action: "Timer page (/{game.slug}) receives event, starts countdown"
+      action: "Room display page (/{game.slug}) receives event, starts countdown"
 
   send_hint:
     - step: 1
@@ -211,7 +211,7 @@ data_flow:
       action: "Emit 'session:command' Socket.IO event to room channel"
     - step: 4
       component: escapeplan_web
-      action: "Timer page displays hint overlay (text/image/video)"
+      action: "Room display page displays hint overlay (text/image/video)"
     - step: 5
       component: escapeplan_web
       action: "Game runner updates hint history sidebar"

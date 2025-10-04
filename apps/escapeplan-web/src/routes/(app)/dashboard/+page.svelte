@@ -76,23 +76,11 @@
     return url.toString();
   };
 
-  let copySuccessMap = $state<Record<string, boolean>>({});
-
   const copyTimerLink = async (session: GameSessionDetails) => {
     const url = buildTimerUrl(session);
     if (!url) {
       setToast('Timer link unavailable for this session.', 'error');
       return;
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      copySuccessMap[session.id] = true;
-      setTimeout(() => {
-        copySuccessMap[session.id] = false;
-      }, 2000);
-    } catch (error) {
-      console.error('Failed to copy timer link', error);
-      setToast('Unable to copy timer link.', 'error');
     }
   };
 
@@ -122,7 +110,7 @@
     window.open(url, '_blank', 'noopener');
   };
 
-  async function dispatchTimerCommand(sessionId: string, command: 'start_timer' | 'pause_timer' | 'resume_timer' | 'reset_timer') {
+  async function dispatchTimerCommand(sessionId: string, command: 'start_timer' | 'pause_timer' | 'resume_timer' | 'reset_timer' | 'stop_session') {
     try {
       await apiFetch<CommandResponse>(fetch, `/sessions/${sessionId}/commands`, {
         method: 'POST',
@@ -237,7 +225,6 @@
       <DashboardSessions
         {sessions}
         {isLoading}
-        {copySuccessMap}
         onTimerCommand={dispatchTimerCommand}
         onCopyTimerLink={copyTimerLink}
         onOpenTimerLink={openTimerLink}

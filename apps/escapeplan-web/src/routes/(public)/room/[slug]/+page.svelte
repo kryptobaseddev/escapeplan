@@ -4,7 +4,7 @@
   import { onMount, onDestroy } from 'svelte';
   import type { PageData } from './$types';
   import { getSocket } from '$lib/realtime/socket';
-  import type { TimerBroadcast, RoomDisplayMediaEvent } from '@escapeplan/contracts';
+  import type { TimerBroadcast, RoomDisplayMediaEvent, RoomDisplayStatusEvent } from '@escapeplan/contracts';
 
   import RoomBackground from './components/RoomBackground.svelte';
   import RoomTimer from './components/RoomTimer.svelte';
@@ -18,7 +18,33 @@
   let timer = $state<TimerBroadcast | null>(data.timer);
   let errorMessage = $state<string | null>(data.timerError ?? null);
   let currentMedia = $state<RoomDisplayMediaEvent | null>(null);
+  let mediaKey = $state<string>('');
   let unsub: (() => void) | null = null;
+
+  /**
+   * Emit playback status to API via WebSocket
+   */
+  function emitPlaybackStatus(
+    sessionId: string,
+    mediaType: 'text' | 'image' | 'audio' | 'video',
+    source: 'hint' | 'milestone',
+    status: 'playing' | 'finished' | 'dismissed',
+    triggeredAt: string
+  ) {
+    const socket = getSocket();
+    if (socket) {
+      const statusEvent: RoomDisplayStatusEvent = {
+        slug: params.slug,
+        sessionId,
+        mediaType,
+        source,
+        status,
+        triggeredAt,
+        statusUpdatedAt: new Date().toISOString()
+      };
+      socket.emit('room-display:status', statusEvent);
+    }
+  }
 
   // WebSocket handlers
   onMount(() => {
@@ -35,7 +61,37 @@
       // Media events
       socket.on('room-display:media', (event: RoomDisplayMediaEvent) => {
         if (event.slug === params.slug) {
-          currentMedia = event;
+          // Force cleanup of previous media by clearing state first
+          if (currentMedia) {
+            currentMedia = null;
+            // Allow cleanup cycle to complete before mounting new media
+            setTimeout(() => {
+              currentMedia = event;
+              // Unique key forces component to fully remount
+              mediaKey = `${event.mediaType}-${event.triggeredAt}`;
+
+              // Emit 'playing' status when media starts
+              emitPlaybackStatus(
+                event.sessionId,
+                event.mediaType,
+                event.source,
+                'playing',
+                event.triggeredAt
+              );
+            }, 50);
+          } else {
+            currentMedia = event;
+            mediaKey = `${event.mediaType}-${event.triggeredAt}`;
+
+            // Emit 'playing' status when media starts
+            emitPlaybackStatus(
+              event.sessionId,
+              event.mediaType,
+              event.source,
+              'playing',
+              event.triggeredAt
+            );
+          }
         }
       });
 
@@ -49,7 +105,19 @@
   onDestroy(() => unsub?.());
 
   function clearMedia() {
+    // Emit 'finished' status before clearing
+    if (currentMedia) {
+      emitPlaybackStatus(
+        currentMedia.sessionId,
+        currentMedia.mediaType,
+        currentMedia.source,
+        'finished',
+        currentMedia.triggeredAt
+      );
+    }
+
     currentMedia = null;
+    mediaKey = '';
   }
 </script>
 
@@ -84,39 +152,41 @@
 
     <!-- Z-index 20+: Media Overlays -->
     {#if currentMedia}
-      {#if currentMedia.mediaType === 'text'}
-        <RoomTextHint
-          content={currentMedia.content}
-          colors={currentMedia.textHintColors}
-        />
-      {:else if currentMedia.mediaType === 'audio'}
-        <RoomAudio
-          src={currentMedia.content}
-          volumeLevel={currentMedia.volumeLevel}
-          loop={currentMedia.loop}
-          loopCount={currentMedia.loopCount}
-          autoDismiss={currentMedia.autoDismiss}
-          onFinish={clearMedia}
-        />
-      {:else if currentMedia.mediaType === 'image'}
-        <RoomImage
-          src={currentMedia.content}
-          displayDuration={currentMedia.displayDurationSeconds}
-          autoDismiss={currentMedia.autoDismiss}
-          scale={timer.roomConfig?.defaultMediaScale ?? 90}
-          onDismiss={clearMedia}
-        />
-      {:else if currentMedia.mediaType === 'video'}
-        <RoomVideo
-          src={currentMedia.content}
-          volumeLevel={currentMedia.volumeLevel}
-          loop={currentMedia.loop}
-          loopCount={currentMedia.loopCount}
-          autoDismiss={currentMedia.autoDismiss}
-          scale={timer.roomConfig?.defaultMediaScale ?? 90}
-          onFinish={clearMedia}
-        />
-      {/if}
+      {#key mediaKey}
+        {#if currentMedia.mediaType === 'text'}
+          <RoomTextHint
+            content={currentMedia.content}
+            colors={currentMedia.textHintColors}
+          />
+        {:else if currentMedia.mediaType === 'audio'}
+          <RoomAudio
+            src={currentMedia.content}
+            volumeLevel={currentMedia.volumeLevel}
+            loop={currentMedia.loop}
+            loopCount={currentMedia.loopCount}
+            autoDismiss={currentMedia.autoDismiss}
+            onFinish={clearMedia}
+          />
+        {:else if currentMedia.mediaType === 'image'}
+          <RoomImage
+            src={currentMedia.content}
+            displayDuration={currentMedia.displayDurationSeconds}
+            autoDismiss={currentMedia.autoDismiss}
+            scale={timer.roomConfig?.defaultMediaScale ?? 90}
+            onDismiss={clearMedia}
+          />
+        {:else if currentMedia.mediaType === 'video'}
+          <RoomVideo
+            src={currentMedia.content}
+            volumeLevel={currentMedia.volumeLevel}
+            loop={currentMedia.loop}
+            loopCount={currentMedia.loopCount}
+            autoDismiss={currentMedia.autoDismiss}
+            scale={timer.roomConfig?.defaultMediaScale ?? 90}
+            onFinish={clearMedia}
+          />
+        {/if}
+      {/key}
     {/if}
 
   </section>

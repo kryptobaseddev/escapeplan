@@ -1716,11 +1716,11 @@ export async function buildServer() {
       }
     });
 
-    api.get('/public/timer/:slug', async (request, reply) => {
+    api.get('/public/room/:slug', async (request, reply) => {
       const { slug } = request.params as { slug: string };
       const sessionRecord = getSessionBySlug(slug);
       if (!sessionRecord) {
-        return reply.status(404).send({ statusCode: 404, message: 'Timer not found' });
+        return reply.status(404).send({ statusCode: 404, message: 'Room not found' });
       }
       return toTimerBroadcast(sessionRecord.slug, sessionRecord.session, sessionRecord.narrative);
     });
@@ -1749,6 +1749,38 @@ export async function buildServer() {
   io.on('connection', (socket) => {
     socket.emit('dashboard:update', getDashboard());
     socket.emit('session:update:init', listActiveSessions().sessions);
+
+    // Handle room display status updates
+    socket.on('room-display:status', async (statusEvent: import('@escapeplan/contracts').RoomDisplayStatusEvent) => {
+      try {
+        const { updateRoomDisplayPlayback } = await import('./state/sessions/index.svelte.js');
+        const { emitRoomDisplayStatus, emitSessionUpdate } = await import('./realtime.js');
+        const { getSessionById } = await import('./state/sessions/index.svelte.js');
+
+        // Update in-memory playback state
+        if (statusEvent.status === 'finished' || statusEvent.status === 'dismissed') {
+          updateRoomDisplayPlayback(statusEvent.sessionId, null);
+        } else if (statusEvent.status === 'playing') {
+          updateRoomDisplayPlayback(statusEvent.sessionId, {
+            mediaType: statusEvent.mediaType,
+            source: statusEvent.source,
+            status: statusEvent.status,
+            triggeredAt: statusEvent.triggeredAt
+          });
+        }
+
+        // Broadcast status to all connected clients (operator consoles)
+        emitRoomDisplayStatus(statusEvent);
+
+        // Also emit updated session data so operator console gets refreshed state
+        const session = getSessionById(statusEvent.sessionId);
+        if (session) {
+          emitSessionUpdate(session);
+        }
+      } catch (error) {
+        socket.emit('error', { message: 'Failed to process room display status update' });
+      }
+    });
   });
 
   return app;

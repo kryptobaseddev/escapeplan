@@ -24,7 +24,7 @@ export const load: PageServerLoad = async (event) => {
 };
 
 export const actions: Actions = {
-  default: async (event) => {
+  create: async (event) => {
     if (!event.locals.user?.permissions?.includes('manage_cameras')) {
       return fail(403, { message: 'Permission denied' });
     }

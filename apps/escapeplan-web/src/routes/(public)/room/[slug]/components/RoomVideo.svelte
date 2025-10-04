@@ -17,15 +17,31 @@
 
   let videoElement: HTMLVideoElement | null = $state(null);
   let playCount = $state(0);
+  let error = $state<string | null>(null);
+  let errorTimer: ReturnType<typeof setTimeout> | null = $state(null);
 
   onMount(() => {
     if (videoElement) {
       videoElement.volume = volumeLevel / 100;
       videoElement.play().catch((err) => {
         console.error('Video autoplay failed:', err);
+        error = 'Failed to play video';
+        // Auto-dismiss after error if configured
+        if (autoDismiss && onFinish) {
+          errorTimer = setTimeout(() => onFinish(), 3000);
+        }
       });
     }
   });
+
+  function handleVideoError(e: Event) {
+    console.error('Video load error:', e);
+    error = 'Failed to load video file';
+    // Auto-dismiss after error if configured
+    if (autoDismiss && onFinish) {
+      errorTimer = setTimeout(() => onFinish(), 3000);
+    }
+  }
 
   function handleEnded() {
     playCount++;
@@ -56,9 +72,15 @@
   }
 
   onDestroy(() => {
+    if (errorTimer) {
+      clearTimeout(errorTimer);
+      errorTimer = null;
+    }
     if (videoElement) {
       videoElement.pause();
+      videoElement.currentTime = 0;
       videoElement.src = '';
+      videoElement = null;
     }
   });
 </script>
@@ -71,21 +93,32 @@
   onkeydown={(e) => e.key === 'Escape' && handleClick()}
 >
   <div class="relative" style="width: {scale}%; height: {scale}%;">
-    <video
-      bind:this={videoElement}
-      {src}
-      class="h-full w-full object-contain"
-      onended={handleEnded}
-      playsinline
-    >
-      <track kind="captions" />
-    </video>
+    {#if error}
+      <div class="text-center p-8 bg-error/20 rounded-lg border border-error/40">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 text-error" viewBox="0 0 20 20" fill="currentColor">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+        </svg>
+        <p class="text-white text-lg font-semibold">{error}</p>
+        <p class="text-white/60 text-sm mt-2">Dismissing in 3 seconds...</p>
+      </div>
+    {:else}
+      <video
+        bind:this={videoElement}
+        {src}
+        class="h-full w-full object-contain"
+        onended={handleEnded}
+        onerror={handleVideoError}
+        playsinline
+      >
+        <track kind="captions" />
+      </video>
 
-    <!-- Dismiss hint at bottom -->
-    <div class="absolute bottom-4 left-1/2 -translate-x-1/2">
-      <p class="text-xs text-white/60">
-        {autoDismiss ? (loop && !loopCount ? 'Looping - Click to dismiss' : `Playing ${playCount + 1}${loopCount ? `/${loopCount}` : ''}`) : 'Click anywhere to dismiss'}
-      </p>
-    </div>
+      <!-- Dismiss hint at bottom -->
+      <div class="absolute bottom-4 left-1/2 -translate-x-1/2">
+        <p class="text-xs text-white/60">
+          {autoDismiss ? (loop && !loopCount ? 'Looping - Click to dismiss' : `Playing ${playCount + 1}${loopCount ? `/${loopCount}` : ''}`) : 'Click anywhere to dismiss'}
+        </p>
+      </div>
+    {/if}
   </div>
 </div>
