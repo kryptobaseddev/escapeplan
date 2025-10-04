@@ -3,10 +3,11 @@
 <script lang="ts">
   import '../app.css';
   import ConfirmDialogHost from '$lib/components/ConfirmDialogHost.svelte';
+  import Toast from '$lib/components/ui/Toast.svelte';
   import { pwaInfo } from 'virtual:pwa-info';
   import { pwaAssetsHead } from 'virtual:pwa-assets/head';
 
-  const { children } = $props<{ children: () => unknown }>();
+  let { children }: { children: () => unknown } = $props();
 
   const manifestLinkTag = pwaInfo?.webManifest?.linkTag ?? '';
 </script>
@@ -31,6 +32,7 @@
 </div>
 
 <ConfirmDialogHost />
+<Toast />
 
 {#await import('$lib/pwa/ReloadPrompt.svelte') then { default: ReloadPrompt }}
   <ReloadPrompt />

@@ -2,8 +2,11 @@
 
 <script lang="ts">
   import type { ActionData } from './$types';
+  import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
 
-  const { form } = $props<{ form: ActionData | null }>();
+  let { form }: { form: ActionData | null } = $props();
+  let isSubmitting = $state(false);
 </script>
 
 <section class="relative min-h-screen overflow-hidden px-4 py-12 sm:py-16">
@@ -28,12 +31,19 @@
       </header>
 
       {#if form?.message}
-        <div class="alert alert-error mt-6 text-sm">
+        <Alert type="error" class="mt-6 text-sm">
           <span>{form.message}</span>
-        </div>
+        </Alert>
       {/if}
 
-      <form method="POST" action="/login" class="mt-8 space-y-5">
+      <form
+        method="POST"
+        action="/login"
+        class="mt-8 space-y-5"
+        onsubmit={() => {
+          isSubmitting = true;
+        }}
+      >
         <label class="form-control w-full">
           <span class="label-text text-xs font-semibold uppercase tracking-[0.35em] text-base-content/60">Username</span>
           <input
@@ -58,7 +68,9 @@
           />
         </label>
 
-        <button class="btn btn-primary btn-block mt-6" type="submit">Enter control center</button>
+        <LoadingButton type="submit" variant="primary" block={true} loading={isSubmitting} class="mt-6">
+          Enter control center
+        </LoadingButton>
       </form>
 
       <div class="mt-6 flex items-center justify-center text-xs text-base-content/50">

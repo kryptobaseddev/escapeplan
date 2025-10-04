@@ -30,6 +30,10 @@ export const handle: Handle = async ({ event, resolve }) => {
     if (session && session.user && session.session) {
       event.locals.user = session.user;
       event.locals.session = session.session;
+
+      // NOTE: session.user now includes user_type field ('operator' | 'customer')
+      // Future: Add route guards to check user_type === 'operator' for operator-only routes
+      // For backward compatibility, user_type defaults to 'operator' for existing users
     }
   } catch {
     // unauthenticated is fine

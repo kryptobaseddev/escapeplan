@@ -2,17 +2,20 @@
 
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { replaceState } from '$app/navigation';
+	import { page } from '$app/stores';
 	import type { PageData } from './$types';
 	import HealthTab from './HealthTab.svelte';
 	import NetworkTab from './NetworkTab.svelte';
 	import AlertsTab from './AlertsTab.svelte';
 	import LogsTab from './LogsTab.svelte';
 	import StorageTab from './StorageTab.svelte';
+	import SettingsTab from './SettingsTab.svelte';
 
-	let { data } = $props<{ data: PageData }>();
+	let { data }: { data: PageData } = $props();
 
-	type TabKey = 'health' | 'network' | 'alerts' | 'logs' | 'storage';
-	const validTabs: TabKey[] = ['health', 'network', 'alerts', 'logs', 'storage'];
+	type TabKey = 'health' | 'network' | 'alerts' | 'logs' | 'storage' | 'settings';
+	const validTabs: TabKey[] = ['health', 'network', 'alerts', 'logs', 'storage', 'settings'];
 
 	let activeTab = $state<TabKey>((data.activeTab as TabKey) || 'health');
 
@@ -35,9 +38,7 @@
 	function setTab(tab: TabKey) {
 		activeTab = tab;
 		if (browser) {
-			const url = new URL(window.location.href);
-			url.searchParams.set('tab', tab);
-			window.history.replaceState(null, '', `${url.pathname}?${url.searchParams.toString()}#${tab}`);
+			replaceState(`${$page.url.pathname}?tab=${tab}#${tab}`, {});
 		}
 	}
 
@@ -76,6 +77,13 @@
 			icon: '💾',
 			visible: data.permissions.canManageFiles,
 			description: 'Asset library and backups'
+		},
+		{
+			key: 'settings' as const,
+			label: 'Settings',
+			icon: '⚙️',
+			visible: data.permissions.canManageSystemHealth,
+			description: 'System settings and configuration'
 		}
 	]);
 
@@ -125,6 +133,8 @@
 				metrics={data.storageMetrics}
 				canManage={data.permissions.canManageFiles}
 			/>
+		{:else if activeTab === 'settings' && data.permissions.canManageSystemHealth}
+			<SettingsTab settings={data.systemSettings} />
 		{:else}
 			<div class="alert alert-warning">
 				<span>You do not have permission to view this tab.</span>

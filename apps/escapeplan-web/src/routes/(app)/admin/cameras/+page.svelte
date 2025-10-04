@@ -1,41 +1,31 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { invalidate } from '$app/navigation';
   import { openConfirmDialog } from '$lib/components/confirm-dialog';
-  import CameraModal from '$lib/components/CameraModal.svelte';
+  import SkeletonLoader from '$lib/components/ui/SkeletonLoader.svelte';
+  import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import type { CameraSummary } from '@escapeplan/contracts';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
 
-  let createModalOpen = $state(false);
-  let editingCamera = $state<CameraSummary | null>(null);
   let isSubmitting = $state(false);
   let feedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
+  let isLoading = $state(true);
 
   const canViewCameras = $derived(data.canViewCameras);
   const canManageCameras = $derived(data.canManageCameras);
 
+  onMount(() => {
+    setTimeout(() => {
+      isLoading = false;
+    }, 500);
+  });
+
   async function refreshData() {
     await invalidate('app:admin:cameras');
-  }
-
-  async function handleCreateSuccess() {
-    createModalOpen = false;
-    await refreshData();
-    feedback = { type: 'success', message: 'Camera added successfully.' };
-  }
-
-  async function handleEditSuccess() {
-    editingCamera = null;
-    await refreshData();
-    feedback = { type: 'success', message: 'Camera updated successfully.' };
-  }
-
-  function closeModals() {
-    createModalOpen = false;
-    editingCamera = null;
   }
 
   async function submitAction(action: string, fields: Record<string, string>) {
@@ -98,11 +88,6 @@
     }
   }
 
-  function handleEdit(camera: CameraSummary) {
-    editingCamera = camera;
-    feedback = null;
-  }
-
   function statusBadge(status: string) {
     switch (status) {
       case 'online':
@@ -141,15 +126,9 @@
       </p>
     </div>
     {#if canManageCameras}
-      <button
-        class="btn btn-primary w-full sm:w-auto"
-        onclick={() => {
-          feedback = null;
-          createModalOpen = true;
-        }}
-      >
+      <a href="/admin/cameras/create" class="btn btn-primary w-full sm:w-auto">
         + Add Camera
-      </button>
+      </a>
     {/if}
   </header>
 
@@ -162,17 +141,21 @@
     </div>
   {/if}
 
-  {#if data.cameras.length === 0}
-    <div
-      class="rounded-2xl border border-dashed border-base-content/15 bg-base-100/60 px-6 py-10 text-center"
+  {#if isLoading}
+    <SkeletonLoader type="card" count={4} />
+  {:else if data.cameras.length === 0}
+    <EmptyState
+      title="No cameras configured"
+      message="Add your first camera to enable live monitoring."
     >
-      <p class="text-sm text-base-content/60">No cameras configured.</p>
-      {#if canManageCameras}
-        <button class="btn btn-primary btn-sm mt-4" onclick={() => (createModalOpen = true)}>
-          Add Your First Camera
-        </button>
-      {/if}
-    </div>
+      {#snippet action()}
+        {#if canManageCameras}
+          <a href="/admin/cameras/create" class="btn btn-primary btn-sm">
+            Add Your First Camera
+          </a>
+        {/if}
+      {/snippet}
+    </EmptyState>
   {:else}
     <!-- Mobile Cards -->
     <div class="space-y-4 sm:hidden">
@@ -212,7 +195,7 @@
                 <ul
                   class="dropdown-content menu menu-sm z-[1] w-full max-w-xs rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg"
                 >
-                  <li><button type="button" onclick={() => handleEdit(camera)}>Edit camera</button></li>
+                  <li><a href="/admin/cameras/{camera.id}/edit">Edit camera</a></li>
                   <li>
                     <button
                       type="button"
@@ -309,7 +292,7 @@
                         <ul
                           class="dropdown-content menu menu-sm z-[1] w-48 rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg"
                         >
-                          <li><button type="button" onclick={() => handleEdit(camera)}>Edit camera</button></li>
+                          <li><a href="/admin/cameras/{camera.id}/edit">Edit camera</a></li>
                           <li>
                             <button
                               type="button"
@@ -333,26 +316,3 @@
     </div>
   {/if}
 </section>
-
-<CameraModal
-  open={createModalOpen}
-  mode="create"
-  action="?/create"
-  testAction="?/testConnection"
-  games={data.games}
-  onclose={closeModals}
-  onsuccess={handleCreateSuccess}
-/>
-
-{#if editingCamera}
-  <CameraModal
-    open={true}
-    mode="edit"
-    action="?/update"
-    testAction="?/testConnection"
-    camera={editingCamera}
-    games={data.games}
-    onclose={() => (editingCamera = null)}
-    onsuccess={handleEditSuccess}
-  />
-{/if}

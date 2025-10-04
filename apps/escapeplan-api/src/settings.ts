@@ -13,6 +13,7 @@ import {
   DEFAULT_BACKUP_RETENTION_DAYS,
   DEFAULT_GITHUB_REPO,
   DEFAULT_AUTO_UPDATE_ENABLED,
+  BUSINESS_DEFAULTS,
   type SettingType,
   type SettingCategory,
   type SystemSettingKey,
@@ -29,6 +30,11 @@ const DEFAULTS: Record<string, string> = {
   [SETTING_KEYS.BACKUP.RETENTION_DAYS]: String(DEFAULT_BACKUP_RETENTION_DAYS),
   [SETTING_KEYS.UPDATES.GITHUB_REPO]: DEFAULT_GITHUB_REPO,
   [SETTING_KEYS.UPDATES.AUTO_UPDATE_ENABLED]: String(DEFAULT_AUTO_UPDATE_ENABLED),
+  [SETTING_KEYS.BUSINESS.GAME_DURATION_MIN_MINUTES]: String(BUSINESS_DEFAULTS.GAME_DURATION_MIN_MINUTES),
+  [SETTING_KEYS.BUSINESS.GAME_DURATION_MAX_MINUTES]: String(BUSINESS_DEFAULTS.GAME_DURATION_MAX_MINUTES),
+  [SETTING_KEYS.BUSINESS.DEFAULT_CANCELLATION_POLICY]: BUSINESS_DEFAULTS.DEFAULT_CANCELLATION_POLICY,
+  [SETTING_KEYS.BUSINESS.DEFAULT_BOOKING_BUFFER_MINUTES]: String(BUSINESS_DEFAULTS.DEFAULT_BOOKING_BUFFER_MINUTES),
+  [SETTING_KEYS.BUSINESS.DEFAULT_BOOKING_WINDOW_DAYS]: String(BUSINESS_DEFAULTS.DEFAULT_BOOKING_WINDOW_DAYS),
   [SETTING_KEYS.SYSTEM.INSTALL_PATH]: process.cwd(),
   [SETTING_KEYS.SYSTEM.VERSION]: '0.1.0', // Will be overridden from package.json
   [SETTING_KEYS.SYSTEM.BUILD_DATE]: new Date().toISOString()
@@ -165,6 +171,7 @@ class SettingsManager {
       storage: [],
       backup: [],
       updates: [],
+      business: [],
       system: [],
       general: []
     };
@@ -241,6 +248,26 @@ class SettingsManager {
 
   isAutoUpdateEnabled(): boolean {
     return this.get(SETTING_KEYS.UPDATES.AUTO_UPDATE_ENABLED);
+  }
+
+  getGameDurationMinMinutes(): number {
+    return this.get(SETTING_KEYS.BUSINESS.GAME_DURATION_MIN_MINUTES);
+  }
+
+  getGameDurationMaxMinutes(): number {
+    return this.get(SETTING_KEYS.BUSINESS.GAME_DURATION_MAX_MINUTES);
+  }
+
+  getDefaultCancellationPolicy(): string {
+    return this.get(SETTING_KEYS.BUSINESS.DEFAULT_CANCELLATION_POLICY);
+  }
+
+  getDefaultBookingBufferMinutes(): number {
+    return this.get(SETTING_KEYS.BUSINESS.DEFAULT_BOOKING_BUFFER_MINUTES);
+  }
+
+  getDefaultBookingWindowDays(): number {
+    return this.get(SETTING_KEYS.BUSINESS.DEFAULT_BOOKING_WINDOW_DAYS);
   }
 }
 

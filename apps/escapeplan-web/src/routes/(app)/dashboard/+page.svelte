@@ -2,19 +2,25 @@
 
 <script lang="ts">
   import type { PageData } from './$types';
-  import { formatDate, formatTime, formatTimer } from '$lib/utils/datetime';
+  import { formatTime } from '$lib/utils/datetime';
   import { onDestroy, onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { initializeRealtime } from '$lib/realtime';
   import { bookingsStore, dashboardStore, sessionsStore } from '$lib/realtime/stores';
   import QuickStartModal from '$lib/components/sessions/QuickStartModal.svelte';
-  import type { GameSessionDetails, GameDetails, Alert } from '@escapeplan/contracts';
+  import SkeletonLoader from '$lib/components/ui/SkeletonLoader.svelte';
+  import DashboardStats from '$lib/components/dashboard/DashboardStats.svelte';
+  import DashboardNetwork from '$lib/components/dashboard/DashboardNetwork.svelte';
+  import DashboardSessions from '$lib/components/dashboard/DashboardSessions.svelte';
+  import type { GameSessionDetails, Alert as AlertType } from '@escapeplan/contracts';
   import { apiFetch } from '$lib/api/client';
   import type { CommandResponse } from '$lib/api/types';
+  import Alert from '$lib/components/ui/Alert.svelte';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
 
+  let isLoading = $state(true);
   let dashboard = $state(data.dashboard ?? null);
   let sessions = $state<GameSessionDetails[]>(data.dashboard?.activeSessions ?? []);
   let bookings = $state(data.dashboard?.upcomingBookings ?? []);
@@ -26,6 +32,19 @@
   let canManageSessions = $derived($page.data.user?.permissions?.includes('manage_sessions') ?? false);
   let canViewNetwork = $derived($page.data.user?.permissions?.includes('view_network') ?? false);
   let networkLink = $derived(canViewNetwork ? (dashboard?.network.detailsUrl ?? '/admin/network') : null);
+
+  // Derived stats for DashboardStats component
+  let statsData = $derived({
+    network: {
+      ssid: dashboard?.network.ssid ?? null,
+      password: dashboard?.network.password ?? null,
+      status: dashboard?.network.status ?? 'offline',
+      broadcastEnabled: dashboard?.network.broadcastEnabled ?? false
+    },
+    sessionCount: sessions.length,
+    upcomingCount: bookings.length,
+    alerts: dashboard?.alerts ?? []
+  });
 
   const setToast = (message: string, type: 'success' | 'error' = 'success') => {
     toast = { message, type };
@@ -49,7 +68,7 @@
     const slug = session.gameSlug ?? session.gameId;
     if (!slug) return '';
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
-    const url = new URL(`/timer/${slug}`, origin);
+    const url = new URL(`/room/${slug}`, origin);
     const roomIdentity = session.roomId;
     if (roomIdentity) {
       url.searchParams.set('room', roomIdentity);
@@ -85,7 +104,7 @@
       });
       // Update local state immediately for better UX
       if (dashboard) {
-        dashboard.alerts = dashboard.alerts.filter((a: Alert) => a.id !== alertId);
+        dashboard.alerts = dashboard.alerts.filter((a: AlertType) => a.id !== alertId);
       }
       setToast('Alert dismissed');
     } catch (error) {
@@ -116,6 +135,11 @@
   }
 
   onMount(() => {
+    // Simulate loading delay
+    const loadingTimer = setTimeout(() => {
+      isLoading = false;
+    }, 500);
+
     initializeRealtime({
       dashboard,
       sessions,
@@ -153,6 +177,7 @@
     });
 
     onDestroy(() => {
+      clearTimeout(loadingTimer);
       unsubDashboard();
       unsubSessions();
       unsubBookings();
@@ -189,53 +214,16 @@
   </header>
 
   {#if data.dashboardError}
-    <div class="alert alert-error border border-error/40 bg-error/10 text-error-content">
+    <Alert type="error">
       <span>{data.dashboardError}</span>
-    </div>
+    </Alert>
   {:else if dashboard}
-    <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-      <article class="metric-card p-4">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.4em] text-base-content/40">Network</p>
-        <div class="mt-2 space-y-1">
-          <div class="flex items-center justify-between">
-            <p class="text-base font-semibold text-base-content">{dashboard.network.ssid ?? 'escapeplan_net'}</p>
-            <span
-              class={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider ${dashboard.network.status === 'online' ? 'bg-success/15 text-success' : dashboard.network.status === 'degraded' ? 'bg-warning/15 text-warning' : 'bg-error/15 text-error'}`}
-            >
-              <span class="inline-flex size-1.5 rounded-full bg-current"></span>
-              {dashboard.network.status}
-            </span>
-          </div>
-          {#if dashboard.network.password && dashboard.network.broadcastEnabled}
-            <p class="text-xs text-base-content/60">Password: <span class="font-mono font-medium text-base-content">{dashboard.network.password}</span></p>
-          {/if}
-          <p class="text-[10px] text-base-content/40">Broadcast {dashboard.network.broadcastEnabled ? 'enabled' : 'disabled'}</p>
-        </div>
-      </article>
-
-      <article class="metric-card p-4">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.4em] text-base-content/40">Active Sessions</p>
-        <p class="mt-2 text-3xl font-display text-primary">{sessions.length.toString().padStart(2, '0')}</p>
-        <p class="mt-1 text-[10px] text-base-content/40">Live rooms</p>
-      </article>
-
-      <article class="metric-card p-4">
-        <p class="text-[10px] font-semibold uppercase tracking-[0.4em] text-base-content/40">Upcoming</p>
-        <p class="mt-2 text-3xl font-display text-secondary">{bookings.length.toString().padStart(2, '0')}</p>
-        <p class="mt-1 text-[10px] text-base-content/40">Next 4 hours</p>
-      </article>
-
-      <button
-        type="button"
-        class="metric-card p-4 text-left transition-all hover:border-accent/30 hover:shadow-accent/10 {dashboard.alerts.length > 0 ? 'cursor-pointer' : 'cursor-default'}"
-        onclick={() => { if (dashboard.alerts.length > 0) alertsModalOpen = true; }}
-        disabled={dashboard.alerts.length === 0}
-      >
-        <p class="text-[10px] font-semibold uppercase tracking-[0.4em] text-base-content/40">Alerts</p>
-        <p class="mt-2 text-3xl font-display text-accent">{dashboard.alerts.length.toString().padStart(2, '0')}</p>
-        <p class="mt-1 text-[10px] text-base-content/40">{dashboard.alerts.length > 0 ? 'Click to view' : 'No alerts'}</p>
-      </button>
-    </div>
+    <!-- Stats Cards Section -->
+    {#if isLoading}
+      <SkeletonLoader type="card" count={4} class="grid gap-3 md:grid-cols-2 xl:grid-cols-4" />
+    {:else}
+      <DashboardStats stats={statsData} onAlertsClick={() => alertsModalOpen = true} />
+    {/if}
 
     {#if toast}
       <div
@@ -246,206 +234,16 @@
     {/if}
 
     <div class="grid gap-8 xl:grid-cols-[1.1fr_0.9fr]">
-      <section class="glass-panel border-white/10 bg-base-200/70 p-6">
-        <header class="flex items-center justify-between gap-4">
-          <div>
-            <h2 class="text-lg font-semibold text-base-content">Live rooms</h2>
-            <p class="text-sm text-base-content/60">Direct feed from the EscapePlan session broker.</p>
-          </div>
-          <a class="btn btn-sm btn-secondary/70 border border-secondary/40" href="/games">Manage sessions</a>
-        </header>
-        <div class="mt-5 space-y-4">
-          {#if sessions.length === 0}
-            <p class="rounded-xl border border-dashed border-base-content/20 bg-base-100/50 px-4 py-6 text-center text-sm text-base-content/60">
-              No active sessions — the control room is standing by.
-            </p>
-          {:else}
-            {#each sessions as session}
-              <article class="rounded-xl border border-white/10 bg-base-100/60 p-5">
-                <div class="flex flex-col gap-3">
-                  <!-- Top row: Game name, action buttons, timer -->
-                  <div class="flex flex-wrap items-start justify-between gap-4">
-                    <div>
-                      <h3 class="flex items-center gap-2 text-xl font-display text-base-content">
-                        {session.gameName}
-                        {#if session.isAdhoc}
-                          <span class="badge badge-outline border-primary/40 text-[11px] text-primary">Ad-hoc</span>
-                        {/if}
-                      </h3>
-                      <p class="mt-1 text-xs text-base-content/60">{session.players} players</p>
-                    </div>
+      <DashboardSessions
+        {sessions}
+        {isLoading}
+        {copySuccessMap}
+        onTimerCommand={dispatchTimerCommand}
+        onCopyTimerLink={copyTimerLink}
+        onOpenTimerLink={openTimerLink}
+      />
 
-                    <div class="flex flex-wrap items-center gap-2">
-                      <a class="btn btn-sm btn-primary" href={`/games/${session.id}`} data-sveltekit-reload>
-                        Open runner
-                      </a>
-                      <a class="btn btn-sm btn-ghost border border-white/10" href={`/bookings?focus=${session.id}`}>View booking</a>
-                    </div>
-
-                    <div class="text-right">
-                      <p class={`text-3xl font-display ${session.timer.remainingSeconds <= 300 ? 'text-warning' : 'text-primary'}`}>
-                        {formatTimer(session.timer.remainingSeconds)}
-                      </p>
-                      <p class="mt-1 text-xs uppercase tracking-[0.3em] text-base-content/50">{session.timer.status}</p>
-                      <p class="text-xs text-base-content/40">
-                        Total: {formatTimer(session.timer.totalElapsedSeconds)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <!-- Bottom row: Session details, timer controls + room display -->
-                  <div class="flex flex-wrap items-start justify-between gap-4">
-                    <dl class="space-y-1 text-sm">
-                      <div class="flex items-center gap-2 text-base-content/70">
-                        <dt class="font-medium">Started:</dt>
-                        <dd>{new Date(session.startedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</dd>
-                      </div>
-                      <div class="flex items-center gap-2 text-base-content/70">
-                        <dt class="font-medium">Scheduled end:</dt>
-                        <dd>{new Date(session.scheduledEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</dd>
-                      </div>
-                      <div class="flex items-center gap-2 text-base-content/70">
-                        <dt class="font-medium">Hints used:</dt>
-                        <dd>{session.hintsUsed}</dd>
-                      </div>
-                    </dl>
-
-                    <div class="flex flex-col items-end gap-2">
-
-                    <div class="flex items-center gap-1">
-                      {#if session.timer.status === 'idle'}
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-circle btn-primary"
-                          onclick={() => dispatchTimerCommand(session.id, 'start_timer')}
-                          aria-label="Start timer"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </button>
-                      {:else if session.timer.status === 'running'}
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-circle btn-warning"
-                          onclick={() => dispatchTimerCommand(session.id, 'pause_timer')}
-                          aria-label="Pause timer"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </button>
-                      {:else if session.timer.status === 'paused'}
-                        <button
-                          type="button"
-                          class="btn btn-sm btn-circle btn-success"
-                          onclick={() => dispatchTimerCommand(session.id, 'resume_timer')}
-                          aria-label="Resume timer"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                        </button>
-                      {/if}
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-circle btn-ghost border border-white/10"
-                        onclick={() => dispatchTimerCommand(session.id, 'reset_timer')}
-                        aria-label="Reset timer"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                        </svg>
-                      </button>
-                    </div>
-
-                    <div class="flex items-center gap-1">
-                      <span class="mr-1 text-xs text-base-content/40">Room Display:</span>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-ghost border border-white/10"
-                        onclick={() => copyTimerLink(session)}
-                        aria-label="Copy URL to clipboard"
-                      >
-                        {#if copySuccessMap[session.id]}
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
-                          </svg>
-                        {:else}
-                          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        {/if}
-                      </button>
-                      <button
-                        type="button"
-                        class="btn btn-sm btn-ghost border border-white/10"
-                        onclick={() => openTimerLink(session)}
-                        aria-label="Open in new tab"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </button>
-                    </div>
-                    </div>
-                  </div>
-                </div>
-              </article>
-            {/each}
-          {/if}
-        </div>
-      </section>
-
-      <section class="glass-panel border-white/10 bg-base-200/70 p-6">
-        <header class="flex items-center justify-between gap-4">
-          <div>
-            <h2 class="text-lg font-semibold text-base-content">Upcoming bookings</h2>
-            <p class="text-sm text-base-content/60">Chronological view of arrivals within the current prep window.</p>
-          </div>
-          <a class="btn btn-sm btn-ghost border border-white/10" href="/bookings">Full schedule</a>
-        </header>
-        <div class="mt-5 overflow-hidden rounded-xl border border-white/10">
-          <table class="table table-zebra table-sm">
-            <thead class="bg-base-300/60 text-xs uppercase tracking-[0.3em] text-base-content/40">
-              <tr>
-                <th class="text-left">Time</th>
-                <th class="text-left">Game</th>
-                <th class="text-left hidden sm:table-cell">Party</th>
-                <th class="text-left">Room</th>
-                <th class="text-left">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each bookings as booking}
-                <tr class="text-xs sm:text-sm">
-                  <td class="whitespace-nowrap">{formatDate(booking.startTime)} · {formatTime(booking.startTime)}</td>
-                  <td>
-                    <div class="flex flex-col">
-                      <span class="font-medium text-base-content">{booking.gameName}</span>
-                      {#if booking.notes}
-                        <span class="text-[11px] text-base-content/50">{booking.notes}</span>
-                      {/if}
-                    </div>
-                  </td>
-                  <td class="hidden sm:table-cell">{booking.partySize} guests</td>
-                  <td>{booking.roomName}</td>
-                  <td class="flex items-center gap-2">
-                    <span class={`badge badge-outline border-white/15 text-[11px] ${booking.status === 'checked_in' ? 'text-success' : 'text-base-content/60'}`}>
-                      {booking.status}
-                    </span>
-                    {#if booking.isAdhoc}
-                      <span class="badge badge-secondary badge-xs">Ad-hoc</span>
-                    {/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <DashboardNetwork {bookings} {isLoading} />
     </div>
   {/if}
 </section>

@@ -4,7 +4,7 @@
   import type { LayoutData } from './$types';
   import { page } from '$app/stores';
 
-  const { children } = $props<{ children: () => unknown; data: LayoutData }>();
+  let { children }: { children: () => unknown; data: LayoutData } = $props();
 
   const tabs = [
     { href: '/account/profile', label: 'Profile' },

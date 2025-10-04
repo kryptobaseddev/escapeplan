@@ -1,12 +1,11 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { admin, customSession, username } from 'better-auth/plugins';
+import { customSession, username } from 'better-auth/plugins';
 import argon2 from 'argon2';
 import type { BetterAuthOptions } from 'better-auth';
 import type { OperatorPermission, OperatorRole } from '@escapeplan/contracts';
 import { db, sqlite } from './db/client.js';
-import { operatorAccounts, operatorAuthSessions, operatorVerifications, operators } from '@escapeplan/contracts';
-import { normalizePermissions, normalizeRole } from './security.js';
+import { user, session, account, verification } from '@escapeplan/contracts';
 
 const DEFAULT_BASE_URL = process.env.AUTH_BASE_URL ?? 'http://localhost:4000/api/auth';
 const WEB_ORIGIN = process.env.WEB_APP_ORIGIN ?? 'http://localhost:5173';
@@ -16,10 +15,10 @@ export type EscapePlanAuthOptions = BetterAuthOptions;
 function buildBaseOptions(): BetterAuthOptions {
   const database = drizzleAdapterWithSerialization(db, {
     schema: {
-      operators,
-      operator_accounts: operatorAccounts,
-      operator_auth_sessions: operatorAuthSessions,
-      operator_verifications: operatorVerifications
+      user,      // Native singular table (no modelName override needed)
+      session,   // Native singular table
+      account,   // Native singular table
+      verification // Native singular table
     },
     provider: 'sqlite'
   });
@@ -29,125 +28,125 @@ function buildBaseOptions(): BetterAuthOptions {
     trustedOrigins: [WEB_ORIGIN],
     database,
     user: {
-      modelName: 'operators',
-      fields: {
-        email: 'email',
-        name: 'name',
-        image: 'avatar_config',
-        createdAt: 'created_at',
-        updatedAt: 'updated_at',
-        emailVerified: 'email_verified'
-      },
+      // NO modelName override - native singular table names
       additionalFields: {
         username: {
           type: 'string',
-          required: true
-        },
-        role: {
-          type: 'string',
+          fieldName: 'username',
           required: true,
-          input: true,
-          defaultValue: 'manager',
-          fieldName: 'role'
+          returned: true,
+          input: true
         },
-        roleId: {
+        user_type: {
           type: 'string',
+          fieldName: 'user_type',
           required: true,
-          input: true,
-          defaultValue: 'role-manager',
-          fieldName: 'role_id'
+          returned: true,
+          input: false,  // Server-managed only
+          defaultValue: 'operator'
         },
-        permissions: {
+        role_id: {
           type: 'string',
-          required: false,
-          input: false,
-          fieldName: 'permissions'
-        },
-        passwordHash: {
-          type: 'string',
-          required: false,
-          input: false,
-          fieldName: 'password_hash'
+          fieldName: 'role_id',
+          required: true,
+          returned: true,
+          input: false,  // Server-managed only
+          defaultValue: 'role-manager'
         },
         bio: {
           type: 'string',
+          fieldName: 'bio',
           required: false,
-          input: true,
-          fieldName: 'bio'
+          returned: true,
+          input: true
         },
-        mustResetPassword: {
+        avatar_config: {
+          type: 'string',  // JSON stringified
+          fieldName: 'avatar_config',
+          required: false,
+          returned: true,
+          input: true
+        },
+        must_reset_password: {
           type: 'boolean',
+          fieldName: 'must_reset_password',
           required: false,
-          input: true,
-          defaultValue: false,
-          fieldName: 'must_reset_password'
-        },
-        lastLoginAt: {
-          type: 'string',
-          required: false,
+          returned: true,
           input: false,
-          fieldName: 'last_login_at'
+          defaultValue: false
+        },
+        loyalty_points: {
+          type: 'number',
+          fieldName: 'loyalty_points',
+          required: false,
+          returned: true,
+          input: false  // Server-managed only
+        },
+        preferred_difficulty: {
+          type: 'string',
+          fieldName: 'preferred_difficulty',
+          required: false,
+          returned: true,
+          input: true
+        },
+        marketing_opted_in: {
+          type: 'boolean',
+          fieldName: 'marketing_opted_in',
+          required: false,
+          returned: true,
+          input: true,
+          defaultValue: false
+        },
+        last_login_at: {
+          type: 'string',
+          fieldName: 'last_login_at',
+          required: false,
+          returned: true,
+          input: false
         },
         banned: {
           type: 'boolean',
+          fieldName: 'banned',
           required: false,
+          returned: true,
           input: false,
-          defaultValue: false,
-          fieldName: 'banned'
+          defaultValue: false
         },
-        banReason: {
+        ban_reason: {
           type: 'string',
+          fieldName: 'ban_reason',
           required: false,
-          input: false,
-          fieldName: 'ban_reason'
+          returned: true,
+          input: false
         },
-        banExpires: {
+        ban_expires: {
           type: 'string',
+          fieldName: 'ban_expires',
           required: false,
-          input: false,
-          fieldName: 'ban_expires'
+          returned: true,
+          input: false
         },
-        archivedAt: {
+        archived_at: {
           type: 'string',
+          fieldName: 'archived_at',
           required: false,
-          input: false,
-          fieldName: 'archived_at'
+          returned: true,
+          input: false
         },
-        archivedBy: {
+        archived_by: {
           type: 'string',
+          fieldName: 'archived_by',
           required: false,
-          input: false,
-          fieldName: 'archived_by'
+          returned: true,
+          input: false
         },
-        archivedReason: {
+        archived_reason: {
           type: 'string',
+          fieldName: 'archived_reason',
           required: false,
-          input: false,
-          fieldName: 'archived_reason'
+          returned: true,
+          input: false
         }
-      }
-    },
-    session: {
-      modelName: 'operator_auth_sessions',
-      fields: {
-        token: 'token',
-        userId: 'user_id',
-        expiresAt: 'expires_at',
-        createdAt: 'created_at',
-        updatedAt: 'updated_at',
-        ipAddress: 'ip_address',
-        userAgent: 'user_agent'
-      }
-    },
-    account: {
-      modelName: 'operator_accounts',
-      fields: {
-        accountId: 'account_id',
-        providerId: 'provider_id',
-        userId: 'user_id',
-        password: 'password',
-        createdAt: 'created_at',
-        updatedAt: 'updated_at'
       }
     },
     emailAndPassword: {
@@ -169,30 +168,25 @@ function buildBaseOptions(): BetterAuthOptions {
         maxUsernameLength: 64,
         usernameNormalization: (value) => value.trim().toLowerCase()
       }),
-      admin({
-        defaultRole: 'manager',
-        adminRoles: ['admin']
-      }),
       customSession(async ({ user, session }) => {
         const enrichedUser = user as Record<string, unknown> & {
-          role?: string;
-          roleId?: string;
+          id: string;
+          user_type?: string;
           role_id?: string;
-          permissions?: unknown;
-          archivedAt?: unknown;
+          archived_at?: string | null;
           image?: unknown;
-          id?: string;
         };
 
-        const role = resolveSessionRole(enrichedUser);
-        const storedPermissions = typeof enrichedUser.permissions === 'string'
-          ? enrichedUser.permissions
-          : null;
-        const mergedPermissions = normalizePermissions(role, storedPermissions ?? undefined);
-
-        if (typeof enrichedUser.archivedAt === 'string' && enrichedUser.archivedAt) {
+        // Block archived users
+        if (enrichedUser.archived_at) {
           throw new Error('Account is archived');
         }
+
+        // Derive permissions from role_id (database-driven RBAC)
+        const permissions = await getUserPermissionsFromDB(enrichedUser.id);
+
+        // Get role details
+        const role = await getRoleFromDB(enrichedUser.role_id);
 
         // Transform Better Auth's 'image' field to 'avatarConfig' for frontend compatibility
         let avatarConfig;
@@ -211,8 +205,8 @@ function buildBaseOptions(): BetterAuthOptions {
         return {
           user: {
             ...userWithoutImage,
-            role,
-            permissions: mergedPermissions,
+            role: role?.name || 'unknown',  // Normalized role name for frontend
+            permissions,  // Array of permission names
             avatarConfig
           },
           session
@@ -240,60 +234,29 @@ export type EscapePlanAuthInstance = ReturnType<typeof createAuth>;
 export type { OperatorRole, OperatorPermission };
 export { DEFAULT_BASE_URL, WEB_ORIGIN };
 
-function resolveSessionRole(user: Record<string, unknown>): OperatorRole {
-  const roleCandidates = [
-    typeof user.role === 'string' ? user.role : null,
-    typeof (user as { roleId?: string }).roleId === 'string' ? (user as { roleId?: string }).roleId! : null,
-    typeof (user as { role_id?: string }).role_id === 'string' ? (user as { role_id?: string }).role_id! : null
-  ].filter((value): value is string => Boolean(value && value.trim()));
+// Helper: Get permissions from database
+async function getUserPermissionsFromDB(userId: string): Promise<string[]> {
+  const result = sqlite.prepare(`
+    SELECT DISTINCT p.name
+    FROM user u
+    JOIN roles r ON u.role_id = r.id
+    JOIN role_permissions rp ON r.id = rp.role_id
+    JOIN permissions p ON rp.permission_id = p.id
+    WHERE u.id = ?
+  `).all(userId) as { name: string }[];
 
-  for (const candidate of roleCandidates) {
-    const normalized = tryNormalizeRole(candidate);
-    if (normalized) {
-      return normalized;
-    }
-  }
-
-  if (typeof user.id === 'string') {
-    const row = sqlite
-      .prepare(`SELECT r.name FROM operators o JOIN roles r ON o.role_id = r.id WHERE o.id = ? LIMIT 1`)
-      .get(user.id) as { name: string } | undefined;
-    if (row) {
-      const normalized = tryNormalizeRole(row.name);
-      if (normalized) {
-        return normalized;
-      }
-    }
-  }
-
-  throw new Error('Unsupported operator role: ');
+  return result.map(row => row.name);
 }
 
-function tryNormalizeRole(value: string | null | undefined): OperatorRole | null {
-  if (!value) return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
+// Helper: Get role from database
+async function getRoleFromDB(roleId: string | undefined): Promise<{ id: string; name: string } | null> {
+  if (!roleId) return null;
 
-  try {
-    return normalizeRole(trimmed);
-  } catch {
-    // continue to lookup fallbacks
-  }
+  const result = sqlite.prepare(`
+    SELECT id, name FROM roles WHERE id = ? LIMIT 1
+  `).get(roleId) as { id: string; name: string } | undefined;
 
-  const prefixed = trimmed.startsWith('role-') ? trimmed : `role-${trimmed}`;
-  const row = sqlite
-    .prepare(`SELECT name FROM roles WHERE id = ? OR name = ? LIMIT 1`)
-    .get(prefixed, trimmed) as { name: string } | undefined;
-
-  if (row) {
-    try {
-      return normalizeRole(row.name);
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
+  return result || null;
 }
 
 function serializeDates(value: unknown): unknown {

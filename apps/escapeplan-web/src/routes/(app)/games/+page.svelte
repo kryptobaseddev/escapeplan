@@ -7,13 +7,16 @@
   import { goto } from '$app/navigation';
   import { formatTimer } from '$lib/utils/datetime';
   import QuickStartModal from '$lib/components/sessions/QuickStartModal.svelte';
+  import SkeletonLoader from '$lib/components/ui/SkeletonLoader.svelte';
+  import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import type { GameSessionDetails, GameDetails } from '@escapeplan/contracts';
   import { apiFetch } from '$lib/api/client';
   import type { CommandResponse } from '$lib/api/types';
   import { initializeRealtime } from '$lib/realtime';
   import { sessionsStore } from '$lib/realtime/stores';
+  import Alert from '$lib/components/ui/Alert.svelte';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
 
   let canManageSessions = $derived($page.data.user?.permissions?.includes('manage_sessions') ?? false);
 
@@ -27,6 +30,7 @@
   let searchQuery = $state<string>('');
   let sortBy = $state<'date' | 'game' | 'location'>('date');
   let sortOrder = $state<'asc' | 'desc'>('desc');
+  let isLoading = $state(true);
 
   // Client-side filtering and sorting
   const matchesStatus = (session: GameSessionDetails) => {
@@ -81,7 +85,7 @@
     const slug = session.gameSlug ?? session.gameId;
     if (!slug) return '';
     const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost';
-    const url = new URL(`/timer/${slug}`, origin);
+    const url = new URL(`/room/${slug}`, origin);
     const roomIdentity = session.roomId;
     if (roomIdentity) {
       url.searchParams.set('room', roomIdentity);
@@ -152,6 +156,11 @@
   let unsubSessions: (() => void) | null = null;
 
   onMount(() => {
+    // Simulate data loading
+    setTimeout(() => {
+      isLoading = false;
+    }, 500);
+
     // Initialize real-time WebSocket connection (but don't sync session store)
     initializeRealtime({});
 
@@ -263,9 +272,9 @@
   </header>
 
   {#if data.sessionsError}
-    <div class="alert alert-error border border-error/40 bg-error/10 text-error-content">
+    <Alert type="error">
       <span>{data.sessionsError}</span>
-    </div>
+    </Alert>
   {:else}
     {#if toast}
       <div
@@ -275,12 +284,30 @@
       </div>
     {/if}
 
-    <div class="grid gap-6 lg:grid-cols-2">
-      {#if sessions.length === 0}
-        <div class="col-span-full rounded-2xl border border-dashed border-base-content/20 bg-base-200/60 px-6 py-10 text-center text-sm text-base-content/60">
-          No active sessions. Once a booking checks in, the room will surface here for quick launch.
-        </div>
+    {#if isLoading}
+      <div class="grid gap-6 lg:grid-cols-2">
+        <SkeletonLoader type="card" count={6} />
+      </div>
+    {:else if sessions.length === 0}
+      {#if canManageSessions && games.length > 0}
+        <EmptyState
+          title="No active sessions"
+          message="Once a booking checks in, the room will surface here for quick launch."
+        >
+          {#snippet action()}
+            <button class="btn btn-primary" onclick={() => (quickStartOpen = true)}>
+              Quick start session
+            </button>
+          {/snippet}
+        </EmptyState>
       {:else}
+        <EmptyState
+          title="No active sessions"
+          message="Once a booking checks in, the room will surface here for quick launch."
+        />
+      {/if}
+    {:else}
+      <div class="grid gap-6 lg:grid-cols-2">
         {#each sessions as session}
           <article class="rounded-xl border border-white/10 bg-base-100/60 p-5">
             <div class="flex flex-col gap-3">
@@ -416,8 +443,8 @@
             </div>
           </article>
         {/each}
-      {/if}
-    </div>
+      </div>
+    {/if}
   {/if}
 </section>
 

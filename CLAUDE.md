@@ -55,11 +55,8 @@ cd apps/escapeplan-api && pnpm test -t "booking validation"
 ```bash
 cd apps/escapeplan-api
 
-# Generate migrations from schema changes
-npx drizzle-kit generate
-
-# Apply migrations
-npx drizzle-kit migrate
+# Apply schema changes to database (push-only workflow, NO migrations)
+npx drizzle-kit push
 
 # Seed database
 pnpm db:seed
@@ -68,18 +65,25 @@ pnpm db:seed
 ## Architecture
 
 ### Authentication & Authorization
-- Uses **Better Auth v1.3** with Drizzle SQLite adapter
+- Uses **Better Auth v1.3.24+** with Drizzle SQLite adapter
 - Session tokens stored in HttpOnly cookies (`better-auth.session_token`)
-- Custom RBAC system with four roles: `admin`, `manager`, `game_master`, `customer`
-- Permissions defined in `packages/contracts/src/rbac.ts`
-- API routes protected via `requireSession()` middleware
-- SvelteKit enforces auth in `hooks.server.ts` by fetching `/auth/get-session`
+- Database-driven RBAC system with `user_type` separation ('operator' | 'customer')
+- **System Roles:** `admin`, `manager`, `game_master` (operators) and `customer`
+- Permissions derived from role relationships via `roles` → `role_permissions` → `permissions` tables
+- Roles and permissions scoped by `user_type_scope` ('operator' | 'customer' | 'both')
+- API routes protected via `requirePermission()` helper functions
+- SvelteKit enforces auth + user_type in `hooks.server.ts`
+- Database triggers enforce user_type/role boundaries automatically
 
 ### Database Layer
 - **SQLite** with WAL mode at `apps/escapeplan-api/data/escapeplan.db`
-- **Drizzle ORM** schema in `apps/escapeplan-api/src/db/schema.ts`
-- Migrations in `apps/escapeplan-api/migrations/*.sql`
-- Tables: `operators`, `operator_auth_sessions`, `games`, `rooms`, `bookings`, `sessions`, `puzzles`, `hints`, `assets`, `network`
+- **Drizzle ORM** schema in `packages/contracts/src/schema.ts`
+- Migrations managed via `drizzle-kit push` (direct schema sync)
+- **Core Auth Tables:** `user`, `session`, `account`, `verification` (singular names per Better Auth v1.3+)
+- **RBAC Tables:** `roles`, `permissions`, `role_permissions`
+- **User Segmentation:** `user` table includes `user_type` field for operator/customer separation
+- **Security:** Database triggers in `drizzle/triggers.sql` enforce user_type immutability and role scope validation
+- All tables use TEXT UUID primary keys
 - Custom adapter wrapper serializes Date objects to ISO strings for Better Auth compatibility
 
 ### Real-Time Communication
@@ -97,7 +101,7 @@ pnpm db:seed
 ### API Surface
 - Base URL: `/api` (proxied by nginx in production)
 - Auth endpoints: `/api/auth/*` (handled by Better Auth)
-- Operators: `/api/admin/users`, `/api/users/me/password`
+- **Users:** `/api/admin/users`, `/api/admin/users/me`
 - Games: `/api/admin/games`, `/api/admin/games/:id`
 - Bookings: `/api/bookings?date=YYYY-MM-DD&scope=all|mobile`
 - Sessions: `/api/sessions`, `/api/sessions/:id/commands`
@@ -162,13 +166,12 @@ Platform automation is in separate `escapeplan-base` repository using pi-gen to 
 ## Development Workflow
 
 1. **Make schema changes**: Edit `apps/escapeplan-api/src/db/schema.ts`
-2. **Generate migration**: `cd apps/escapeplan-api && npx drizzle-kit generate`
-3. **Test migration**: Restart dev server to auto-apply, or run seed script
-4. **Update contracts**: If types change, export from `packages/contracts/src/index.ts`
-5. **Rebuild contracts**: `pnpm --filter @escapeplan/contracts build` (required before API/web can import)
-6. **Update API handlers**: Modify `state.ts` and route definitions in `index.ts`
-7. **Update client stores/pages**: Adjust Svelte components and API fetch calls
-8. **Test real-time flow**: Verify WebSocket events fire correctly in browser console
+2. **Rebuild contracts**: `pnpm --filter @escapeplan/contracts build` (required before API/web can import)
+3. **Apply schema changes**: `cd apps/escapeplan-api && npx drizzle-kit push` (NO migrations - push only!)
+4. **Test changes**: `pnpm --filter escapeplan-api test`
+5. **Update API handlers**: Modify `state.ts` and route definitions in `index.ts`
+6. **Update client stores/pages**: Adjust Svelte components and API fetch calls
+7. **Test real-time flow**: Verify WebSocket events fire correctly in browser console
 
 ## Important Constraints
 

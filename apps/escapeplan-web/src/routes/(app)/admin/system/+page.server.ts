@@ -17,21 +17,22 @@ export const load: PageServerLoad = async (event) => {
 	const canManageAlerts = user?.permissions?.includes('manage_alert_rules') ?? false;
 	const canManageFiles = user?.permissions?.includes('manage_assets') ?? false;
 	const canManageNetwork = user?.permissions?.includes('manage_network') ?? false;
+	const canManageSystemHealth = user?.permissions?.includes('manage_system_health') ?? false;
 
-	if (!canViewSystemLogs && !canViewNetwork && !canManageAlerts && !canManageFiles) {
+	if (!canViewSystemLogs && !canViewNetwork && !canManageAlerts && !canManageFiles && !canManageSystemHealth) {
 		throw error(403, 'Permission denied');
 	}
 
 	const apiFetch = makeServerFetcher(event);
 
-	const allowedTabs = new Set(['health', 'network', 'alerts', 'logs', 'storage']);
+	const allowedTabs = new Set(['health', 'network', 'alerts', 'logs', 'storage', 'settings']);
 	const requestedTab = url.searchParams.get('tab')?.toLowerCase() ?? '';
 	const activeTab = allowedTabs.has(requestedTab)
 		? (requestedTab as typeof requestedTab)
 		: 'health';
 
 	// Load data for all tabs in parallel
-	const [networkData, alertsData, logsData, storageData] = await Promise.allSettled([
+	const [networkData, alertsData, logsData, storageData, settingsData] = await Promise.allSettled([
 		// Network tab
 		canViewNetwork ? apiFetch<NetworkProfile>('/admin/network').catch(() => null) : null,
 
@@ -72,7 +73,12 @@ export const load: PageServerLoad = async (event) => {
 		// Storage tab
 		canManageFiles
 			? apiFetch<any>('/admin/storage/metrics').catch(() => null)
-			: null
+			: null,
+
+		// Settings tab
+		canManageSystemHealth
+			? apiFetch<{ settings: any }>('/admin/settings').catch(() => ({ settings: {} }))
+			: { settings: {} }
 	]);
 
 	return {
@@ -82,11 +88,13 @@ export const load: PageServerLoad = async (event) => {
 			canViewNetwork,
 			canManageAlerts,
 			canManageFiles,
-			canManageNetwork
+			canManageNetwork,
+			canManageSystemHealth
 		},
 		networkProfile: networkData.status === 'fulfilled' ? networkData.value : null,
 		alertRules: alertsData.status === 'fulfilled' ? alertsData.value : [],
 		logsData: logsData.status === 'fulfilled' ? logsData.value : { logs: [], total: 0, page: 1 },
-		storageMetrics: storageData.status === 'fulfilled' ? storageData.value : null
+		storageMetrics: storageData.status === 'fulfilled' ? storageData.value : null,
+		systemSettings: settingsData.status === 'fulfilled' ? settingsData.value.settings : {}
 	};
 };

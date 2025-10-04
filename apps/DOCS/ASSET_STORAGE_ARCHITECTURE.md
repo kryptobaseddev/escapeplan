@@ -68,7 +68,7 @@ CREATE TABLE assets (
   -- Indexes
   FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE,
   FOREIGN KEY (puzzle_id) REFERENCES game_puzzles(id) ON DELETE CASCADE,
-  FOREIGN KEY (uploaded_by) REFERENCES operators(id)
+  FOREIGN KEY (uploaded_by) REFERENCES user(id)
 );
 
 CREATE INDEX idx_assets_game_id ON assets(game_id);

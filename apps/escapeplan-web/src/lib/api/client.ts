@@ -28,7 +28,12 @@ export async function apiFetch<T>(fetchImpl: FetchLike, path: string, options: A
     mergedHeaders.set('Content-Type', 'application/json');
   }
 
-  const response = await fetchImpl(`${apiBase}${path}`, {
+  // Normalize path: remove leading /api if apiBase already contains it
+  const normalizedPath = apiBase.endsWith('/api') && path.startsWith('/api')
+    ? path.slice(4) // Remove '/api' prefix from path
+    : path;
+
+  const response = await fetchImpl(`${apiBase}${normalizedPath}`, {
     credentials: credentials ?? 'include',
     ...rest,
     headers: mergedHeaders

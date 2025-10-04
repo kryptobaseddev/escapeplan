@@ -1,9 +1,9 @@
 {
   "version": "1.0.0",
-  "lastUpdated": "2025-10-02",
+  "lastUpdated": "2025-10-03",
   "projectName": "EscapePlan",
   "projectVersion": "0.1.0",
-  "currentPhase": "PHASE_1",
+  "currentPhase": "PHASE_3",
   "phases": {
     "PHASE_1": {
       "name": "Discovery & Architecture Alignment",
@@ -924,6 +924,285 @@
             "observability",
             "technical_debt"
           ]
+        },
+        {
+          "id": "P3-AUTH-REFACTOR",
+          "title": "Session 53: Architecture Analysis - Cloud Growth Strategy",
+          "feature": "Architecture",
+          "status": "COMPLETED",
+          "priority": "CRITICAL",
+          "estimatedHours": 40,
+          "actualHours": 40,
+          "assignee": "CLAUDE",
+          "createdDate": "2025-10-03",
+          "completedDate": "2025-10-03",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Analyze Better Auth organization plugin compatibility with offline-first architecture",
+            "Compare single-tenant MVP vs multi-tenant NOW approaches with quantified impact analysis",
+            "Design cloud sync architecture with conflict resolution strategy",
+            "Create comprehensive Phase 0-3 implementation roadmap with effort estimates",
+            "Document ADR-001 architecture decision with rationale and evidence",
+            "Deliver monetization strategy with pricing model and ROI analysis"
+          ],
+          "dependencies": [
+            "P3-011",
+            "P3-021",
+            "P3-022"
+          ],
+          "risks": [],
+          "notes": [
+            "Session 53: Complete architecture analysis and cloud growth planning",
+            "Delivered 10+ documents totaling 10,000+ lines of research",
+            "Decision: Hybrid A (Schema NOW, Features LATER) - 37.6% ROI",
+            "Key deliverables: ADR-001, CLOUD_GROWTH_ROADMAP, APPROACH_COMPARISON_MATRIX",
+            "Better Auth organization plugin scored 21.5/100 for offline-first use case",
+            "Recommendation: Add minimal cloud metadata (72 columns) in MVP, defer sync engine to Phase 2",
+            "Total cloud platform cost: $142k (1,420 hours) across 4 phases",
+            "Break-even: 92 cloud customers at $129/mo subscription"
+          ],
+          "labels": [
+            "architecture",
+            "research",
+            "planning",
+            "cloud",
+            "strategy"
+          ]
+        },
+        {
+          "id": "P3-CLOUD-SCHEMA",
+          "title": "Phase 0: Add cloud-ready schema metadata to core tables",
+          "feature": "Database",
+          "status": "NOT_STARTED",
+          "priority": "CRITICAL",
+          "estimatedHours": 60,
+          "actualHours": 0,
+          "assignee": "Riley Patel",
+          "createdDate": "2025-10-03",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Add cloud metadata fields (9 fields) to 8 core tables: bookings, sessions, games, user, discountCodes, assets, rooms, hints",
+            "Fields: cloud_id, sync_status, last_sync_at, sync_version, cloud_org_id, cloud_hub_id, conflict_data, resolved_at, resolved_by",
+            "All fields nullable and default to NULL (unused in Phase 0)",
+            "Create hub_config table with single row for appliance settings",
+            "Hub config fields: cloud_organization_id, cloud_hub_id, sync_enabled (default false), license_key, hardware_fingerprint",
+            "Add indexes on cloud_id for each table",
+            "Test schema changes with drizzle-kit push (no migrations - push only)",
+            "Validate all existing MVP tests pass with new columns present",
+            "Document cloud field purpose and future activation plan"
+          ],
+          "dependencies": [
+            "P3-AUTH-REFACTOR",
+            "P3-002"
+          ],
+          "risks": [
+            "Schema changes could impact query performance (mitigated by indexes)",
+            "Nullable columns must not break existing business logic"
+          ],
+          "notes": [
+            "Implements Hybrid A decision from ADR-001",
+            "Based on CLOUD_GROWTH_ROADMAP Phase 0 requirements",
+            "Total schema impact: +72 columns (9 fields × 8 tables)",
+            "Effort breakdown: 20h design + 40h implementation from roadmap",
+            "Future-proofs schema to avoid migration pain in Phase 2 cloud launch",
+            "References: ADR-001, CLOUD_GROWTH_ROADMAP.md Section 3.2.2"
+          ],
+          "labels": [
+            "database",
+            "schema",
+            "cloud",
+            "mvp",
+            "future_proof"
+          ]
+        },
+        {
+          "id": "P3-CLOUD-API-STUBS",
+          "title": "Phase 0: Implement stub API endpoints for cloud sync status",
+          "feature": "API",
+          "status": "NOT_STARTED",
+          "priority": "HIGH",
+          "estimatedHours": 20,
+          "actualHours": 0,
+          "assignee": "Riley Patel",
+          "createdDate": "2025-10-03",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Create GET /api/sync/status endpoint returning disabled state",
+            "Return: { sync_enabled: false, pending_sync_counts: {}, last_sync_at: null }",
+            "Create GET /api/admin/hub/config endpoint returning local-only state",
+            "Return: { cloud_org_id: null, cloud_hub_id: null, sync_enabled: false, license_key: null }",
+            "Add OpenAPI/Swagger documentation for stub endpoints",
+            "Write unit tests verifying stub behavior",
+            "Document future activation requirements in API docs"
+          ],
+          "dependencies": [
+            "P3-CLOUD-SCHEMA"
+          ],
+          "risks": [],
+          "notes": [
+            "Stub endpoints prepare UI for future cloud features without breaking existing code",
+            "Endpoints return valid JSON but indicate cloud features disabled",
+            "Effort estimate: 20h from CLOUD_GROWTH_ROADMAP Phase 0 breakdown",
+            "Will be activated in Phase 2 (Cloud Launch) with real sync logic",
+            "References: CLOUD_GROWTH_ROADMAP.md Section 3.2.2"
+          ],
+          "labels": [
+            "api",
+            "cloud",
+            "stub",
+            "future_ready"
+          ]
+        },
+        {
+          "id": "P3-BUG-GAME-UPDATE",
+          "title": "Bug Fix: Game update fails to save changes to database",
+          "feature": "Content Management",
+          "status": "NOT_STARTED",
+          "priority": "HIGH",
+          "estimatedHours": 4,
+          "actualHours": 0,
+          "assignee": "Riley Patel",
+          "createdDate": "2025-10-03",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Identify root cause of game update failure (transaction rollback, validation error, or missing fields)",
+            "Fix API handler in /api/admin/games/:id PATCH endpoint",
+            "Verify all game fields update correctly (name, slug, description, difficulty, duration, min/max players)",
+            "Test nested updates (rooms, puzzles, hints) save correctly",
+            "Add integration test covering full game update workflow",
+            "Verify audit logging captures game update events"
+          ],
+          "dependencies": [
+            "P3-005",
+            "P3-014"
+          ],
+          "risks": [
+            "May be related to Svelte 5 form binding issues in GameModal"
+          ],
+          "notes": [
+            "User report: Game edits appear successful in UI but don't persist to database",
+            "Suspected issue: PATCH handler may not be receiving full payload from GameModal",
+            "Check GameModal form submission logic and API client error handling",
+            "Related to P3-014 GameModal refactor completed in Session 52"
+          ],
+          "labels": [
+            "bug",
+            "games",
+            "database",
+            "api"
+          ]
+        },
+        {
+          "id": "P3-BUG-ROLE-CREATE",
+          "title": "Bug Fix: Custom role creation throws validation error",
+          "feature": "Security",
+          "status": "NOT_STARTED",
+          "priority": "HIGH",
+          "estimatedHours": 3,
+          "actualHours": 0,
+          "assignee": "Riley Patel",
+          "createdDate": "2025-10-03",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Identify validation error causing role creation to fail",
+            "Fix POST /api/admin/roles endpoint validation schema",
+            "Verify custom roles can be created with subset of permissions",
+            "Test role_permissions junction table inserts correctly",
+            "Ensure user_type_scope validation works for operator/customer/both",
+            "Add unit test for custom role creation with various permission combinations"
+          ],
+          "dependencies": [
+            "P3-RBAC-001",
+            "P3-RBAC-002"
+          ],
+          "risks": [],
+          "notes": [
+            "User report: Attempting to create custom role results in '400 Bad Request: Invalid user_type_scope'",
+            "May be related to user_type_scope enum validation in Zod schema",
+            "Check RoleModal form submission and contracts schema definition",
+            "Verify database triggers allow custom role creation"
+          ],
+          "labels": [
+            "bug",
+            "rbac",
+            "security",
+            "validation"
+          ]
+        },
+        {
+          "id": "P3-BUG-ALERT-RULES",
+          "title": "Bug Fix: Alert rules not triggering notifications",
+          "feature": "Observability",
+          "status": "NOT_STARTED",
+          "priority": "MEDIUM",
+          "estimatedHours": 5,
+          "actualHours": 0,
+          "assignee": "Riley Patel",
+          "createdDate": "2025-10-03",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Debug alert rule evaluation logic in systemHealth monitoring service",
+            "Verify alert thresholds are being checked correctly (CPU, memory, disk)",
+            "Fix alert creation when thresholds exceeded",
+            "Test notification delivery to operators (WebSocket events)",
+            "Verify alert deduplication logic (don't spam same alert)",
+            "Add integration test for alert rule lifecycle (create → trigger → notify → resolve)"
+          ],
+          "dependencies": [
+            "P3-009",
+            "P2-004"
+          ],
+          "risks": [],
+          "notes": [
+            "User report: Alert rules configured but no alerts appear in System Dashboard when disk usage exceeds 80%",
+            "May be related to systemHealth polling interval or threshold comparison logic",
+            "Check alerts table insertions and alertRules evaluation in health monitoring service",
+            "Verify WebSocket 'dashboard:update' events include alert notifications"
+          ],
+          "labels": [
+            "bug",
+            "observability",
+            "alerts",
+            "monitoring"
+          ]
+        },
+        {
+          "id": "P3-BUG-BACKUP-RESTORE",
+          "title": "Bug Fix: Database backup restore fails with foreign key violations",
+          "feature": "Operations",
+          "status": "NOT_STARTED",
+          "priority": "HIGH",
+          "estimatedHours": 6,
+          "actualHours": 0,
+          "assignee": "Riley Patel",
+          "createdDate": "2025-10-03",
+          "dueDate": null,
+          "acceptanceCriteria": [
+            "Identify foreign key constraint violations during backup restore",
+            "Fix backup/restore SQL generation to handle FK dependencies correctly",
+            "Ensure restore order: disable FKs → restore tables in dependency order → re-enable FKs",
+            "Test restore from backup with full data set (sessions, bookings, users, games)",
+            "Verify Better Auth session table restore preserves authentication state",
+            "Add integration test for backup → restore → verify data integrity workflow"
+          ],
+          "dependencies": [
+            "P4-008"
+          ],
+          "risks": [
+            "Restore failures could leave system in inconsistent state requiring manual recovery"
+          ],
+          "notes": [
+            "User report: Attempting to restore from backup fails with 'FOREIGN KEY constraint failed' error",
+            "Issue likely in Storage tab backup/restore implementation from Session 39",
+            "Check SQLite PRAGMA foreign_keys handling and table restore order",
+            "May need to use drizzle transactions with PRAGMA foreign_keys = OFF wrapper"
+          ],
+          "labels": [
+            "bug",
+            "backup",
+            "database",
+            "disaster_recovery"
+          ]
         }
       ]
     },
@@ -1574,20 +1853,20 @@
     }
   },
   "globalMetrics": {
-    "totalTodos": 43,
-    "completedTodos": 19,
-    "inProgressTodos": 9,
-    "notStartedTodos": 14,
+    "totalTodos": 50,
+    "completedTodos": 20,
+    "inProgressTodos": 10,
+    "notStartedTodos": 19,
     "blockedTodos": 1,
-    "estimatedTotalHours": 504,
-    "actualHoursSpent": 313,
-    "criticalItems": 17,
-    "highPriorityItems": 21,
-    "mediumPriorityItems": 5,
+    "estimatedTotalHours": 602,
+    "actualHoursSpent": 353,
+    "criticalItems": 19,
+    "highPriorityItems": 25,
+    "mediumPriorityItems": 6,
     "lowPriorityItems": 0,
     "overdueTodos": 0,
-    "completionPercentage": 44.2,
-    "averageHoursPerTodo": 11.72,
+    "completionPercentage": 40.0,
+    "averageHoursPerTodo": 12.04,
     "currentPhaseProgress": 0
   },
   "tags": {
@@ -1832,6 +2111,38 @@
     ],
     "uuid": [
       "P3-019"
+    ],
+    "cloud": [
+      "P3-AUTH-REFACTOR",
+      "P3-CLOUD-SCHEMA",
+      "P3-CLOUD-API-STUBS"
+    ],
+    "strategy": [
+      "P3-AUTH-REFACTOR"
+    ],
+    "future_proof": [
+      "P3-CLOUD-SCHEMA"
+    ],
+    "stub": [
+      "P3-CLOUD-API-STUBS"
+    ],
+    "future_ready": [
+      "P3-CLOUD-API-STUBS"
+    ],
+    "bug": [
+      "P3-BUG-GAME-UPDATE",
+      "P3-BUG-ROLE-CREATE",
+      "P3-BUG-ALERT-RULES",
+      "P3-BUG-BACKUP-RESTORE"
+    ],
+    "validation": [
+      "P3-BUG-ROLE-CREATE"
+    ],
+    "monitoring": [
+      "P3-BUG-ALERT-RULES"
+    ],
+    "disaster_recovery": [
+      "P3-BUG-BACKUP-RESTORE"
     ]
   },
   "teamMembers": [
@@ -2082,6 +2393,21 @@
     }
   ],
   "changelog": [
+    {
+      "date": "2025-10-03",
+      "version": "0.1.0-planning",
+      "changes": [
+        "Marked P3-AUTH-REFACTOR (Session 53) as COMPLETE - architecture analysis and cloud growth strategy",
+        "Added P3-CLOUD-SCHEMA: Phase 0 cloud-ready schema implementation (72 columns, 60h estimate)",
+        "Added P3-CLOUD-API-STUBS: Stub API endpoints for cloud sync status (20h estimate)",
+        "Added 4 bug fix tasks: game update, role creation, alert rules, backup restore (18h total)",
+        "Updated currentPhase to PHASE_3 (Backend Core Services in progress)",
+        "Updated globalMetrics: 50 total todos (+7), 602 estimated hours (+98), 40% completion",
+        "Added new tags: cloud, strategy, future_proof, stub, future_ready, bug, validation, monitoring, disaster_recovery",
+        "Tasks based on ADR-001 Hybrid A decision and CLOUD_GROWTH_ROADMAP Phase 0 deliverables"
+      ],
+      "author": "CLAUDE (Session 54 Planning)"
+    },
     {
       "date": "2025-10-01",
       "version": "0.1.0-planning",

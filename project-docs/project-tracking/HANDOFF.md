@@ -7,10 +7,116 @@ Use this file to orient any contributor—human or AI—before they touch the pr
 | ----- | ----- |
 | Project name | `EscapePlan` |
 | Primary goal | Ship a Pi-hosted MVP that lets operators manage bookings and run games with reliable video, timers, and hints entirely offline. |
-| Current phase | `PHASE_1` |
+| Current phase | `PHASE_1` (MVP development with cloud-ready schema) |
 | Contact / escalation | _Not required (single maintainer)_ |
 | Environments | Local dev via Docker/Podman; production on Raspberry Pi 5 + USB AC600M Wi-Fi AP. |
 | Key differentiators | Offline-first Pi appliance, mobile-ready catalog flag, unified game runner with live video + room branding. |
+| Last major update | Session 53: Architecture decision (Hybrid A), cloud growth roadmap, Session 52: Auth system refactor docs |
+
+## Current System Status (Updated 2025-10-03)
+
+### Production-Ready Components
+- **Authentication System**: Better Auth v1.3.24+ integrated with database-driven RBAC
+  - User types: `operator` | `customer` (segmented in `user` table)
+  - System roles: `admin`, `manager`, `game_master`, `customer`
+  - 27 granular permissions with user_type scoping
+  - 5 security triggers enforcing user_type/role boundaries
+  - Session enrichment with permissions, role, user_type
+  - All documentation updated (Session 52)
+
+- **Database Schema**: Drizzle ORM with SQLite WAL mode
+  - 23 interconnected tables (push-only workflow, no migrations)
+  - Cloud-ready schema planned (not yet implemented)
+  - Security triggers active and tested
+
+### Session 53 Architecture Decision Summary
+
+**Decision:** Hybrid A - "Schema NOW, Features LATER" ✅ ACCEPTED
+
+**What This Means:**
+- Add minimal cloud sync metadata fields (16 columns) to core tables during MVP development
+- Defer organization tables and full multi-tenant features to post-MVP cloud phase
+- No Better Auth organization plugin integration (incompatible with offline-first architecture)
+
+**Key Metrics:**
+- Best ROI: 37.6% (vs -71.1% for full defer approach)
+- MVP Delay: 2 weeks (vs 13-14 weeks for full multi-tenant)
+- Total Effort: 380 hours across all phases (lowest of all alternatives)
+- Migration Risk: None (schema correct from day 1)
+
+**MVP Schema Additions (Planned):**
+- `cloud_id` TEXT (nullable) added to 8 core tables
+- `cloud_hub_id` TEXT (nullable) added to same 8 tables
+- Single-column index on `cloud_id` for each table
+- `hub_config` table with cloud registration placeholders
+- All fields nullable, unused until cloud phase (6-12 months post-MVP)
+
+**Cloud Growth Roadmap (4 Phases):**
+
+1. **Phase 0 - MVP (16-18 weeks):** Single-tenant Pi appliance with cloud-ready schema
+   - All core features work offline (bookings, sessions, game runner, cameras)
+   - Cloud metadata present but unused (null values)
+   - Deliverable: Production-ready single-location system
+
+2. **Phase 1 - Cloud Prep (6-8 weeks):** License key system, monetization foundation
+   - License key generation/validation with hardware fingerprinting
+   - Hub registration system (no cloud dependency)
+   - Support renewal tracking and feature gating
+   - Deliverable: Monetization-ready system
+
+3. **Phase 2 - Cloud Launch (10-12 weeks):** Sync engine, Cloud Control subscription
+   - Bidirectional sync for bookings/sessions
+   - Remote dashboard access ($129/mo base subscription)
+   - Nightly backups to cloud storage
+   - Deliverable: Cloud-connected optional add-on
+
+4. **Phase 3 - Multi-Hub Scale (14-16 weeks):** Organization management, enterprise features
+   - Organization management for multi-location brands
+   - Additional hub billing (+$35/mo per hub)
+   - Cross-hub analytics and aggregated dashboards
+   - Deliverable: Enterprise-ready multi-hub platform
+
+**Total Timeline to Multi-Hub:** 46-54 weeks (~11-13 months)
+
+**Reference Documents:**
+- Architecture Decision: `/project-docs/research/claude-auth/ARCHITECTURE_DECISION_RECORD.md` (ADR-001)
+- Growth Roadmap: `/project-docs/research/claude-auth/CLOUD_GROWTH_ROADMAP.md`
+- Research Foundation: 10,000+ lines across 10 analysis documents (Phase 1-3)
+
+## Session 54 Prerequisites
+
+**Before starting Session 54, the following must be completed:**
+
+### Schema Implementation (8-12 hours)
+- [ ] Add cloud metadata fields to schema.ts (16 columns across 8 tables)
+- [ ] Create `hub_config` table with cloud registration placeholders
+- [ ] Add single-column indexes on `cloud_id` for each table
+- [ ] Rebuild contracts package: `pnpm --filter @escapeplan/contracts build`
+- [ ] Apply schema via `drizzle-kit push` (no migrations)
+
+### Testing & Validation (4-6 hours)
+- [ ] Write 16 unit tests for cloud field nullability and compatibility
+- [ ] Run existing test suite (expect 186 tests + 16 new = 202 total to pass)
+- [ ] Benchmark INSERT/SELECT performance (<10% degradation target)
+- [ ] Validate backward compatibility (zero breaking changes)
+
+### Documentation (2-3 hours)
+- [ ] Update `DATABASE_SYSTEM.md` with cloud field descriptions
+- [ ] Update `API_CONTRACTS_SCHEMA_MANAGEMENT.md` with new columns
+- [ ] Create `/project-docs/cloud-sync-plan.md` documenting Phase 2 roadmap
+- [ ] Add inline comments in schema.ts explaining cloud readiness
+
+### Acceptance Criteria
+- [ ] All 8 core tables have `cloud_id` and `cloud_hub_id` columns (nullable)
+- [ ] `hub_config` table exists with `cloud_organization_id`, `cloud_hub_id`, `sync_enabled` fields
+- [ ] All cloud fields default to NULL in MVP
+- [ ] Zero breaking changes detected by automated tests
+- [ ] Performance degradation <10% for INSERT, <15% for SELECT
+- [ ] All documentation updated and accurate
+
+**Estimated Total Effort:** 14-21 hours (2-week timeline impact)
+
+**Success Metric:** MVP ships with cloud-ready schema, zero customer-facing changes, no migration pain later.
 
 ## Session Flow
 ### Start-of-session checklist

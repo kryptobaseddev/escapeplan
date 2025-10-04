@@ -627,8 +627,21 @@ export async function listAssets(filters?: {
   const params: any[] = [];
 
   if (filters?.gameId) {
+    // Resolve gameId - could be UUID or slug
+    let resolvedGameId: string = filters.gameId;
+
+    // Check if it's NOT a UUID (UUIDs are 36 chars with specific pattern)
+    const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!uuidPattern.test(filters.gameId)) {
+      // It's likely a slug, resolve to UUID
+      const game = sqlite.prepare('SELECT id FROM games WHERE slug = ?').get(filters.gameId) as { id: string } | undefined;
+      if (game) {
+        resolvedGameId = game.id;
+      }
+    }
+
     query += ' AND (game_id = ? OR is_reusable = 1)';
-    params.push(filters.gameId);
+    params.push(resolvedGameId);
   }
 
   if (filters?.assetType) {

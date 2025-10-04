@@ -152,7 +152,7 @@ Pattern to follow from Milestones:
         min="0"
         max="100"
         bind:value={hint.volumeLevel}
-        class="range range-sm range-primary"
+        class="range range-xs range-primary"
       />
       <span>{hint.volumeLevel ?? gameDefaultVolume}%</span>
     </label>
@@ -211,7 +211,7 @@ Standardize all volume sliders to use this pattern:
     max="100"
     value={volumeLevel}
     disabled
-    class="range range-sm range-primary"
+    class="range range-xs range-primary"
   />
   <span class="volume-label">{volumeLevel}%</span>
 </div>

@@ -10,19 +10,22 @@
   import { initializeRealtime, enqueueOfflineCommand } from '$lib/realtime';
   import { offlineCommandQueue, sessionsStore } from '$lib/realtime/stores';
   import { get } from 'svelte/store';
+  import VolumeSlider from '$lib/components/ui/VolumeSlider.svelte';
 
   type RunnerActionData = {
     hintError?: string;
     puzzleError?: string;
   } | null;
 
-  let { data, form } = $props<{ data: PageData; form: RunnerActionData }>();
+  let { data, form }: { data: PageData; form: RunnerActionData } = $props();
   let session = $state(data.session);
   let hintFormError = $state(form?.hintError ?? null);
   let puzzleFormError = $state(form?.puzzleError ?? null);
   let offlineNotice = $state<string | null>(null);
   let queuedCommands = $state(0);
   let copySuccess = $state(false);
+  let hintMedium = $state<'text' | 'image' | 'audio' | 'video'>('text');
+  let hintVolume = $state(80);
 
   // Sync session from page data when it changes (navigation between different sessions)
   $effect(() => {
@@ -97,13 +100,29 @@
     await dispatchCommand('mark_puzzle', { puzzleId, status });
   }
 
-  async function sendPuzzleHint(puzzleId: string, hint: { content: string; type: string; assetUrl?: string; volumeLevel?: number }) {
+  async function sendPuzzleHint(
+    puzzleId: string,
+    hint: {
+      content: string;
+      type: string;
+      assetUrl?: string;
+      volumeLevel?: number;
+      displayDurationSeconds?: number;
+      loop?: boolean;
+      loopCount?: number;
+      autoDismiss?: boolean;
+    }
+  ) {
     hintFormError = null;
     await dispatchCommand('send_hint', {
       message: hint.content,
       medium: hint.type,
       assetUrl: hint.assetUrl,
       volumeLevel: hint.volumeLevel || session.gameDefaultVolume || 80,
+      displayDurationSeconds: hint.displayDurationSeconds,
+      loop: hint.loop ?? false,
+      loopCount: hint.loopCount,
+      autoDismiss: hint.autoDismiss ?? true,
       puzzleId
     });
   }
@@ -116,22 +135,42 @@
     event.preventDefault();
     const formElement = event.currentTarget as HTMLFormElement;
     const formData = new FormData(formElement);
+
     const message = String(formData.get('message') ?? '').trim();
     const medium = String(formData.get('medium') ?? 'text');
+    const displayDuration = formData.get('displayDuration') ? Number(formData.get('displayDuration')) : undefined;
+    const loop = formData.get('loop') === 'on';
+    const loopCount = formData.get('loopCount') ? Number(formData.get('loopCount')) : undefined;
 
     if (!message) {
       hintFormError = 'Hint message required.';
       return;
     }
 
+    // Validate image hints require duration
+    if (medium === 'image' && !displayDuration) {
+      hintFormError = 'Image hints require display duration.';
+      return;
+    }
+
     hintFormError = null;
-    await dispatchCommand('send_hint', { message, medium });
+    await dispatchCommand('send_hint', {
+      message,
+      medium,
+      displayDurationSeconds: displayDuration,
+      volumeLevel: hintVolume,
+      loop,
+      loopCount,
+      autoDismiss: true
+    });
     formElement.reset();
+    hintMedium = 'text'; // Reset medium state
+    hintVolume = 80; // Reset volume to default
   }
 
   function copyRoomDisplayUrl() {
     if (!browser) return;
-    const url = `${window.location.origin}/timer/${session.gameSlug}`;
+    const url = `${window.location.origin}/room/${session.gameSlug}`;
     navigator.clipboard.writeText(url).then(() => {
       copySuccess = true;
       setTimeout(() => { copySuccess = false; }, 2000);
@@ -140,7 +179,7 @@
 
   function openRoomDisplay() {
     if (!browser) return;
-    const url = `/timer/${session.gameSlug}`;
+    const url = `/room/${session.gameSlug}`;
     window.open(url, '_blank');
   }
 </script>
@@ -222,7 +261,7 @@
         </div>
 
         <div class="flex items-center gap-1">
-          <span class="mr-1 text-xs text-base-content/40">Room Display:</span>
+          <span class="mr-1 text-xs text-base-content/40">Room Display URL:</span>
           <button
             type="button"
             class="btn btn-sm btn-ghost border border-white/10"
@@ -233,10 +272,12 @@
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
               </svg>
+              Copied!
             {:else}
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
+              Copy
             {/if}
           </button>
           <button
@@ -248,6 +289,7 @@
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
+            Open
           </button>
         </div>
 
@@ -451,18 +493,48 @@
             <span class="label-text text-xs uppercase tracking-[0.3em] text-base-content/50">Hint message</span>
             <textarea class="textarea textarea-bordered mt-2 bg-base-100/60" name="message" required rows="3" placeholder="Team is stuck on the cipher – remind them of the lantern pattern."></textarea>
           </label>
-          <div class="flex flex-wrap items-center gap-4">
-            <label class="form-control max-w-xs">
+
+          <div class="grid grid-cols-2 gap-4">
+            <label class="form-control">
               <span class="label-text text-xs uppercase tracking-[0.3em] text-base-content/50">Medium</span>
-              <select class="select select-bordered mt-2 bg-base-100/60" name="medium">
+              <select class="select select-bordered mt-2 bg-base-100/60" name="medium" bind:value={hintMedium}>
                 <option value="text">Text</option>
                 <option value="image">Image</option>
                 <option value="audio">Audio</option>
                 <option value="video">Video</option>
               </select>
             </label>
-            <button class="btn btn-primary" type="submit">Send hint</button>
+
+            {#if hintMedium === 'image'}
+              <label class="form-control">
+                <span class="label-text text-xs uppercase tracking-[0.3em] text-base-content/50">Display Duration (seconds)</span>
+                <input type="number" class="input input-bordered mt-2 bg-base-100/60" name="displayDuration" min="1" max="300" value="15" required />
+              </label>
+            {/if}
+
+            {#if hintMedium === 'audio' || hintMedium === 'video'}
+              <div class="form-control">
+                <span class="label-text text-xs uppercase tracking-[0.3em] text-base-content/50 mb-2">Volume</span>
+                <VolumeSlider
+                  bind:value={hintVolume}
+                  step={5}
+                  showLabel={false}
+                />
+              </div>
+
+              <label class="flex items-center gap-2 mt-7">
+                <input type="checkbox" class="checkbox checkbox-sm" name="loop" />
+                <span class="label-text text-xs uppercase tracking-[0.3em] text-base-content/50">Loop</span>
+              </label>
+
+              <label class="form-control">
+                <span class="label-text text-xs uppercase tracking-[0.3em] text-base-content/50">Loop Count (blank = infinite)</span>
+                <input type="number" class="input input-bordered input-sm mt-2 bg-base-100/60" name="loopCount" min="1" placeholder="Infinite" />
+              </label>
+            {/if}
           </div>
+
+          <button class="btn btn-primary" type="submit">Send hint</button>
         </form>
 
         <div class="mt-6 space-y-3">

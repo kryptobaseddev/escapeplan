@@ -1,0 +1,443 @@
+
+> escapeplan-web@0.0.1 check /mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: /mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web
+Getting Svelte diagnostics...
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/avatar/Avatar.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/Modal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<!-- Modal.svelte -->
+<script lang="ts">
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/LoadingButton.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<!-- LoadingButton.svelte -->
+<script lang="ts">
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/Alert.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<!-- Alert.svelte -->
+<script lang="ts">
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/UserModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/avatar/AvatarEditor.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ArchiveReasonContent.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/CameraModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ConfirmDialogHost.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/SkeletonLoader.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<!-- SkeletonLoader.svelte -->
+<script lang="ts">
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/table/TableLoading.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/EmptyState.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<!-- EmptyState.svelte -->
+<script lang="ts">
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/table/TableEmpty.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/table/TableMobile.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/table/TableDesktop.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/DataTable.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/PasswordResetModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/PermissionsTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/RoleModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/RolesTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/media/MediaModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetUpload.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import { apiFetch } from '$lib/api/client';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/dashboard/DashboardNetwork.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/dashboard/DashboardSessions.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/dashboard/DashboardStats.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/forms/CheckboxInput.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface Props {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/forms/RadioGroup.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface Option {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/forms/SelectInput.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface Option {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/forms/TextArea.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface Props {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/forms/TextInput.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface Props {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/forms/ToggleInput.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface Props {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameBasicInfoForm.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  /**
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameBookingTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import type { GamePricingConfig, GameBookingRules } from '@escapeplan/contracts';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameCamerasTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface CameraSummary {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameDetailsModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import type { GameDetails, GameHintDefinition, GameMilestone } from '@escapeplan/contracts';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameMediaSection.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import AssetUpload from '../assets/AssetUpload.svelte';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameMilestonesTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import type { GameMilestone, MilestoneType, MilestoneMediaType } from '@escapeplan/contracts';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GamePuzzlesSection.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import type { GamePuzzleDefinition, GameHintDefinition } from '@escapeplan/contracts';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/HintModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/HintModal.svelte:60:29
+Error: Property 'penaltySeconds' does not exist on type '{ uuid: string; type: "audio" | "video" | "image" | "text"; content: string; order: number; assetUrl?: string | undefined; volumeLevel?: number | undefined; }'. (ts)
+      volumeLevel: hint?.volumeLevel ?? 80,
+      penaltySeconds: hint?.penaltySeconds ?? 0,
+      penaltyEnabled: hint?.penaltyEnabled ?? false,
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/HintModal.svelte:61:29
+Error: Property 'penaltyEnabled' does not exist on type '{ uuid: string; type: "audio" | "video" | "image" | "text"; content: string; order: number; assetUrl?: string | undefined; volumeLevel?: number | undefined; }'. (ts)
+      penaltySeconds: hint?.penaltySeconds ?? 0,
+      penaltyEnabled: hint?.penaltyEnabled ?? false,
+      countAsHint: hint?.countAsHint ?? true
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/HintModal.svelte:62:26
+Error: Property 'countAsHint' does not exist on type '{ uuid: string; type: "audio" | "video" | "image" | "text"; content: string; order: number; assetUrl?: string | undefined; volumeLevel?: number | undefined; }'. (ts)
+      penaltyEnabled: hint?.penaltyEnabled ?? false,
+      countAsHint: hint?.countAsHint ?? true
+    };
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/HintModal.svelte:85:7
+Error: Object literal may only specify known properties, and 'penaltySeconds' does not exist in type '{ uuid: string; type: "audio" | "video" | "image" | "text"; content: string; order: number; assetUrl?: string | undefined; volumeLevel?: number | undefined; }'. (ts)
+      volumeLevel: workingHint.volumeLevel,
+      penaltySeconds: workingHint.penaltySeconds,
+      penaltyEnabled: workingHint.penaltyEnabled,
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/HintModal.svelte:160:9
+Error: Type '{ uuid: string; type: HintType; content: string; assetUrl: string; order: number; countAsHint: true; }' is missing the following properties from type 'EditableHint': penaltySeconds, penaltyEnabled (ts)
+      if (hint) {
+        workingHint = {
+          uuid: hint.uuid,
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import { enhance } from '$app/forms';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/sessions/QuickStartModal.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/Breadcrumbs.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface Crumb {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/FormField.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<!-- FormField.svelte -->
+<script lang="ts">
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/HelpTooltip.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+	interface Props {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/LoadingState.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<!-- LoadingState.svelte -->
+<script lang="ts">
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/StatusBadge.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  interface Props {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/Toast.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import { toastStore } from '$lib/stores/toast.svelte';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/pwa/ReloadPrompt.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import { useRegisterSW } from 'virtual:pwa-register/svelte';
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/+layout.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/+layout.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/account/+layout.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/account/profile/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/account/security/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/cameras/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/games/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/games/create/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/HealthTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/NetworkTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/AlertsTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/LogsTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/StorageTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/SettingsTab.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/users/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/bookings/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/dashboard/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/games/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/games/[sessionId]/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(auth)/login/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(public)/timer/[slug]/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/alerts/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/logs/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/network/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<svelte:options runes={true} />
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/storage/+page.svelte:1:1
+Error: Unrecognised compiler option onwarn
+https://svelte.dev/e/options_unrecognised (svelte)
+<script lang="ts">
+  import { apiFetch } from '$lib/api/client';
+
+====================================
+svelte-check found 80 errors and 0 warnings in 75 files
+ ELIFECYCLE  Command failed with exit code 1.

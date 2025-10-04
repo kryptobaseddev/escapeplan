@@ -13,6 +13,7 @@ import {
   DEFAULT_BACKUP_RETENTION_DAYS,
   DEFAULT_GITHUB_REPO,
   DEFAULT_AUTO_UPDATE_ENABLED,
+  BUSINESS_DEFAULTS,
   FALLBACK_VERSION
 } from '@escapeplan/contracts';
 import { readFileSync } from 'node:fs';
@@ -95,6 +96,53 @@ export async function seedSystemSettings() {
       category: 'updates',
       label: 'Enable Auto-Updates',
       description: 'Automatically check for and install updates when available',
+      is_editable: true
+    },
+
+    // ========== BUSINESS DEFAULTS ==========
+    {
+      key: SETTING_KEYS.BUSINESS.GAME_DURATION_MIN_MINUTES,
+      value: String(BUSINESS_DEFAULTS.GAME_DURATION_MIN_MINUTES),
+      type: 'number',
+      category: 'business',
+      label: 'Min Game Duration (Minutes)',
+      description: 'Minimum allowed duration for games',
+      is_editable: true
+    },
+    {
+      key: SETTING_KEYS.BUSINESS.GAME_DURATION_MAX_MINUTES,
+      value: String(BUSINESS_DEFAULTS.GAME_DURATION_MAX_MINUTES),
+      type: 'number',
+      category: 'business',
+      label: 'Max Game Duration (Minutes)',
+      description: 'Maximum allowed duration for games',
+      is_editable: true
+    },
+    {
+      key: SETTING_KEYS.BUSINESS.DEFAULT_CANCELLATION_POLICY,
+      value: BUSINESS_DEFAULTS.DEFAULT_CANCELLATION_POLICY,
+      type: 'string',
+      category: 'business',
+      label: 'Default Cancellation Policy',
+      description: 'Default template for game cancellation policies',
+      is_editable: true
+    },
+    {
+      key: SETTING_KEYS.BUSINESS.DEFAULT_BOOKING_BUFFER_MINUTES,
+      value: String(BUSINESS_DEFAULTS.DEFAULT_BOOKING_BUFFER_MINUTES),
+      type: 'number',
+      category: 'business',
+      label: 'Default Booking Buffer (Minutes)',
+      description: 'Default buffer time between bookings',
+      is_editable: true
+    },
+    {
+      key: SETTING_KEYS.BUSINESS.DEFAULT_BOOKING_WINDOW_DAYS,
+      value: String(BUSINESS_DEFAULTS.DEFAULT_BOOKING_WINDOW_DAYS),
+      type: 'number',
+      category: 'business',
+      label: 'Default Booking Window (Days)',
+      description: 'How far in advance bookings can be made',
       is_editable: true
     },
 

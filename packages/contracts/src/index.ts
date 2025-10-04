@@ -82,6 +82,7 @@ export interface OperatorProfile {
   username: string;
   name: string;
   role: OperatorRole;
+  user_type?: 'operator' | 'customer'; // Field from unified user table
   avatarConfig?: BotttsAvatarConfig;
   bio?: string;
   permissions: OperatorPermission[];
@@ -273,6 +274,39 @@ export interface GameSessionDetails extends ActiveSessionSummary {
   gameDefaultVolume?: number; // Game-wide default volume
 }
 
+export interface RoomDisplayConfig {
+  showTimer?: boolean;
+  timerPosition?: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  backgroundType: 'asset' | 'solid' | 'gradient';
+  backgroundAssetId?: string;
+  backgroundColor?: string;
+  gradientFrom?: string;
+  gradientTo?: string;
+  gradientDirection?: 'to-b' | 'to-t' | 'to-r' | 'to-l' | 'to-br' | 'to-tl' | 'radial';
+  backgroundOpacity?: number;
+  defaultMediaScale?: number;
+  textHintTextColor?: string;
+  textHintBackgroundColor?: string;
+}
+
+export interface RoomDisplayMediaEvent {
+  slug: string;
+  sessionId: string;
+  mediaType: 'text' | 'image' | 'audio' | 'video';
+  content: string; // Text content OR asset URL
+  volumeLevel?: number; // For audio/video (0-100)
+  loop?: boolean;
+  loopCount?: number; // undefined = infinite
+  autoDismiss?: boolean; // Auto-close after playback
+  displayDurationSeconds?: number; // For images or override
+  triggeredAt: string;
+  source: 'hint' | 'milestone'; // Track origin
+  textHintColors?: {
+    textColor: string;
+    backgroundColor: string;
+  };
+}
+
 export interface TimerBroadcast {
   slug: string;
   sessionId: string;
@@ -288,6 +322,7 @@ export interface TimerBroadcast {
     message: string;
     shownAt: string;
   };
+  roomConfig?: RoomDisplayConfig;
 }
 
 export interface ActiveSessionsResponse {
@@ -365,6 +400,7 @@ export interface GameDetails {
   defaultVolume: number; // 0-100, game-wide default for all media
   cameraIds: string[]; // Array of camera IDs associated with this game
   media?: GameMediaConfig;
+  roomDisplayConfig?: RoomDisplayConfig;
   pricing?: GamePricingConfig;
   bookingRules?: GameBookingRules;
   milestones?: GameMilestone[]; // Game milestones configuration

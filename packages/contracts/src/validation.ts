@@ -24,7 +24,18 @@ export const hintSchema = z.object({
   content: z.string(),
   assetUrl: z.string().optional(),
   volumeLevel: z.number().int().min(0).max(100).optional(), // 0-100, overrides game default
-  order: z.number().int().min(1)
+  order: z.number().int().min(1),
+
+  // Penalty fields - use camelCase to match existing JSON structure
+  penaltySeconds: z.number().int().min(0).max(300).default(0),
+  penaltyEnabled: z.boolean().default(false),
+  countAsHint: z.boolean().default(true),
+
+  // Media display settings
+  displayDurationSeconds: z.number().int().positive().optional(), // Required for images, optional for audio/video
+  loop: z.boolean().default(false), // Loop playback
+  loopCount: z.number().int().positive().optional(), // Number of loops (undefined = infinite when loop=true)
+  autoDismiss: z.boolean().default(true) // Auto-dismiss after playback
 });
 
 
@@ -53,14 +64,35 @@ export const milestoneSchema = z.object({
   displayOrder: z.number().int().min(1).default(1),
   triggerType: z.enum(['manual', 'timer', 'condition']),
   triggerConfig: z.record(z.any()).nullable().optional(),
-  enabled: z.boolean().default(true)
+  enabled: z.boolean().default(true),
+
+  // Media display settings
+  displayDurationSeconds: z.number().int().positive().optional(), // Required for images, optional for audio/video
+  loop: z.boolean().default(false), // Loop playback
+  loopCount: z.number().int().positive().optional(), // Number of loops (undefined = infinite when loop=true)
+  autoDismiss: z.boolean().default(true) // Auto-dismiss after playback
 });
 
 // Media config schema
 export const mediaConfigSchema = z.object({
   thumbnailAssetId: z.string().optional(),
-  roomScreenAssetId: z.string().optional(),
   galleryAssetIds: z.array(z.string()).default([])
+}).optional();
+
+// Room Display config schema
+export const roomDisplayConfigSchema = z.object({
+  backgroundType: z.enum(['asset', 'solid', 'gradient']).default('solid'),
+  backgroundAssetId: z.string().optional(),
+  backgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  gradientFrom: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  gradientTo: z.string().regex(/^#[0-9A-Fa-f]{6}$/).optional(),
+  gradientDirection: z.enum(['to-b', 'to-t', 'to-r', 'to-l', 'to-br', 'to-tl', 'radial']).default('to-b'),
+  backgroundOpacity: z.number().int().min(0).max(100).default(40),
+  defaultMediaScale: z.number().int().min(10).max(100).default(90),
+  showTimer: z.boolean().default(true),
+  timerPosition: z.enum(['center', 'top', 'bottom']).default('center'),
+  textHintTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#000000'),
+  textHintBackgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FFA500')
 }).optional();
 
 // Pricing tier schema - Enhanced with per-tier models and scheduling
@@ -149,7 +181,7 @@ export const saveGameSchema = z.object({
   name: z.string().min(1, 'Game name is required'),
   description: z.string().min(1, 'Description is required'),
   storyIntro: z.string().optional(),
-  durationMinutes: z.number().int().positive().default(60),
+  durationMinutes: z.number().int().positive().default(60), // No hardcoded min/max - validated against system settings at API level
   difficulty: z.string().min(1).default('Medium'),
   gameType: z.enum(['storefront', 'mobile']).default('storefront'),
   categories: z.array(z.string().min(1)).default([]),
@@ -169,6 +201,7 @@ export const saveGameSchema = z.object({
 
   // Config objects
   media: mediaConfigSchema,
+  roomDisplayConfig: roomDisplayConfigSchema,
   pricing: pricingConfigSchema,
   bookingRules: bookingRulesSchema
 });
@@ -182,6 +215,7 @@ export type GamePuzzleDefinition = z.infer<typeof puzzleSchema>;
 export type GameMilestone = z.infer<typeof milestoneSchema>;
 export type GameHintDefinition = z.infer<typeof hintSchema>;
 export type GameMediaConfig = z.infer<typeof mediaConfigSchema>;
+export type RoomDisplayConfig = z.infer<typeof roomDisplayConfigSchema>;
 export type GamePricingConfig = z.infer<typeof pricingConfigSchema>;
 export type GameBookingRules = z.infer<typeof bookingRulesSchema>;
 
@@ -265,14 +299,14 @@ export type CommandRequest = z.infer<typeof sessionCommandSchema>;
 
 export const createRoleSchema = z.object({
   name: z.string().min(1),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   isSystem: z.boolean().default(false),
   permissionIds: z.array(z.string()).default([])
 });
 
 export const updateRoleSchema = z.object({
   name: z.string().min(1).optional(),
-  description: z.string().optional()
+  description: z.string().optional().nullable()
 });
 
 export type CreateRoleRequest = z.infer<typeof createRoleSchema>;

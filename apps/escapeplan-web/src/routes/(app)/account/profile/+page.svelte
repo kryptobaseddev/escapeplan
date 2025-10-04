@@ -8,16 +8,19 @@
   import type { ActionData, PageData } from './$types';
   import Avatar from '$lib/avatar/Avatar.svelte';
   import { randomizeAvatarConfig } from '$lib/avatar/avatar-utils';
+  import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
 
-  let { data, form } = $props<{ data: PageData; form: ActionData | null }>();
+  let { data, form }: { data: PageData; form: ActionData | null } = $props();
 
   let profile = $derived(form?.profile ?? data.profile);
   let success = $derived(Boolean(form?.success));
   let errorMessage = $derived(form && 'message' in form ? (form as { message?: string }).message : null);
 
   // Avatar editing state - initialize from profile but don't auto-reset
-  let avatarConfig = $state<BotttsAvatarConfig>(profile.avatarConfig ?? { seed: profile.username });
   let hasCustomized = $state(false);
+  let avatarConfig = $state<BotttsAvatarConfig>({ seed: '' }); // Will be initialized in effect
+  let isSubmitting = $state(false);
 
   // Only sync avatar from profile if user hasn't customized it
   $effect(() => {
@@ -30,6 +33,7 @@
   $effect(() => {
     if (success) {
       hasCustomized = false;
+      isSubmitting = false;
     }
   });
 
@@ -41,13 +45,13 @@
 
 <section class="space-y-6">
   {#if success}
-    <div class="alert alert-success border border-success/40 bg-success/10 text-success-content">
+    <Alert type="success">
       <span>Profile updated successfully.</span>
-    </div>
+    </Alert>
   {:else if errorMessage}
-    <div class="alert alert-error border border-error/40 bg-error/10 text-error-content">
+    <Alert type="error">
       <span>{errorMessage}</span>
-    </div>
+    </Alert>
   {/if}
 
   <article class="glass-panel border-white/10 bg-base-200/70 p-6">
@@ -76,10 +80,13 @@
       method="POST"
       action="?/update"
       use:enhance={() => {
+        isSubmitting = true;
         return async ({ result, update }) => {
           await update();
           if (result.type === 'success') {
             await invalidateAll();
+          } else {
+            isSubmitting = false;
           }
         };
       }}
@@ -101,7 +108,9 @@
         <span class="label-text-alt">Max 500 characters. Visible to managers and admins.</span>
       </label>
       <div class="md:col-span-2 flex justify-end">
-        <button class="btn btn-primary" type="submit">Save profile</button>
+        <LoadingButton type="submit" variant="primary" loading={isSubmitting}>
+          Save profile
+        </LoadingButton>
       </div>
     </form>
   </article>

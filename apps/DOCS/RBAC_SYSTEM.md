@@ -37,6 +37,9 @@ EscapePlan uses a **database-driven RBAC system** that allows for flexible permi
 ✅ Audit logging for all role/permission changes
 ✅ Protection of system roles from modification
 ✅ Session enrichment with role and permissions
+✅ User type scoping (operator vs customer roles)
+✅ Database triggers enforce role/user_type boundaries
+✅ Future-ready for customer portal implementation
 
 ---
 
@@ -50,21 +53,24 @@ EscapePlan uses a **database-driven RBAC system** that allows for flexible permi
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│              Custom Session Enrichment                      │
-│  - Adds: role, role_id, permissions[]                      │
-│  - Queries: role_permissions + permissions tables          │
+│                  Custom Session Plugin                       │
+│  - Enriches session with role and permissions               │
+│  - Queries: user → roles → role_permissions → permissions   │
+│  - Validates user_type matches role scope                   │
 └───────────────────────┬─────────────────────────────────────┘
                         │
                         ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                   API Route Guards                          │
-│  ensurePermission(role, permissions[], required)           │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-                        ▼
-┌─────────────────────────────────────────────────────────────┐
-│              SvelteKit Page Guards                          │
-│  if (!locals.user?.permissions?.includes('perm')) error()  │
+│                    Session Object                            │
+│  {                                                           │
+│    user: {                                                   │
+│      id, username, name, email,                             │
+│      user_type: 'operator' | 'customer',                    │
+│      role: 'admin' | 'manager' | 'game_master' | 'customer',│
+│      role_id: 'role-admin',                                 │
+│      permissions: ['view_dashboard', 'manage_games', ...]   │
+│    }                                                         │
+│  }                                                           │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -80,64 +86,85 @@ EscapePlan uses a **database-driven RBAC system** that allows for flexible permi
 
 ## Database Schema
 
-### Tables
+### roles
+**Purpose:** Define available roles with user type scoping.
 
-#### `roles`
-```sql
-CREATE TABLE roles (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  description TEXT,
-  is_system INTEGER NOT NULL DEFAULT 0, -- 1 for system roles
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-```
+**Fields:**
+- `id` (TEXT, PK)
+- `name` (TEXT, UNIQUE, NOT NULL)
+- `description` (TEXT)
+- `user_type_scope` (TEXT, NOT NULL, default 'operator') - **NEW FIELD**
+  - `'operator'` - Only operators can have this role
+  - `'customer'` - Only customers can have this role
+  - `'both'` - Either user type can have this role
+- `is_system` (BOOLEAN, default false)
+- `created_at`, `updated_at` (TEXT, timestamps)
 
-**System Roles (is_system = 1):**
-- `role-admin` (name: admin)
-- `role-manager` (name: manager)
-- `role-game-master` (name: game_master)
-- `role-customer` (name: customer)
+### permissions
+**Purpose:** Define granular permissions with user type scoping.
 
-**Custom Roles (is_system = 0):**
-- Created by admins via `/api/admin/roles`
-- Cannot be named the same as system roles
-- Can be deleted if no operators are assigned
+**Fields:**
+- `id` (TEXT, PK)
+- `name` (TEXT, UNIQUE, NOT NULL)
+- `label` (TEXT, NOT NULL)
+- `category` (TEXT, NOT NULL)
+- `user_type_scope` (TEXT, NOT NULL, default 'operator') - **NEW FIELD**
+  - `'operator'` - Operator-only permission
+  - `'customer'` - Customer-only permission
+  - `'both'` - Shared permission
+- `description` (TEXT)
+- `created_at` (TEXT, timestamp)
 
-#### `permissions`
-```sql
-CREATE TABLE permissions (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  label TEXT NOT NULL,
-  category TEXT NOT NULL,
-  description TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-```
+### role_permissions
+**Purpose:** Junction table mapping roles to permissions.
 
-**Categories:** dashboard, bookings, sessions, games, network, users, rbac, storage, cameras, system
+**Fields:**
+- `id` (TEXT, PK)
+- `role_id` (TEXT, FK roles.id, CASCADE)
+- `permission_id` (TEXT, FK permissions.id, CASCADE)
+- `granted_at` (TEXT, timestamp)
+- `granted_by` (TEXT, FK user.id)
 
-#### `role_permissions`
-```sql
-CREATE TABLE role_permissions (
-  id TEXT PRIMARY KEY,
-  role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-  permission_id TEXT NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-  granted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  granted_by TEXT REFERENCES operators(id),
-  UNIQUE(role_id, permission_id)
-);
-```
+**Index:** Unique on (role_id, permission_id)
 
-#### `operators` (Extended)
-```sql
-ALTER TABLE operators ADD COLUMN role_id TEXT REFERENCES roles(id);
--- Note: 'role' column retained for Better Auth compatibility
-```
+---
 
-**Migration Note:** Existing operators are backfilled with `role_id` based on their `role` column.
+## User Type Scoping
+
+The RBAC system supports two user types with automatic role/permission scoping:
+
+### Operator Users (`user_type: 'operator'`)
+**Allowed Roles:**
+- Roles with `user_type_scope = 'operator'`
+- Roles with `user_type_scope = 'both'`
+
+**System Roles:**
+- `admin` (user_type_scope: 'operator')
+- `manager` (user_type_scope: 'operator')
+- `game_master` (user_type_scope: 'operator')
+
+**Permissions:** All 27 current permissions (all scoped to 'operator')
+
+### Customer Users (`user_type: 'customer'`)
+**Allowed Roles:**
+- Roles with `user_type_scope = 'customer'`
+- Roles with `user_type_scope = 'both'`
+
+**System Roles:**
+- `customer` (user_type_scope: 'customer')
+
+**Planned Permissions:**
+- `view_catalog` - Browse games
+- `create_booking` - Self-service booking
+- `view_own_bookings` - Booking history
+- `cancel_booking` - Cancel own bookings
+- `view_profile`, `edit_profile` - Account management
+
+### Enforcement Mechanism
+**Database Triggers:** 5 triggers (see DATABASE_SYSTEM.md) automatically block:
+- Cross-type role assignments (customer with operator role)
+- user_type changes after creation
+- Invalid role scope for user type
 
 ---
 
@@ -179,13 +206,17 @@ ALTER TABLE operators ADD COLUMN role_id TEXT REFERENCES roles(id);
 
 ## System Roles
 
+**Note:** `role_id` is set in user table and must match user's `user_type` via `user_type_scope`. Database triggers automatically enforce this validation.
+
 ### Admin
 **Role ID:** `role-admin`
+**User Type Scope:** `operator`
 **Permissions:** ALL (27/27)
 **Use Case:** Full system access, create custom roles, manage all operators
 
 ### Manager
 **Role ID:** `role-manager`
+**User Type Scope:** `operator`
 **Permissions:** 18/27
 - All dashboard, bookings, sessions, games
 - View network (no manage)
@@ -198,6 +229,7 @@ ALTER TABLE operators ADD COLUMN role_id TEXT REFERENCES roles(id);
 
 ### Game Master
 **Role ID:** `role-game-master`
+**User Type Scope:** `operator`
 **Permissions:** 7/27
 - View dashboard, bookings, sessions, games
 - Manage sessions
@@ -208,6 +240,7 @@ ALTER TABLE operators ADD COLUMN role_id TEXT REFERENCES roles(id);
 
 ### Customer
 **Role ID:** `role-customer`
+**User Type Scope:** `customer`
 **Permissions:** 2/27
 - View dashboard
 - View bookings
@@ -457,35 +490,40 @@ cd packages/contracts
 pnpm build
 ```
 
-5. **Create migration to seed new permission:**
+5. **Add permission to seed script:**
 
-```sql
--- apps/escapeplan-api/drizzle/0003_add_new_permission.sql
-INSERT INTO permissions (id, name, label, category, description, created_at)
-VALUES (
-  'perm-new_permission_name',
-  'new_permission_name',
-  'Human-readable label for UI',
-  'appropriate_category',
-  NULL,
-  CURRENT_TIMESTAMP
-);
+```typescript
+// apps/escapeplan-api/src/db/seed.ts
+import { randomUUID } from 'node:crypto';
+import { db } from './client.ts';
+import { permissions, rolePermissions } from './schema.ts';
 
--- Optionally add to roles
-INSERT INTO role_permissions (id, role_id, permission_id, granted_at)
-VALUES (
-  lower(hex(randomblob(16))),
-  'role-admin',
-  'perm-new_permission_name',
-  CURRENT_TIMESTAMP
-);
+// Add new permission
+await db.insert(permissions).values({
+  id: 'perm-new_permission_name',
+  name: 'new_permission_name',
+  label: 'Human-readable label for UI',
+  category: 'appropriate_category',
+  user_type_scope: 'operator',
+  description: null,
+  created_at: new Date().toISOString()
+});
+
+// Optionally add to admin role
+await db.insert(rolePermissions).values({
+  id: randomUUID(),
+  role_id: 'role-admin',
+  permission_id: 'perm-new_permission_name',
+  granted_at: new Date().toISOString(),
+  granted_by: null // System-seeded
+});
 ```
 
-6. **Run migration:**
+6. **Run seed script:**
 
 ```bash
 cd apps/escapeplan-api
-npx drizzle-kit migrate
+pnpm db:seed
 ```
 
 7. **Use in API routes:**
@@ -588,15 +626,20 @@ if (existing.isSystem) {
 Permissions are loaded **per-request** from database:
 ```typescript
 // apps/escapeplan-api/src/security.ts
-export function permissionsForRole(roleNameOrId: string): OperatorPermission[] {
-  // Queries database, not hardcoded
-  const permissions = sqlite.prepare(`
-    SELECT p.name FROM permissions p
-    INNER JOIN role_permissions rp ON p.id = rp.permission_id
-    WHERE rp.role_id = ?
-  `).all(roleId);
+import { db } from './db/client.ts';
+import { permissions, rolePermissions } from './db/schema.ts';
+import { eq } from 'drizzle-orm';
+import type { OperatorPermission } from '@escapeplan/contracts';
 
-  return permissions.map(p => p.name as OperatorPermission);
+export async function permissionsForRole(roleNameOrId: string): Promise<OperatorPermission[]> {
+  // Queries database, not hardcoded
+  const perms = await db
+    .select({ name: permissions.name })
+    .from(permissions)
+    .innerJoin(rolePermissions, eq(permissions.id, rolePermissions.permission_id))
+    .where(eq(rolePermissions.role_id, roleNameOrId));
+
+  return perms.map(p => p.name as OperatorPermission);
 }
 ```
 
@@ -681,34 +724,50 @@ it('should create role → assign permissions → verify user access', async () 
 
 ---
 
-## Migration from Hardcoded RBAC
+## Schema Initialization
 
-If you're upgrading from the hardcoded RBAC system:
+The RBAC system uses Drizzle's push-based workflow (no migrations):
 
-1. **Backup database:**
+1. **Backup database (if upgrading):**
 ```bash
 cp apps/escapeplan-api/data/escapeplan.db apps/escapeplan-api/data/escapeplan-backup.db
 ```
 
-2. **Run migrations:**
+2. **Push schema changes:**
 ```bash
 cd apps/escapeplan-api
-npx drizzle-kit migrate
+npx drizzle-kit push
 ```
 
-3. **Verify role_id backfill:**
+3. **Seed RBAC data:**
 ```bash
-sqlite3 data/escapeplan.db "SELECT username, role, role_id FROM operators;"
+pnpm db:seed
+```
+
+4. **Verify role_id assignments:**
+```typescript
+// Use Drizzle to query
+import { db } from './db/client.ts';
+import { user } from './db/schema.ts';
+
+const users = await db.select({
+  username: user.username,
+  role_id: user.role_id
+}).from(user);
+
+console.log(users);
 ```
 
 Expected output:
-```
-admin|admin|role-admin
-manager1|manager|role-manager
-gm1|game_master|role-game-master
+```json
+[
+  { "username": "admin", "role_id": "role-admin" },
+  { "username": "manager1", "role_id": "role-manager" },
+  { "username": "gm1", "role_id": "role-game-master" }
+]
 ```
 
-4. **Test permission resolution:**
+5. **Test permission resolution:**
 ```bash
 # Login as each role, verify permissions in session
 curl http://localhost:4000/api/auth/get-session -H "Cookie: better-auth.session_token=TOKEN"
@@ -727,26 +786,42 @@ curl http://localhost:4000/api/auth/get-session \
 ```
 
 Should return array of permissions. If empty, check:
-1. `role_id` is set in operators table
+1. `role_id` is set in user table
 2. `role_permissions` table has mappings for that role
 3. Session was created **after** permission changes
 
 ### Problem: Custom role creation fails
 
 **Solution:** Check constraints:
-```sql
--- Verify name is unique
-SELECT * FROM roles WHERE name = 'your_role_name';
+```typescript
+// Verify name is unique
+import { db } from './db/client.ts';
+import { roles, permissions } from './db/schema.ts';
+import { eq, inArray } from 'drizzle-orm';
 
--- Verify permission IDs exist
-SELECT * FROM permissions WHERE id IN ('perm-xxx', 'perm-yyy');
+const existing = await db.select().from(roles).where(eq(roles.name, 'your_role_name'));
+console.log('Existing role:', existing);
+
+// Verify permission IDs exist
+const permIds = ['perm-xxx', 'perm-yyy'];
+const foundPerms = await db.select().from(permissions).where(inArray(permissions.id, permIds));
+console.log('Found permissions:', foundPerms);
 ```
 
 ### Problem: Cannot delete custom role
 
 **Solution:** Check for assigned operators:
-```sql
-SELECT COUNT(*) FROM operators WHERE role_id = 'your-role-id';
+```typescript
+import { db } from './db/client.ts';
+import { user } from './db/schema.ts';
+import { eq, count } from 'drizzle-orm';
+
+const result = await db
+  .select({ count: count() })
+  .from(user)
+  .where(eq(user.role_id, 'your-role-id'));
+
+console.log('Operators with this role:', result[0].count);
 ```
 
 Reassign operators to different role before deletion.
@@ -836,7 +911,7 @@ Database path resolution is handled by the **[Runtime Configuration System](./RU
 
 ### Core System Docs
 - **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md)** - Database path resolution for RBAC tables
-- **[Database System](./DATABASE_SYSTEM.md)** - operators, roles, permissions, role_permissions tables
+- **[Database System](./DATABASE_SYSTEM.md)** - user, roles, permissions, role_permissions tables
 - **[API Contracts & Schema Management](./API_CONTRACTS_SCHEMA_MANAGEMENT.md)** - RBAC schema definition
 
 ### Integration Docs

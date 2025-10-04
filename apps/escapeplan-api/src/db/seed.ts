@@ -146,10 +146,10 @@ export const clearAll = () => {
     'asset_usage',
     'assets',
     'games',
-    'operator_auth_sessions',
-    'operator_accounts',
-    'operator_verifications',
-    'operators',
+    'session',
+    'account',
+    'verification',
+    'user',
     'network_profiles',
     'network_health',
     'alerts',
@@ -279,28 +279,28 @@ export async function seedIdempotent() {
     if (!existing) {
       const permId = `perm-${permName}`;
       db.prepare(`
-        INSERT INTO permissions (id, name, label, category, created_at)
-        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-      `).run(permId, permName, permLabel, permissionCategories[permName] || 'system');
+        INSERT INTO permissions (id, name, label, category, user_type_scope, created_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `).run(permId, permName, permLabel, permissionCategories[permName] || 'system', 'operator');
       console.log(`  ✅ Created permission: ${permName}`);
     }
   }
 
   // 2. Seed 4 System Roles (idempotent)
   const systemRoles = [
-    { id: 'role-admin', name: 'admin', description: 'Full system access with all permissions' },
-    { id: 'role-manager', name: 'manager', description: 'Manage games, bookings, sessions, users, and cameras' },
-    { id: 'role-game-master', name: 'game_master', description: 'Run sessions, view games, and access cameras' },
-    { id: 'role-customer', name: 'customer', description: 'View dashboard and bookings only' }
+    { id: 'role-admin', name: 'admin', description: 'Full system access with all permissions', user_type_scope: 'operator' },
+    { id: 'role-manager', name: 'manager', description: 'Manage games, bookings, sessions, users, and cameras', user_type_scope: 'operator' },
+    { id: 'role-game-master', name: 'game_master', description: 'Run sessions, view games, and access cameras', user_type_scope: 'operator' },
+    { id: 'role-customer', name: 'customer', description: 'View dashboard and bookings only', user_type_scope: 'customer' }
   ];
 
   for (const role of systemRoles) {
     const existing = db.prepare('SELECT id FROM roles WHERE name = ?').get(role.name);
     if (!existing) {
       db.prepare(`
-        INSERT INTO roles (id, name, description, is_system, created_at, updated_at)
-        VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `).run(role.id, role.name, role.description);
+        INSERT INTO roles (id, name, description, user_type_scope, is_system, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `).run(role.id, role.name, role.description, role.user_type_scope);
       console.log(`  ✅ Created role: ${role.name}`);
     }
   }
@@ -338,15 +338,6 @@ export async function seedIdempotent() {
   const adminPermissions = permissionsForRole('admin');
   const adminRoleId = resolveRoleId('admin');
   const adminBio = 'Primary EscapePlan appliance administrator.';
-  const adminBaseProfile = {
-    name: 'System Administrator',
-    username: 'admin',
-    role: 'admin',
-    roleId: adminRoleId,
-    bio: adminBio,
-    mustResetPassword: false,
-    emailVerified: true
-  };
 
   // Seed admin user (idempotent)
   const existingAdmin = await adapter.findUserByEmail(adminEmail, { includeAccounts: true });
@@ -359,27 +350,30 @@ export async function seedIdempotent() {
     mouth: ['smile01']
   };
 
-  const adminProfileUpdates = {
-    ...adminBaseProfile,
-    passwordHash: hashedPassword,
-    image: JSON.stringify(defaultAvatarConfig) // Better Auth expects string
-  };
-
   if (!existingAdmin) {
     console.log('Creating admin user...');
-    const adminUser = await adapter.createUser({
+
+    // Create user with only input-allowed fields
+    const userPayload = {
       email: adminEmail,
-      ...adminBaseProfile,
+      name: 'System Administrator',
+      username: 'admin',
+      bio: adminBio,
+      emailVerified: true,
       passwordHash: hashedPassword,
-      image: JSON.stringify(defaultAvatarConfig) // Better Auth expects string
-    }) as any;
+      image: JSON.stringify(defaultAvatarConfig)
+    };
+    console.log('User payload:', JSON.stringify(userPayload, null, 2));
+
+    const adminUser = await adapter.createUser(userPayload) as any;
     adminId = adminUser.id;
 
-    await adapter.updateUser(adminId, {
-      role: 'admin',
-      roleId: adminRoleId,
-      permissions: adminPermissions
-    });
+    // Update server-managed fields directly in database
+    db.prepare(`
+      UPDATE user
+      SET role_id = ?, user_type = ?, must_reset_password = ?
+      WHERE id = ?
+    `).run(adminRoleId, 'operator', 0, adminId);
 
     await adapter.createAccount({
       userId: adminId,
@@ -387,14 +381,21 @@ export async function seedIdempotent() {
       accountId: adminId,
       password: hashedPassword
     });
+
+    console.log('✅ Admin user created successfully');
   } else {
-    console.log('Admin user already exists, updating password and permissions...');
+    console.log('Admin user already exists, updating password...');
     adminId = existingAdmin.user.id;
     await adapter.updatePassword(adminId, hashedPassword);
-    await adapter.updateUser(adminId, {
-      ...adminProfileUpdates,
-      permissions: adminPermissions
-    });
+
+    // Ensure role_id and user_type are correct
+    db.prepare(`
+      UPDATE user
+      SET role_id = ?, user_type = ?, bio = ?, image = ?
+      WHERE id = ?
+    `).run(adminRoleId, 'operator', adminBio, JSON.stringify(defaultAvatarConfig), adminId);
+
+    console.log('✅ Admin user updated successfully');
   }
 
   // Seed game (idempotent)

@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { GameDetails, GameHintDefinition, GameMilestone } from '@escapeplan/contracts';
   import MediaModal from '../media/MediaModal.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
 
   type TabId = 'details' | 'media' | 'puzzles' | 'pricing' | 'booking' | 'milestones' | 'cameras';
 
@@ -78,10 +79,10 @@
   }
 
   function playMilestoneMedia(milestone: GameMilestone) {
-    if (!milestone.assetUrl) return;
+    if (!milestone.assetId) return;
     if (milestone.mediaType !== 'audio' && milestone.mediaType !== 'video') return;
 
-    currentMediaSrc = milestone.assetUrl;
+    currentMediaSrc = milestone.assetId;
     currentMediaTitle = `${milestone.name} - ${milestone.mediaType}`;
     currentMediaType = milestone.mediaType;
     mediaModalOpen = true;
@@ -226,12 +227,12 @@
             {#if game.validationNotes}
               <div>
                 <h3 class="text-sm uppercase tracking-wider text-base-content/50 mb-2">Validation Notes</h3>
-                <div class="alert alert-info">
+                <Alert type="info">
                   <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
                   </svg>
                   <span>{game.validationNotes}</span>
-                </div>
+                </Alert>
               </div>
             {/if}
           </div>
@@ -361,7 +362,7 @@
           <div class="space-y-6">
             <div>
               <h3 class="text-sm uppercase tracking-wider text-base-content/50 mb-2">Base Price</h3>
-              <p class="text-2xl font-bold">{formatPrice(game.pricePerPlayerCents)} per player</p>
+              <p class="text-2xl font-bold">{formatPrice(game.pricePerPlayerCents ?? 0)} per player</p>
             </div>
 
             {#if game.pricing?.tiers && game.pricing.tiers.length > 0}
@@ -465,7 +466,7 @@
                       {/if}
                     </div>
 
-                    {#if milestone.assetUrl && (milestone.mediaType === 'audio' || milestone.mediaType === 'video')}
+                    {#if milestone.assetId && (milestone.mediaType === 'audio' || milestone.mediaType === 'video')}
                       <div class="mt-3">
                         <button
                           type="button"
@@ -495,7 +496,7 @@
                 Cameras can be associated from the <a href="/admin/cameras" class="link link-primary">Camera Management</a> page.
               </p>
             {:else}
-              <div class="alert alert-info">
+              <Alert type="info">
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
                   <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
                 </svg>
@@ -506,7 +507,7 @@
                     Manage cameras from the <a href="/admin/cameras" class="link link-primary">Camera Management</a> page.
                   </p>
                 </div>
-              </div>
+              </Alert>
 
               <div class="space-y-2">
                 {#each game.cameraIds as cameraId}

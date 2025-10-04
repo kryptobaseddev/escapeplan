@@ -184,7 +184,7 @@ CREATE TABLE alerts (
   context TEXT, -- JSON: {gameName, roomName, pausedBy, etc}
   created_at TEXT NOT NULL,
   dismissed_at TEXT,
-  dismissed_by TEXT REFERENCES operators(id)
+  dismissed_by TEXT REFERENCES user(id)
 );
 
 CREATE INDEX idx_alerts_active ON alerts(dismissed_at) WHERE dismissed_at IS NULL;
@@ -390,8 +390,9 @@ export default logger;
 
 ```typescript
 // apps/escapeplan-api/src/logging/database.ts
-import { nanoid } from 'nanoid';
-import { sqlite } from '../db/client.js';
+import { randomUUID } from 'node:crypto';
+import { db } from '../db/client.js';
+import { systemLogs } from '../db/schema.js';
 import logger from '../logger.js';
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -412,21 +413,18 @@ export function logToDatabase(
   context?: LogContext
 ): void {
   try {
-    const id = `log-${nanoid(12)}`;
+    const id = randomUUID();
     const timestamp = new Date().toISOString();
 
-    sqlite.prepare(
-      `INSERT INTO system_logs (id, level, category, message, context, timestamp, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
+    await db.insert(systemLogs).values({
       id,
       level,
       category,
       message,
-      context ? JSON.stringify(context) : null,
+      context: context ?? null,
       timestamp,
-      timestamp
-    );
+      created_at: timestamp
+    });
 
     // Also log to Winston
     logger.log(level, message, { category, ...context });
@@ -445,8 +443,10 @@ export function logToDatabase(
 
 ```typescript
 // apps/escapeplan-api/src/logging/alerts.ts
-import { nanoid } from 'nanoid';
-import { sqlite } from '../db/client.js';
+import { randomUUID } from 'node:crypto';
+import { db } from '../db/client.js';
+import { alerts, alertRules } from '../db/schema.js';
+import { eq, and, isNull } from 'drizzle-orm';
 import { logToDatabase } from './database.js';
 import { emitDashboardUpdate } from '../realtime.js';
 import { getDashboard } from '../state.js';
@@ -464,22 +464,19 @@ export interface CreateAlertOptions {
 }
 
 export function createAlert(options: CreateAlertOptions): string {
-  const id = `alert-${nanoid(12)}`;
+  const id = randomUUID();
   const now = new Date().toISOString();
 
-  sqlite.prepare(
-    `INSERT INTO alerts (id, session_id, level, category, title, message, context, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
+  await db.insert(alerts).values({
     id,
-    options.sessionId ?? null,
-    options.level,
-    options.category,
-    options.title,
-    options.message,
-    options.context ? JSON.stringify(options.context) : null,
-    now
-  );
+    session_id: options.sessionId ?? null,
+    level: options.level,
+    category: options.category,
+    title: options.title,
+    message: options.message,
+    context: options.context ?? null,
+    created_at: now
+  });
 
   // Log the alert creation
   logToDatabase('info', 'system', `Alert created: ${options.title}`, {
@@ -497,11 +494,17 @@ export function createAlert(options: CreateAlertOptions): string {
 export function dismissAlert(alertId: string, operatorId: string): void {
   const now = new Date().toISOString();
 
-  sqlite.prepare(
-    `UPDATE alerts
-     SET dismissed_at = ?, dismissed_by = ?
-     WHERE id = ? AND dismissed_at IS NULL`
-  ).run(now, operatorId, alertId);
+  await db.update(alerts)
+    .set({
+      dismissed_at: now,
+      dismissed_by: operatorId
+    })
+    .where(
+      and(
+        eq(alerts.id, alertId),
+        isNull(alerts.dismissed_at)
+      )
+    );
 
   logToDatabase('info', 'system', `Alert dismissed: ${alertId}`, {
     alertId,
@@ -512,11 +515,19 @@ export function dismissAlert(alertId: string, operatorId: string): void {
 }
 
 export function dismissAlertsBySession(sessionId: string, reason: string): void {
-  sqlite.prepare(
-    `UPDATE alerts
-     SET dismissed_at = CURRENT_TIMESTAMP, dismissed_by = 'system'
-     WHERE session_id = ? AND dismissed_at IS NULL`
-  ).run(sessionId);
+  const now = new Date().toISOString();
+
+  await db.update(alerts)
+    .set({
+      dismissed_at: now,
+      dismissed_by: 'system'
+    })
+    .where(
+      and(
+        eq(alerts.session_id, sessionId),
+        isNull(alerts.dismissed_at)
+      )
+    );
 
   logToDatabase('info', 'system', `Auto-dismissed alerts for session: ${reason}`, {
     sessionId
@@ -525,12 +536,12 @@ export function dismissAlertsBySession(sessionId: string, reason: string): void 
 
 // Check alert rules and create alerts
 export function evaluateAlertRules(event: string, context: any): void {
-  const rules = sqlite.prepare(
-    `SELECT * FROM alert_rules WHERE enabled = 1`
-  ).all() as any[];
+  const rules = await db.select()
+    .from(alertRules)
+    .where(eq(alertRules.enabled, true));
 
   for (const rule of rules) {
-    const conditions = JSON.parse(rule.conditions);
+    const conditions = rule.conditions as any;
 
     if (conditions.event !== event) continue;
 
@@ -547,8 +558,8 @@ export function evaluateAlertRules(event: string, context: any): void {
 
     createAlert({
       sessionId: context.sessionId,
-      level: rule.level,
-      category: rule.category,
+      level: rule.level as AlertLevel,
+      category: rule.category as AlertCategory,
       title,
       message,
       context
@@ -584,6 +595,9 @@ function interpolateTemplate(template: string, context: any): string {
 
 ```typescript
 // apps/escapeplan-api/src/index.ts
+import { db } from './db/client.js';
+import { alertRules, systemLogs } from './db/schema.js';
+import { eq, asc, desc, and, count } from 'drizzle-orm';
 
 // Get alert rules
 api.get('/admin/alert-rules', async (request, reply) => {
@@ -591,7 +605,10 @@ api.get('/admin/alert-rules', async (request, reply) => {
   if (!session) return;
   if (!ensurePermission(reply, session.user.role, session.user.permissions, 'view_system_settings')) return;
 
-  const rules = sqlite.prepare('SELECT * FROM alert_rules ORDER BY category, name').all();
+  const rules = await db.select()
+    .from(alertRules)
+    .orderBy(asc(alertRules.category), asc(alertRules.name));
+
   return { rules };
 });
 
@@ -604,11 +621,16 @@ api.patch('/admin/alert-rules/:id', async (request, reply) => {
   const { id } = request.params as { id: string };
   const { enabled, level, conditions, title_template, message_template } = request.body as any;
 
-  sqlite.prepare(
-    `UPDATE alert_rules
-     SET enabled = ?, level = ?, conditions = ?, title_template = ?, message_template = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`
-  ).run(enabled ? 1 : 0, level, JSON.stringify(conditions), title_template, message_template, id);
+  await db.update(alertRules)
+    .set({
+      enabled,
+      level,
+      conditions,
+      title_template,
+      message_template,
+      updated_at: new Date().toISOString()
+    })
+    .where(eq(alertRules.id, id));
 
   logToDatabase('info', 'system', `Alert rule updated: ${id}`, { ruleId: id, updatedBy: session.user.id });
 
@@ -623,25 +645,26 @@ api.get('/admin/logs', async (request, reply) => {
 
   const { level, category, limit = 100, offset = 0 } = request.query as any;
 
-  let query = 'SELECT * FROM system_logs WHERE 1=1';
-  const params: any[] = [];
-
+  // Build query with optional filters
+  const conditions = [];
   if (level) {
-    query += ' AND level = ?';
-    params.push(level);
+    conditions.push(eq(systemLogs.level, level));
   }
   if (category) {
-    query += ' AND category = ?';
-    params.push(category);
+    conditions.push(eq(systemLogs.category, category));
   }
 
-  query += ' ORDER BY timestamp DESC LIMIT ? OFFSET ?';
-  params.push(parseInt(limit), parseInt(offset));
+  const logs = await db.select()
+    .from(systemLogs)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(systemLogs.timestamp))
+    .limit(parseInt(limit))
+    .offset(parseInt(offset));
 
-  const logs = sqlite.prepare(query).all(...params);
-  const total = sqlite.prepare('SELECT COUNT(*) as count FROM system_logs').get() as { count: number };
+  const [totalResult] = await db.select({ count: count() })
+    .from(systemLogs);
 
-  return { logs, total: total.count };
+  return { logs, total: totalResult.count };
 });
 
 // Dismiss alert

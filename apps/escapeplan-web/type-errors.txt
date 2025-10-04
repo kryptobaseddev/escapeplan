@@ -1,0 +1,1494 @@
+
+> escapeplan-web@0.0.1 check /mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web
+> svelte-kit sync && svelte-check --tsconfig ./tsconfig.json
+
+Loading svelte-check in workspace: /mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web
+Getting Svelte diagnostics...
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/RoleModal.svelte:261:7
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+    <div class="form-control">
+      <label class="label">
+        <span class="label-text font-semibold">Permissions ({selectedPermissions.size} selected)</span>
+      </label>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/media/MediaModal.svelte:61:2
+Warn: Elements with the 'dialog' interactive role must have a tabindex value
+https://svelte.dev/e/a11y_interactive_supports_focus (svelte)
+	<!-- Modal backdrop - fills entire main content area (no sidebar overlap) -->
+	<div
+		class="fixed inset-y-0 left-64 right-0 z-[9999] flex items-center justify-center bg-black/90 p-6"
+		onclick={handleBackdropClick}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="media-modal-title"
+	>
+		<!-- Modal container - scales based on windowScale prop -->
+		<div
+			class="relative flex {isHorizontal ? 'flex-row' : 'flex-col'} gap-4 bg-base-300 rounded-lg shadow-2xl"
+			style="width: {scale}%; max-height: {scale}vh;"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<!-- Header: Title and Close Button (always at top) -->
+			<div class="flex items-center justify-between gap-4 px-4 py-3 bg-base-200 rounded-t-lg">
+				<h2 id="media-modal-title" class="text-lg font-semibold truncate flex-1">
+					{title}
+				</h2>
+				<button
+					type="button"
+					class="btn btn-sm btn-circle btn-ghost hover:btn-error"
+					onclick={onClose}
+					aria-label="Close modal"
+				>
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content area with optional asset details -->
+			<div class="flex {isHorizontal ? 'flex-row' : 'flex-col'} gap-4 p-4 flex-1 overflow-hidden">
+				<!-- Asset Details - Top/Left -->
+				{#if assetDetails && (assetDetailsPosition === 'top' || assetDetailsPosition === 'left')}
+					<div
+						class="bg-base-200 rounded-lg p-4 {assetDetailsPosition === 'left'
+							? 'w-64 overflow-y-auto'
+							: 'w-full'}"
+					>
+						<h3 class="text-sm font-semibold mb-3 text-base-content/70">Asset Details</h3>
+						<div class="space-y-2 text-sm">
+							<div>
+								<span class="font-medium">Filename:</span>
+								<p class="text-base-content/70 break-all">{assetDetails.filename}</p>
+							</div>
+							<div>
+								<span class="font-medium">Size:</span>
+								<p class="text-base-content/70">{assetDetails.size}</p>
+							</div>
+							<div>
+								<span class="font-medium">Type:</span>
+								<p class="text-base-content/70">{assetDetails.type}</p>
+							</div>
+							{#if assetDetails.uploadedAt}
+								<div>
+									<span class="font-medium">Uploaded:</span>
+									<p class="text-base-content/70">{assetDetails.uploadedAt}</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Media Content -->
+				<div class="flex items-center justify-center flex-1 overflow-hidden rounded-lg bg-black">
+					{#if mediaType === 'image'}
+						<img
+							{src}
+							alt={title}
+							class="max-w-full max-h-full object-contain"
+							loading="eager"
+						/>
+					{:else if mediaType === 'video'}
+						<!-- Native HTML5 video - works in Chrome, Safari, Edge, Silk -->
+						<video
+							{src}
+							{title}
+							controls={showControls}
+							autoplay={autoPlay}
+							loop={mediaLoop}
+							playsinline
+							class="w-full h-full object-contain"
+							preload="metadata"
+						>
+							<track kind="captions" />
+							Your browser does not support the video element.
+						</video>
+					{:else if mediaType === 'audio'}
+						<div class="flex flex-col items-center justify-center gap-6 p-8 w-full">
+							<!-- Audio icon -->
+							<svg
+								class="w-24 h-24 text-primary"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+								/>
+							</svg>
+							<!-- Native HTML5 audio - works in all browsers -->
+							{#if showControls}
+								<audio
+									{src}
+									controls
+									autoplay={autoPlay}
+									loop={mediaLoop}
+									class="w-full max-w-md"
+									preload="metadata"
+								>
+									Your browser does not support the audio element.
+								</audio>
+							{:else}
+								<audio {src} autoplay={autoPlay} loop={mediaLoop} preload="metadata">
+									<track kind="captions" />
+								</audio>
+								<p class="text-sm text-base-content/60">Playing in headless mode...</p>
+							{/if}
+						</div>
+					{/if}
+				</div>
+
+				<!-- Asset Details - Bottom/Right -->
+				{#if assetDetails && (assetDetailsPosition === 'bottom' || assetDetailsPosition === 'right')}
+					<div
+						class="bg-base-200 rounded-lg p-4 {assetDetailsPosition === 'right'
+							? 'w-64 overflow-y-auto'
+							: 'w-full'}"
+					>
+						<h3 class="text-sm font-semibold mb-3 text-base-content/70">Asset Details</h3>
+						<div class="space-y-2 text-sm">
+							<div>
+								<span class="font-medium">Filename:</span>
+								<p class="text-base-content/70 break-all">{assetDetails.filename}</p>
+							</div>
+							<div>
+								<span class="font-medium">Size:</span>
+								<p class="text-base-content/70">{assetDetails.size}</p>
+							</div>
+							<div>
+								<span class="font-medium">Type:</span>
+								<p class="text-base-content/70">{assetDetails.type}</p>
+							</div>
+							{#if assetDetails.uploadedAt}
+								<div>
+									<span class="font-medium">Uploaded:</span>
+									<p class="text-base-content/70">{assetDetails.uploadedAt}</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/media/MediaModal.svelte:61:2
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+	<!-- Modal backdrop - fills entire main content area (no sidebar overlap) -->
+	<div
+		class="fixed inset-y-0 left-64 right-0 z-[9999] flex items-center justify-center bg-black/90 p-6"
+		onclick={handleBackdropClick}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby="media-modal-title"
+	>
+		<!-- Modal container - scales based on windowScale prop -->
+		<div
+			class="relative flex {isHorizontal ? 'flex-row' : 'flex-col'} gap-4 bg-base-300 rounded-lg shadow-2xl"
+			style="width: {scale}%; max-height: {scale}vh;"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<!-- Header: Title and Close Button (always at top) -->
+			<div class="flex items-center justify-between gap-4 px-4 py-3 bg-base-200 rounded-t-lg">
+				<h2 id="media-modal-title" class="text-lg font-semibold truncate flex-1">
+					{title}
+				</h2>
+				<button
+					type="button"
+					class="btn btn-sm btn-circle btn-ghost hover:btn-error"
+					onclick={onClose}
+					aria-label="Close modal"
+				>
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content area with optional asset details -->
+			<div class="flex {isHorizontal ? 'flex-row' : 'flex-col'} gap-4 p-4 flex-1 overflow-hidden">
+				<!-- Asset Details - Top/Left -->
+				{#if assetDetails && (assetDetailsPosition === 'top' || assetDetailsPosition === 'left')}
+					<div
+						class="bg-base-200 rounded-lg p-4 {assetDetailsPosition === 'left'
+							? 'w-64 overflow-y-auto'
+							: 'w-full'}"
+					>
+						<h3 class="text-sm font-semibold mb-3 text-base-content/70">Asset Details</h3>
+						<div class="space-y-2 text-sm">
+							<div>
+								<span class="font-medium">Filename:</span>
+								<p class="text-base-content/70 break-all">{assetDetails.filename}</p>
+							</div>
+							<div>
+								<span class="font-medium">Size:</span>
+								<p class="text-base-content/70">{assetDetails.size}</p>
+							</div>
+							<div>
+								<span class="font-medium">Type:</span>
+								<p class="text-base-content/70">{assetDetails.type}</p>
+							</div>
+							{#if assetDetails.uploadedAt}
+								<div>
+									<span class="font-medium">Uploaded:</span>
+									<p class="text-base-content/70">{assetDetails.uploadedAt}</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Media Content -->
+				<div class="flex items-center justify-center flex-1 overflow-hidden rounded-lg bg-black">
+					{#if mediaType === 'image'}
+						<img
+							{src}
+							alt={title}
+							class="max-w-full max-h-full object-contain"
+							loading="eager"
+						/>
+					{:else if mediaType === 'video'}
+						<!-- Native HTML5 video - works in Chrome, Safari, Edge, Silk -->
+						<video
+							{src}
+							{title}
+							controls={showControls}
+							autoplay={autoPlay}
+							loop={mediaLoop}
+							playsinline
+							class="w-full h-full object-contain"
+							preload="metadata"
+						>
+							<track kind="captions" />
+							Your browser does not support the video element.
+						</video>
+					{:else if mediaType === 'audio'}
+						<div class="flex flex-col items-center justify-center gap-6 p-8 w-full">
+							<!-- Audio icon -->
+							<svg
+								class="w-24 h-24 text-primary"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+								/>
+							</svg>
+							<!-- Native HTML5 audio - works in all browsers -->
+							{#if showControls}
+								<audio
+									{src}
+									controls
+									autoplay={autoPlay}
+									loop={mediaLoop}
+									class="w-full max-w-md"
+									preload="metadata"
+								>
+									Your browser does not support the audio element.
+								</audio>
+							{:else}
+								<audio {src} autoplay={autoPlay} loop={mediaLoop} preload="metadata">
+									<track kind="captions" />
+								</audio>
+								<p class="text-sm text-base-content/60">Playing in headless mode...</p>
+							{/if}
+						</div>
+					{/if}
+				</div>
+
+				<!-- Asset Details - Bottom/Right -->
+				{#if assetDetails && (assetDetailsPosition === 'bottom' || assetDetailsPosition === 'right')}
+					<div
+						class="bg-base-200 rounded-lg p-4 {assetDetailsPosition === 'right'
+							? 'w-64 overflow-y-auto'
+							: 'w-full'}"
+					>
+						<h3 class="text-sm font-semibold mb-3 text-base-content/70">Asset Details</h3>
+						<div class="space-y-2 text-sm">
+							<div>
+								<span class="font-medium">Filename:</span>
+								<p class="text-base-content/70 break-all">{assetDetails.filename}</p>
+							</div>
+							<div>
+								<span class="font-medium">Size:</span>
+								<p class="text-base-content/70">{assetDetails.size}</p>
+							</div>
+							<div>
+								<span class="font-medium">Type:</span>
+								<p class="text-base-content/70">{assetDetails.type}</p>
+							</div>
+							{#if assetDetails.uploadedAt}
+								<div>
+									<span class="font-medium">Uploaded:</span>
+									<p class="text-base-content/70">{assetDetails.uploadedAt}</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/media/MediaModal.svelte:69:3
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+		<!-- Modal container - scales based on windowScale prop -->
+		<div
+			class="relative flex {isHorizontal ? 'flex-row' : 'flex-col'} gap-4 bg-base-300 rounded-lg shadow-2xl"
+			style="width: {scale}%; max-height: {scale}vh;"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<!-- Header: Title and Close Button (always at top) -->
+			<div class="flex items-center justify-between gap-4 px-4 py-3 bg-base-200 rounded-t-lg">
+				<h2 id="media-modal-title" class="text-lg font-semibold truncate flex-1">
+					{title}
+				</h2>
+				<button
+					type="button"
+					class="btn btn-sm btn-circle btn-ghost hover:btn-error"
+					onclick={onClose}
+					aria-label="Close modal"
+				>
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content area with optional asset details -->
+			<div class="flex {isHorizontal ? 'flex-row' : 'flex-col'} gap-4 p-4 flex-1 overflow-hidden">
+				<!-- Asset Details - Top/Left -->
+				{#if assetDetails && (assetDetailsPosition === 'top' || assetDetailsPosition === 'left')}
+					<div
+						class="bg-base-200 rounded-lg p-4 {assetDetailsPosition === 'left'
+							? 'w-64 overflow-y-auto'
+							: 'w-full'}"
+					>
+						<h3 class="text-sm font-semibold mb-3 text-base-content/70">Asset Details</h3>
+						<div class="space-y-2 text-sm">
+							<div>
+								<span class="font-medium">Filename:</span>
+								<p class="text-base-content/70 break-all">{assetDetails.filename}</p>
+							</div>
+							<div>
+								<span class="font-medium">Size:</span>
+								<p class="text-base-content/70">{assetDetails.size}</p>
+							</div>
+							<div>
+								<span class="font-medium">Type:</span>
+								<p class="text-base-content/70">{assetDetails.type}</p>
+							</div>
+							{#if assetDetails.uploadedAt}
+								<div>
+									<span class="font-medium">Uploaded:</span>
+									<p class="text-base-content/70">{assetDetails.uploadedAt}</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Media Content -->
+				<div class="flex items-center justify-center flex-1 overflow-hidden rounded-lg bg-black">
+					{#if mediaType === 'image'}
+						<img
+							{src}
+							alt={title}
+							class="max-w-full max-h-full object-contain"
+							loading="eager"
+						/>
+					{:else if mediaType === 'video'}
+						<!-- Native HTML5 video - works in Chrome, Safari, Edge, Silk -->
+						<video
+							{src}
+							{title}
+							controls={showControls}
+							autoplay={autoPlay}
+							loop={mediaLoop}
+							playsinline
+							class="w-full h-full object-contain"
+							preload="metadata"
+						>
+							<track kind="captions" />
+							Your browser does not support the video element.
+						</video>
+					{:else if mediaType === 'audio'}
+						<div class="flex flex-col items-center justify-center gap-6 p-8 w-full">
+							<!-- Audio icon -->
+							<svg
+								class="w-24 h-24 text-primary"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+								/>
+							</svg>
+							<!-- Native HTML5 audio - works in all browsers -->
+							{#if showControls}
+								<audio
+									{src}
+									controls
+									autoplay={autoPlay}
+									loop={mediaLoop}
+									class="w-full max-w-md"
+									preload="metadata"
+								>
+									Your browser does not support the audio element.
+								</audio>
+							{:else}
+								<audio {src} autoplay={autoPlay} loop={mediaLoop} preload="metadata">
+									<track kind="captions" />
+								</audio>
+								<p class="text-sm text-base-content/60">Playing in headless mode...</p>
+							{/if}
+						</div>
+					{/if}
+				</div>
+
+				<!-- Asset Details - Bottom/Right -->
+				{#if assetDetails && (assetDetailsPosition === 'bottom' || assetDetailsPosition === 'right')}
+					<div
+						class="bg-base-200 rounded-lg p-4 {assetDetailsPosition === 'right'
+							? 'w-64 overflow-y-auto'
+							: 'w-full'}"
+					>
+						<h3 class="text-sm font-semibold mb-3 text-base-content/70">Asset Details</h3>
+						<div class="space-y-2 text-sm">
+							<div>
+								<span class="font-medium">Filename:</span>
+								<p class="text-base-content/70 break-all">{assetDetails.filename}</p>
+							</div>
+							<div>
+								<span class="font-medium">Size:</span>
+								<p class="text-base-content/70">{assetDetails.size}</p>
+							</div>
+							<div>
+								<span class="font-medium">Type:</span>
+								<p class="text-base-content/70">{assetDetails.type}</p>
+							</div>
+							{#if assetDetails.uploadedAt}
+								<div>
+									<span class="font-medium">Uploaded:</span>
+									<p class="text-base-content/70">{assetDetails.uploadedAt}</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/media/MediaModal.svelte:69:3
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+		<!-- Modal container - scales based on windowScale prop -->
+		<div
+			class="relative flex {isHorizontal ? 'flex-row' : 'flex-col'} gap-4 bg-base-300 rounded-lg shadow-2xl"
+			style="width: {scale}%; max-height: {scale}vh;"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<!-- Header: Title and Close Button (always at top) -->
+			<div class="flex items-center justify-between gap-4 px-4 py-3 bg-base-200 rounded-t-lg">
+				<h2 id="media-modal-title" class="text-lg font-semibold truncate flex-1">
+					{title}
+				</h2>
+				<button
+					type="button"
+					class="btn btn-sm btn-circle btn-ghost hover:btn-error"
+					onclick={onClose}
+					aria-label="Close modal"
+				>
+					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content area with optional asset details -->
+			<div class="flex {isHorizontal ? 'flex-row' : 'flex-col'} gap-4 p-4 flex-1 overflow-hidden">
+				<!-- Asset Details - Top/Left -->
+				{#if assetDetails && (assetDetailsPosition === 'top' || assetDetailsPosition === 'left')}
+					<div
+						class="bg-base-200 rounded-lg p-4 {assetDetailsPosition === 'left'
+							? 'w-64 overflow-y-auto'
+							: 'w-full'}"
+					>
+						<h3 class="text-sm font-semibold mb-3 text-base-content/70">Asset Details</h3>
+						<div class="space-y-2 text-sm">
+							<div>
+								<span class="font-medium">Filename:</span>
+								<p class="text-base-content/70 break-all">{assetDetails.filename}</p>
+							</div>
+							<div>
+								<span class="font-medium">Size:</span>
+								<p class="text-base-content/70">{assetDetails.size}</p>
+							</div>
+							<div>
+								<span class="font-medium">Type:</span>
+								<p class="text-base-content/70">{assetDetails.type}</p>
+							</div>
+							{#if assetDetails.uploadedAt}
+								<div>
+									<span class="font-medium">Uploaded:</span>
+									<p class="text-base-content/70">{assetDetails.uploadedAt}</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+
+				<!-- Media Content -->
+				<div class="flex items-center justify-center flex-1 overflow-hidden rounded-lg bg-black">
+					{#if mediaType === 'image'}
+						<img
+							{src}
+							alt={title}
+							class="max-w-full max-h-full object-contain"
+							loading="eager"
+						/>
+					{:else if mediaType === 'video'}
+						<!-- Native HTML5 video - works in Chrome, Safari, Edge, Silk -->
+						<video
+							{src}
+							{title}
+							controls={showControls}
+							autoplay={autoPlay}
+							loop={mediaLoop}
+							playsinline
+							class="w-full h-full object-contain"
+							preload="metadata"
+						>
+							<track kind="captions" />
+							Your browser does not support the video element.
+						</video>
+					{:else if mediaType === 'audio'}
+						<div class="flex flex-col items-center justify-center gap-6 p-8 w-full">
+							<!-- Audio icon -->
+							<svg
+								class="w-24 h-24 text-primary"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+								/>
+							</svg>
+							<!-- Native HTML5 audio - works in all browsers -->
+							{#if showControls}
+								<audio
+									{src}
+									controls
+									autoplay={autoPlay}
+									loop={mediaLoop}
+									class="w-full max-w-md"
+									preload="metadata"
+								>
+									Your browser does not support the audio element.
+								</audio>
+							{:else}
+								<audio {src} autoplay={autoPlay} loop={mediaLoop} preload="metadata">
+									<track kind="captions" />
+								</audio>
+								<p class="text-sm text-base-content/60">Playing in headless mode...</p>
+							{/if}
+						</div>
+					{/if}
+				</div>
+
+				<!-- Asset Details - Bottom/Right -->
+				{#if assetDetails && (assetDetailsPosition === 'bottom' || assetDetailsPosition === 'right')}
+					<div
+						class="bg-base-200 rounded-lg p-4 {assetDetailsPosition === 'right'
+							? 'w-64 overflow-y-auto'
+							: 'w-full'}"
+					>
+						<h3 class="text-sm font-semibold mb-3 text-base-content/70">Asset Details</h3>
+						<div class="space-y-2 text-sm">
+							<div>
+								<span class="font-medium">Filename:</span>
+								<p class="text-base-content/70 break-all">{assetDetails.filename}</p>
+							</div>
+							<div>
+								<span class="font-medium">Size:</span>
+								<p class="text-base-content/70">{assetDetails.size}</p>
+							</div>
+							<div>
+								<span class="font-medium">Type:</span>
+								<p class="text-base-content/70">{assetDetails.type}</p>
+							</div>
+							{#if assetDetails.uploadedAt}
+								<div>
+									<span class="font-medium">Uploaded:</span>
+									<p class="text-base-content/70">{assetDetails.uploadedAt}</p>
+								</div>
+							{/if}
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:308:4
+Warn: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+			{/if}
+			<button type="button" class="btn btn-secondary btn-sm" onclick={loadAssets}>
+				<svg
+					class="h-4 w-4"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+					/>
+				</svg>
+			</button>
+		</div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:445:5
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+			{#each assets as asset (asset.id)}
+				<div
+					class={`card card-compact bg-base-200 shadow-sm transition-all hover:shadow-md cursor-pointer ${
+						selectedAssets.has(asset.id) ? 'ring-2 ring-primary' : ''
+					} ${selectedAssetId === asset.id ? 'ring-2 ring-accent' : ''}`}
+					onclick={() => {
+						if (selectionMode === 'single' && onSelect) {
+							onSelect(asset);
+						} else {
+							openMedia(asset);
+						}
+					}}
+				>
+					<!-- Thumbnail -->
+					<figure class="relative h-32 bg-base-300">
+						{#if !asset.mediaType}
+							<!-- Image thumbnail -->
+							<img
+								src={asset.url}
+								alt={asset.originalFilename}
+								class="h-full w-full object-cover"
+								loading="lazy"
+							/>
+						{:else}
+							<!-- Audio/Video icon -->
+							<div class="flex h-full w-full items-center justify-center">
+								<svg
+									class="h-12 w-12 text-base-content/30"
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d={getMediaIcon(asset)}
+									/>
+								</svg>
+							</div>
+						{/if}
+						<!-- Select Checkbox (only in multiple mode) -->
+						{#if selectionMode === 'multiple'}
+							<div class="absolute top-2 left-2" onclick={(e) => e.stopPropagation()}>
+								<input
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									checked={selectedAssets.has(asset.id)}
+									onchange={(e) => toggleSelectAsset(asset.id, e)}
+								/>
+							</div>
+						{/if}
+						<!-- Reusable Badge -->
+						{#if asset.isReusable}
+							<div class="badge badge-secondary badge-xs absolute top-2 right-2">Reusable</div>
+						{/if}
+					</figure>
+
+					<!-- Card Body -->
+					<div class="card-body p-2">
+						<!-- Filename -->
+						<h3
+							class="text-xs font-medium truncate leading-tight"
+							title={asset.originalFilename}
+						>
+							{asset.originalFilename}
+						</h3>
+
+						<!-- Extension & Size -->
+						<div class="flex items-center justify-between gap-1 mt-1">
+							<div class="flex items-center gap-1">
+								<span class="badge badge-xs badge-outline">{getFileExtension(asset.filename).toUpperCase()}</span>
+								<span class="text-[10px] text-base-content/60">{formatFileSize(asset.sizeBytes)}</span>
+							</div>
+							<!-- Info Button -->
+							<button
+								type="button"
+								class="btn btn-xs btn-circle btn-ghost"
+								onclick={(e) => openInfo(asset, e)}
+								title="View details"
+							>
+								<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+									<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+								</svg>
+							</button>
+						</div>
+					</div>
+				</div>
+			{/each}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:445:5
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+			{#each assets as asset (asset.id)}
+				<div
+					class={`card card-compact bg-base-200 shadow-sm transition-all hover:shadow-md cursor-pointer ${
+						selectedAssets.has(asset.id) ? 'ring-2 ring-primary' : ''
+					} ${selectedAssetId === asset.id ? 'ring-2 ring-accent' : ''}`}
+					onclick={() => {
+						if (selectionMode === 'single' && onSelect) {
+							onSelect(asset);
+						} else {
+							openMedia(asset);
+						}
+					}}
+				>
+					<!-- Thumbnail -->
+					<figure class="relative h-32 bg-base-300">
+						{#if !asset.mediaType}
+							<!-- Image thumbnail -->
+							<img
+								src={asset.url}
+								alt={asset.originalFilename}
+								class="h-full w-full object-cover"
+								loading="lazy"
+							/>
+						{:else}
+							<!-- Audio/Video icon -->
+							<div class="flex h-full w-full items-center justify-center">
+								<svg
+									class="h-12 w-12 text-base-content/30"
+									xmlns="http://www.w3.org/2000/svg"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										stroke-width="2"
+										d={getMediaIcon(asset)}
+									/>
+								</svg>
+							</div>
+						{/if}
+						<!-- Select Checkbox (only in multiple mode) -->
+						{#if selectionMode === 'multiple'}
+							<div class="absolute top-2 left-2" onclick={(e) => e.stopPropagation()}>
+								<input
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									checked={selectedAssets.has(asset.id)}
+									onchange={(e) => toggleSelectAsset(asset.id, e)}
+								/>
+							</div>
+						{/if}
+						<!-- Reusable Badge -->
+						{#if asset.isReusable}
+							<div class="badge badge-secondary badge-xs absolute top-2 right-2">Reusable</div>
+						{/if}
+					</figure>
+
+					<!-- Card Body -->
+					<div class="card-body p-2">
+						<!-- Filename -->
+						<h3
+							class="text-xs font-medium truncate leading-tight"
+							title={asset.originalFilename}
+						>
+							{asset.originalFilename}
+						</h3>
+
+						<!-- Extension & Size -->
+						<div class="flex items-center justify-between gap-1 mt-1">
+							<div class="flex items-center gap-1">
+								<span class="badge badge-xs badge-outline">{getFileExtension(asset.filename).toUpperCase()}</span>
+								<span class="text-[10px] text-base-content/60">{formatFileSize(asset.sizeBytes)}</span>
+							</div>
+							<!-- Info Button -->
+							<button
+								type="button"
+								class="btn btn-xs btn-circle btn-ghost"
+								onclick={(e) => openInfo(asset, e)}
+								title="View details"
+							>
+								<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+									<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+								</svg>
+							</button>
+						</div>
+					</div>
+				</div>
+			{/each}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:488:8
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+						{#if selectionMode === 'multiple'}
+							<div class="absolute top-2 left-2" onclick={(e) => e.stopPropagation()}>
+								<input
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									checked={selectedAssets.has(asset.id)}
+									onchange={(e) => toggleSelectAsset(asset.id, e)}
+								/>
+							</div>
+						{/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:488:8
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+						{#if selectionMode === 'multiple'}
+							<div class="absolute top-2 left-2" onclick={(e) => e.stopPropagation()}>
+								<input
+									type="checkbox"
+									class="checkbox checkbox-sm checkbox-primary"
+									checked={selectedAssets.has(asset.id)}
+									onchange={(e) => toggleSelectAsset(asset.id, e)}
+								/>
+							</div>
+						{/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:553:2
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+{#if infoPopupOpen && currentAssetInfo}
+	<div class="fixed inset-0 left-64 z-[9998] flex items-center justify-center bg-black/50" onclick={closeInfo}>
+		<div class="bg-base-100 rounded-lg shadow-xl max-w-md w-full m-4" onclick={(e) => e.stopPropagation()}>
+			<!-- Header -->
+			<div class="flex items-center justify-between p-4 border-b border-base-300">
+				<h3 class="text-lg font-bold">Asset Details</h3>
+				<button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={closeInfo}>
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content -->
+			<div class="p-4 space-y-3 text-sm">
+				<div>
+					<span class="font-semibold">Original Filename:</span>
+					<p class="text-base-content/70">{currentAssetInfo.originalFilename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Stored Filename:</span>
+					<p class="text-base-content/70 break-all">{currentAssetInfo.filename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Extension:</span>
+					<span class="badge badge-outline ml-2">{getFileExtension(currentAssetInfo.filename).toUpperCase()}</span>
+				</div>
+				<div>
+					<span class="font-semibold">File Size:</span>
+					<span class="ml-2">{formatFileSize(currentAssetInfo.sizeBytes)}</span>
+				</div>
+				<div>
+					<span class="font-semibold">Type:</span>
+					<span class="ml-2">{currentAssetInfo.assetType ? currentAssetInfo.assetType.replace(/_/g, ' ') : 'Unknown'}</span>
+				</div>
+				{#if currentAssetInfo.mediaType}
+					<div>
+						<span class="font-semibold">Media Type:</span>
+						<span class="ml-2">{currentAssetInfo.mediaType.charAt(0).toUpperCase() + currentAssetInfo.mediaType.slice(1)}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.gameId && games[currentAssetInfo.gameId]}
+					<div>
+						<span class="font-semibold">Game:</span>
+						<p class="text-base-content/70">{games[currentAssetInfo.gameId]}</p>
+					</div>
+				{/if}
+				{#if currentAssetInfo.puzzleId}
+					<div>
+						<span class="font-semibold">Puzzle ID:</span>
+						<span class="ml-2">{currentAssetInfo.puzzleId}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.hintOrder !== null && currentAssetInfo.hintOrder !== undefined}
+					<div>
+						<span class="font-semibold">Hint Order:</span>
+						<span class="ml-2">#{currentAssetInfo.hintOrder}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.isReusable}
+					<div>
+						<span class="badge badge-secondary">Reusable Asset</span>
+					</div>
+				{/if}
+				<div>
+					<span class="font-semibold">Uploaded:</span>
+					<p class="text-base-content/70">{new Date(currentAssetInfo.uploadedAt).toLocaleString()}</p>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:553:2
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+{#if infoPopupOpen && currentAssetInfo}
+	<div class="fixed inset-0 left-64 z-[9998] flex items-center justify-center bg-black/50" onclick={closeInfo}>
+		<div class="bg-base-100 rounded-lg shadow-xl max-w-md w-full m-4" onclick={(e) => e.stopPropagation()}>
+			<!-- Header -->
+			<div class="flex items-center justify-between p-4 border-b border-base-300">
+				<h3 class="text-lg font-bold">Asset Details</h3>
+				<button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={closeInfo}>
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content -->
+			<div class="p-4 space-y-3 text-sm">
+				<div>
+					<span class="font-semibold">Original Filename:</span>
+					<p class="text-base-content/70">{currentAssetInfo.originalFilename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Stored Filename:</span>
+					<p class="text-base-content/70 break-all">{currentAssetInfo.filename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Extension:</span>
+					<span class="badge badge-outline ml-2">{getFileExtension(currentAssetInfo.filename).toUpperCase()}</span>
+				</div>
+				<div>
+					<span class="font-semibold">File Size:</span>
+					<span class="ml-2">{formatFileSize(currentAssetInfo.sizeBytes)}</span>
+				</div>
+				<div>
+					<span class="font-semibold">Type:</span>
+					<span class="ml-2">{currentAssetInfo.assetType ? currentAssetInfo.assetType.replace(/_/g, ' ') : 'Unknown'}</span>
+				</div>
+				{#if currentAssetInfo.mediaType}
+					<div>
+						<span class="font-semibold">Media Type:</span>
+						<span class="ml-2">{currentAssetInfo.mediaType.charAt(0).toUpperCase() + currentAssetInfo.mediaType.slice(1)}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.gameId && games[currentAssetInfo.gameId]}
+					<div>
+						<span class="font-semibold">Game:</span>
+						<p class="text-base-content/70">{games[currentAssetInfo.gameId]}</p>
+					</div>
+				{/if}
+				{#if currentAssetInfo.puzzleId}
+					<div>
+						<span class="font-semibold">Puzzle ID:</span>
+						<span class="ml-2">{currentAssetInfo.puzzleId}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.hintOrder !== null && currentAssetInfo.hintOrder !== undefined}
+					<div>
+						<span class="font-semibold">Hint Order:</span>
+						<span class="ml-2">#{currentAssetInfo.hintOrder}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.isReusable}
+					<div>
+						<span class="badge badge-secondary">Reusable Asset</span>
+					</div>
+				{/if}
+				<div>
+					<span class="font-semibold">Uploaded:</span>
+					<p class="text-base-content/70">{new Date(currentAssetInfo.uploadedAt).toLocaleString()}</p>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:554:3
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+	<div class="fixed inset-0 left-64 z-[9998] flex items-center justify-center bg-black/50" onclick={closeInfo}>
+		<div class="bg-base-100 rounded-lg shadow-xl max-w-md w-full m-4" onclick={(e) => e.stopPropagation()}>
+			<!-- Header -->
+			<div class="flex items-center justify-between p-4 border-b border-base-300">
+				<h3 class="text-lg font-bold">Asset Details</h3>
+				<button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={closeInfo}>
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content -->
+			<div class="p-4 space-y-3 text-sm">
+				<div>
+					<span class="font-semibold">Original Filename:</span>
+					<p class="text-base-content/70">{currentAssetInfo.originalFilename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Stored Filename:</span>
+					<p class="text-base-content/70 break-all">{currentAssetInfo.filename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Extension:</span>
+					<span class="badge badge-outline ml-2">{getFileExtension(currentAssetInfo.filename).toUpperCase()}</span>
+				</div>
+				<div>
+					<span class="font-semibold">File Size:</span>
+					<span class="ml-2">{formatFileSize(currentAssetInfo.sizeBytes)}</span>
+				</div>
+				<div>
+					<span class="font-semibold">Type:</span>
+					<span class="ml-2">{currentAssetInfo.assetType ? currentAssetInfo.assetType.replace(/_/g, ' ') : 'Unknown'}</span>
+				</div>
+				{#if currentAssetInfo.mediaType}
+					<div>
+						<span class="font-semibold">Media Type:</span>
+						<span class="ml-2">{currentAssetInfo.mediaType.charAt(0).toUpperCase() + currentAssetInfo.mediaType.slice(1)}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.gameId && games[currentAssetInfo.gameId]}
+					<div>
+						<span class="font-semibold">Game:</span>
+						<p class="text-base-content/70">{games[currentAssetInfo.gameId]}</p>
+					</div>
+				{/if}
+				{#if currentAssetInfo.puzzleId}
+					<div>
+						<span class="font-semibold">Puzzle ID:</span>
+						<span class="ml-2">{currentAssetInfo.puzzleId}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.hintOrder !== null && currentAssetInfo.hintOrder !== undefined}
+					<div>
+						<span class="font-semibold">Hint Order:</span>
+						<span class="ml-2">#{currentAssetInfo.hintOrder}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.isReusable}
+					<div>
+						<span class="badge badge-secondary">Reusable Asset</span>
+					</div>
+				{/if}
+				<div>
+					<span class="font-semibold">Uploaded:</span>
+					<p class="text-base-content/70">{new Date(currentAssetInfo.uploadedAt).toLocaleString()}</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:554:3
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+	<div class="fixed inset-0 left-64 z-[9998] flex items-center justify-center bg-black/50" onclick={closeInfo}>
+		<div class="bg-base-100 rounded-lg shadow-xl max-w-md w-full m-4" onclick={(e) => e.stopPropagation()}>
+			<!-- Header -->
+			<div class="flex items-center justify-between p-4 border-b border-base-300">
+				<h3 class="text-lg font-bold">Asset Details</h3>
+				<button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={closeInfo}>
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content -->
+			<div class="p-4 space-y-3 text-sm">
+				<div>
+					<span class="font-semibold">Original Filename:</span>
+					<p class="text-base-content/70">{currentAssetInfo.originalFilename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Stored Filename:</span>
+					<p class="text-base-content/70 break-all">{currentAssetInfo.filename}</p>
+				</div>
+				<div>
+					<span class="font-semibold">Extension:</span>
+					<span class="badge badge-outline ml-2">{getFileExtension(currentAssetInfo.filename).toUpperCase()}</span>
+				</div>
+				<div>
+					<span class="font-semibold">File Size:</span>
+					<span class="ml-2">{formatFileSize(currentAssetInfo.sizeBytes)}</span>
+				</div>
+				<div>
+					<span class="font-semibold">Type:</span>
+					<span class="ml-2">{currentAssetInfo.assetType ? currentAssetInfo.assetType.replace(/_/g, ' ') : 'Unknown'}</span>
+				</div>
+				{#if currentAssetInfo.mediaType}
+					<div>
+						<span class="font-semibold">Media Type:</span>
+						<span class="ml-2">{currentAssetInfo.mediaType.charAt(0).toUpperCase() + currentAssetInfo.mediaType.slice(1)}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.gameId && games[currentAssetInfo.gameId]}
+					<div>
+						<span class="font-semibold">Game:</span>
+						<p class="text-base-content/70">{games[currentAssetInfo.gameId]}</p>
+					</div>
+				{/if}
+				{#if currentAssetInfo.puzzleId}
+					<div>
+						<span class="font-semibold">Puzzle ID:</span>
+						<span class="ml-2">{currentAssetInfo.puzzleId}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.hintOrder !== null && currentAssetInfo.hintOrder !== undefined}
+					<div>
+						<span class="font-semibold">Hint Order:</span>
+						<span class="ml-2">#{currentAssetInfo.hintOrder}</span>
+					</div>
+				{/if}
+				{#if currentAssetInfo.isReusable}
+					<div>
+						<span class="badge badge-secondary">Reusable Asset</span>
+					</div>
+				{/if}
+				<div>
+					<span class="font-semibold">Uploaded:</span>
+					<p class="text-base-content/70">{new Date(currentAssetInfo.uploadedAt).toLocaleString()}</p>
+				</div>
+			</div>
+		</div>
+	</div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/assets/AssetBrowser.svelte:558:5
+Warn: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+				<h3 class="text-lg font-bold">Asset Details</h3>
+				<button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={closeInfo}>
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameDetailsModal.svelte:157:13
+Warn: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+            {/if}
+            <button
+              type="button"
+              class="btn btn-sm btn-ghost btn-circle"
+              onclick={handleClose}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+              </svg>
+            </button>
+          </div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameDetailsModal.svelte:353:23
+Warn: Screenreaders already announce `<img>` elements as an image
+https://svelte.dev/e/a11y_img_redundant_alt (svelte)
+                    <div class="aspect-square rounded-lg overflow-hidden border border-white/10">
+                      <img src="/api/assets/{assetId}" alt="Gallery image" class="w-full h-full object-cover" />
+                    </div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/games/GameMediaSection.svelte:179:13
+Warn: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+            </div>
+            <button
+              type="button"
+              class="btn btn-circle btn-xs btn-error absolute -right-2 -top-2"
+              onclick={() => {
+                const updatedIds = galleryImageIds.filter(id => id !== assetId);
+                onGalleryImagesChange(updatedIds);
+              }}
+            >
+              <svg class="h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/lib/components/ui/HelpTooltip.svelte:26:2
+Warn: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+<div class="tooltip {positionClass} {colorClass} {className}" data-tip={text}>
+	<button type="button" class="btn btn-circle btn-ghost btn-xs text-info" tabindex="-1">
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			fill="none"
+			viewBox="0 0 24 24"
+			stroke-width="1.5"
+			stroke="currentColor"
+			class="h-4 w-4"
+		>
+			<path
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 5.25h.008v.008H12v-.008Z"
+			/>
+		</svg>
+	</button>
+</div>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/account/profile/+page.svelte:21:49
+Warn: This reference only captures the initial value of `profile`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+  // Avatar editing state - initialize from profile but don't auto-reset
+  let avatarConfig = $state<BotttsAvatarConfig>(profile.avatarConfig ?? { seed: profile.username });
+  let hasCustomized = $state(false);
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/account/profile/+page.svelte:21:81
+Warn: This reference only captures the initial value of `profile`. Did you mean to reference it inside a derived instead?
+https://svelte.dev/e/state_referenced_locally (svelte)
+  // Avatar editing state - initialize from profile but don't auto-reset
+  let avatarConfig = $state<BotttsAvatarConfig>(profile.avatarConfig ?? { seed: profile.username });
+  let hasCustomized = $state(false);
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/AlertsTab.svelte:126:9
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+							<div>
+								<label class="label">
+									<span class="label-text text-xs">Alert Level</span>
+								</label>
+								<select class="select select-bordered select-sm w-full" bind:value={editForm.level}>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/AlertsTab.svelte:137:9
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+							<div>
+								<label class="label">
+									<span class="label-text text-xs">Title Template</span>
+								</label>
+								<input
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/AlertsTab.svelte:148:9
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+							<div>
+								<label class="label">
+									<span class="label-text text-xs">Message Template</span>
+								</label>
+								<textarea
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/LogsTab.svelte:114:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="label">
+						<span class="label-text text-xs">Level</span>
+					</label>
+					<select class="select select-bordered select-sm w-full" bind:value={levelFilter}>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/LogsTab.svelte:127:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div>
+					<label class="label">
+						<span class="label-text text-xs">Category</span>
+					</label>
+					<select class="select select-bordered select-sm w-full" bind:value={categoryFilter}>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/LogsTab.svelte:141:6
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+				<div class="md:col-span-2">
+					<label class="label">
+						<span class="label-text text-xs">Search Message</span>
+					</label>
+					<div class="join w-full">
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/SettingsTab.svelte:213:15
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+            {#if errors[setting.key]}
+              <label class="label">
+                <span class="label-text-alt text-error">{errors[setting.key]}</span>
+              </label>
+            {/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/SettingsTab.svelte:219:15
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+            {#if successMessages[setting.key]}
+              <label class="label">
+                <span class="label-text-alt text-success">{successMessages[setting.key]}</span>
+              </label>
+            {/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/SettingsTab.svelte:279:17
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+              {#if errors[setting.key]}
+                <label class="label">
+                  <span class="label-text-alt text-error">{errors[setting.key]}</span>
+                </label>
+              {/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/SettingsTab.svelte:285:17
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+              {#if successMessages[setting.key]}
+                <label class="label">
+                  <span class="label-text-alt text-success">{successMessages[setting.key]}</span>
+                </label>
+              {/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/SettingsTab.svelte:346:17
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+              {#if errors[setting.key]}
+                <label class="label">
+                  <span class="label-text-alt text-error">{errors[setting.key]}</span>
+                </label>
+              {/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/SettingsTab.svelte:352:17
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+              {#if successMessages[setting.key]}
+                <label class="label">
+                  <span class="label-text-alt text-success">{successMessages[setting.key]}</span>
+                </label>
+              {/if}
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/admin/system/SettingsTab.svelte:56:9
+Error: Argument of type 'string' is not assignable to parameter of type '{ (input: URL | RequestInfo, init?: RequestInit | undefined): Promise<Response>; (input: string | URL | Request, init?: RequestInit | undefined): Promise<...>; }'. (ts)
+      const response = await apiFetch<{ success: boolean; key: string; value: any }>(
+        `/admin/settings/${setting.key}`,
+        {
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/dashboard/+page.svelte:267:9
+Warn: Buttons and links should either contain text or have an `aria-label`, `aria-labelledby` or `title` attribute
+https://svelte.dev/e/a11y_consider_explicit_label (svelte)
+        </div>
+        <button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={() => (alertsModalOpen = false)}>
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </header>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/dashboard/+page.svelte:305:5
+Warn: Visible, non-interactive elements with a click event must be accompanied by a keyboard event handler. Consider whether an interactive element such as `<button type="button">` or `<a>` might be more appropriate
+https://svelte.dev/e/a11y_click_events_have_key_events (svelte)
+    </div>
+    <div class="modal-backdrop" onclick={() => (alertsModalOpen = false)}></div>
+  </dialog>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/(app)/dashboard/+page.svelte:305:5
+Warn: `<div>` with a click handler must have an ARIA role
+https://svelte.dev/e/a11y_no_static_element_interactions (svelte)
+    </div>
+    <div class="modal-backdrop" onclick={() => (alertsModalOpen = false)}></div>
+  </dialog>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/alerts/+page.svelte:128:17
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+              <div>
+                <label class="label">
+                  <span class="label-text text-xs">Alert Level</span>
+                </label>
+                <select class="select select-bordered select-sm w-full" bind:value={editForm.level}>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/alerts/+page.svelte:139:17
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+              <div>
+                <label class="label">
+                  <span class="label-text text-xs">Title Template</span>
+                </label>
+                <input
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/alerts/+page.svelte:150:17
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+              <div>
+                <label class="label">
+                  <span class="label-text text-xs">Message Template</span>
+                </label>
+                <textarea
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/logs/+page.svelte:112:11
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+        <div>
+          <label class="label">
+            <span class="label-text text-xs">Level</span>
+          </label>
+          <select class="select select-bordered select-sm w-full" bind:value={levelFilter}>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/logs/+page.svelte:125:11
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+        <div>
+          <label class="label">
+            <span class="label-text text-xs">Category</span>
+          </label>
+          <select class="select select-bordered select-sm w-full" bind:value={categoryFilter}>
+
+/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-web/src/routes/_archived/logs/+page.svelte:139:11
+Warn: A form label must be associated with a control
+https://svelte.dev/e/a11y_label_has_associated_control (svelte)
+        <div class="md:col-span-2">
+          <label class="label">
+            <span class="label-text text-xs">Search Message</span>
+          </label>
+          <div class="join w-full">
+
+====================================
+svelte-check found 1 error and 42 warnings in 13 files
+ ELIFECYCLE  Command failed with exit code 1.

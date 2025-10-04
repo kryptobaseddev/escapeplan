@@ -3,8 +3,10 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageData } from './$types';
+  import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
+  let isSubmitting = $state(false);
 </script>
 
 <section class="mx-auto w-full max-w-3xl space-y-8">
@@ -17,7 +19,18 @@
 
   <article class="glass-panel border-white/10 bg-base-200/70 p-6">
     <h2 class="text-lg font-semibold text-base-content">Change password</h2>
-    <form method="POST" action="?/change" use:enhance class="mt-4 space-y-4">
+    <form
+      method="POST"
+      action="?/change"
+      use:enhance={() => {
+        isSubmitting = true;
+        return async ({ result, update }) => {
+          await update();
+          isSubmitting = false;
+        };
+      }}
+      class="mt-4 space-y-4"
+    >
       <label class="form-control">
         <span class="label-text">Current password</span>
         <input class="input input-bordered" type="password" name="currentPassword" autocomplete="current-password" required />
@@ -27,7 +40,9 @@
         <input class="input input-bordered" type="password" name="newPassword" autocomplete="new-password" minlength="12" required />
         <span class="label-text-alt">Use at least 12 characters. Avoid shared credentials.</span>
       </label>
-      <button class="btn btn-primary" type="submit">Update password</button>
+      <LoadingButton type="submit" variant="primary" loading={isSubmitting}>
+        Update password
+      </LoadingButton>
     </form>
   </article>
 </section>

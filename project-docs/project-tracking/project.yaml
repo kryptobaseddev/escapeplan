@@ -1,189 +1,555 @@
-# Project configuration for project-tracker
-# Fill in the fields below, then run:
-#   ./project-tracker init-config --config project-docs/project-tracking/project.yaml
-# to apply the values across the tracker files.
+# EscapePlan Project Configuration
+# This file defines the system architecture, components, and agent workflows
+# Always pass this file as context to agents for architectural decisions
 
 $schema: ./schemas/project-schema.json
-project_name: EscapePlan
-project_version: 0.1.0
-summary: "Offline-first escape room management suite for a Raspberry Pi-hosted network."
-goal: "Ship a Pi-hosted MVP that lets operators manage bookings and run games with reliable video, timers, and hints entirely offline."
-overview_path: project-docs/project-overview.md
-current_phase: PHASE_3
 
 # ==============================================================================
-# TECHNOLOGY STACK
+# PROJECT METADATA
 # ==============================================================================
-stack:
-  # Frontend
-  - SvelteKit 2 + Svelte 5 runes
-  - Tailwind CSS 4 + DaisyUI 5.1.25+ theme components
-  - "@vite-pwa/sveltekit PWA integration with Workbox"
-  - Socket.IO 5 client for real-time updates
-
-  # Backend API
-  - Node.js 24 LTS + TypeScript v5.9+
-  - Fastify v5.6.1+ with CORS + multipart file uploads
-  - Socket.IO 5 server for real-time control
-  - Better-Auth v1.3.24+ with Argon2id password hashing
-  - Winston v3.18.2 logging with daily rotation and alert rules
-
-  # Database & Schema
-  - SQLite WAL mode with Drizzle ORM v0.44.5+
-  - Drizzle-kit v0.31.5+ for migrations
-  - 31+ tables with TEXT UUID primary keys
-  - Database-backed RBAC (roles, permissions, role_permissions tables)
-  - Database-backed system settings (runtime-configurable via Admin UI)
-
-  # Configuration & Runtime (Zero-Config)
-  - Automatic dev/prod detection via filesystem + systemd inspection
-  - No .env files or NODE_ENV environment variable required
-  - Dynamic path resolution (@escapeplan/contracts/runtime module)
-  - Database-backed settings for file sizes, backup retention, update config
-
-  # Media Processing
-  - ffmpeg 7 for RTSP→HLS camera stream transcoding
-  - Sharp for image optimization and thumbnail generation
-  - fluent-ffmpeg for video metadata extraction
-
-  # Platform (Production)
-  - Raspberry Pi OS Bookworm 64-bit
-  - Custom pi-gen image (EscapePlan Base)
-  - Nginx v1.29.1+ reverse proxy with mDNS (escapeplan.local)
-  - hostapd + dnsmasq for WiFi AP (10.10.10.0/24 subnet)
-  - Systemd services for API server + camera stream workers
-
-  # Build & Deployment
-  - pnpm 10.12.4 workspace monorepo (packages + apps)
-  - .deb package for Raspberry Pi deployment
-  - Automatic Drizzle migrations on production startup
+project:
+  name: EscapePlan
+  version: "0.1.0"
+  description: "Offline-first escape room management suite for a Raspberry Pi-hosted network"
+  goal: "Ship a Pi-hosted MVP that lets operators manage bookings and run games with reliable video, timers, and hints entirely offline"
+  architecture_style: hybrid  # Monorepo with monolithic backend + PWA frontend
+  overview_path: project-docs/project-overview.md
+  current_phase: PHASE_3
 
 # ==============================================================================
-# SHARED PACKAGES (Monorepo)
-# ==============================================================================
-packages:
-  contracts:
-    location: "packages/contracts"
-    description: "Shared TypeScript types, Drizzle schema, runtime detection, and validation"
-    exports:
-      - "Drizzle schema (31+ tables) - single source of truth"
-      - "Zod validation schemas for API request/response"
-      - "Runtime environment detection (dev vs prod, no NODE_ENV)"
-      - "Path resolution functions (database, assets, backups)"
-      - "System settings types (database-backed configuration)"
-      - "Universal constants (ports, domains, file size defaults)"
-    consumers:
-      - "apps/escapeplan-api - Full usage (schema, runtime, paths, settings)"
-      - "apps/escapeplan-web - Types and constants only (browser-safe imports)"
-    build_order: "contracts → api → web (enforced via workspace dependencies)"
-
-# ==============================================================================
-# RUNTIME CONFIGURATION SYSTEM
-# ==============================================================================
-configuration:
-  type: "Zero-configuration runtime detection"
-  environment_detection:
-    method: "Automatic via filesystem paths and systemd presence"
-    production_criteria:
-      - "Running from /opt/escapeplan/ or /usr/lib/escapeplan/"
-      - "OR: systemd service (INVOCATION_ID env var) + built code (dist/ exists, src/ doesn't)"
-    development_criteria:
-      - "Running from source directory with src/ folder present"
-  settings_storage:
-    type: "Database-backed (system_settings table)"
-    editable: "Yes, via Admin UI without server restarts"
-    cached: "In-memory cache, loaded on startup"
-  path_resolution:
-    module: "@escapeplan/contracts/runtime"
-    development:
-      - "Database: {cwd}/data/escapeplan.db"
-      - "Assets: {cwd}/data/assets/"
-      - "Backups: {cwd}/data/backups/"
-    production:
-      - "Database: /var/lib/escapeplan/escapeplan.db"
-      - "Assets: /var/lib/escapeplan/assets/"
-      - "Backups: /var/backups/escapeplan/"
-  requirements:
-    - "No .env files required"
-    - "No NODE_ENV environment variable required"
-    - "All paths dynamically resolved at runtime"
-    - "Settings seeded automatically on first startup"
-
-# ==============================================================================
-# COMMANDS
+# COMMANDS - Key commands agents should run
 # ==============================================================================
 commands:
+  # Project Tracking
   validate: "./project-tracker validate"
   quick_check: "./project-tracker quick-check"
-  base_image_build: "cd ../escapeplan-base && pnpm run build:image"
-  base_image_test:
-    - "cd ../escapeplan-base && pnpm run lint"
-    - "cd ../escapeplan-base && pnpm run test"
-  webapp_dev: "pnpm --filter escapeplan-web dev --host"
-  webapp_build: "pnpm --filter escapeplan-web build"
-  api_dev: "pnpm --filter escapeplan-api dev"
-  api_build: "pnpm --filter escapeplan-api build"
-  contracts_build: "pnpm --filter @escapeplan/contracts build"
+
+  # Workspace Build
   build_all: "pnpm -r run build"
-  webapp_test:
-    - "pnpm --filter escapeplan-api test"
-    - "pnpm --filter escapeplan-web test"
-  package_deb: "cd ../escapeplan-base && ./scripts/package-deb.sh"
+  build_contracts: "pnpm --filter @escapeplan/contracts build"
+  build_api: "pnpm --filter escapeplan-api build"
+  build_web: "pnpm --filter escapeplan-web build"
+
+  # Development
+  dev_all: "pnpm dev"  # Starts both API (4000) and Web (5173)
+  dev_api: "pnpm --filter escapeplan-api dev"
+  dev_web: "pnpm --filter escapeplan-web dev"
+
+  # Database
   db_seed: "pnpm --filter escapeplan-api db:seed"
+  db_seed_fresh: "pnpm --filter escapeplan-api db:seed:fresh"
   db_seed_settings: "pnpm --filter escapeplan-api db:seed:settings"
-  db_migrate: "cd apps/escapeplan-api && npx drizzle-kit migrate"
 
-# ==============================================================================
-# ENVIRONMENTS
-# ==============================================================================
-environments: "Local dev via pnpm workspace; production on Raspberry Pi 5 + USB AC600M WiFi AP; Docker/Podman for testing."
+  # Testing
+  test_all: "pnpm -r run test"
+  test_api: "pnpm --filter escapeplan-api test"
+  test_web: "pnpm --filter escapeplan-web test"
 
-# ==============================================================================
-# ARCHITECTURE NOTES
-# ==============================================================================
-notes:
-  # Repository Structure
-  - "Two-repo setup: escapeplan-base (OS image + services) and escapeplan-app (monorepo: API + Web + Contracts)."
-  - "Monorepo workspace: packages/contracts (shared schema/types), apps/escapeplan-api, apps/escapeplan-web."
-  - "Build order enforced: contracts → api → web via pnpm workspace dependencies."
-
-  # Zero-Configuration System
-  - "Zero-configuration deployment: Environment auto-detected via filesystem/systemd, no .env files required."
-  - "All paths dynamically resolved: dev uses {cwd}/data, production uses /var/lib/escapeplan."
-  - "System settings stored in database (file size limits, backup retention, update config) - editable via Admin UI without restarts."
-  - "Production detected by: /opt/escapeplan path OR systemd + built code; everything else is development mode."
-
-  # Database & Schema Management
-  - "Single source of truth: Drizzle schema in packages/contracts/src/schema.ts."
-  - "31+ tables with TEXT UUID primary keys, foreign key cascades, and soft-delete patterns."
-  - "Drizzle migrations auto-applied on production startup; manual apply in development."
-  - "No mock or hardcoded data; use database seeds/migrations for canonical records and load everything dynamically."
-  - "Database-backed RBAC: roles, permissions, role_permissions tables with session enrichment."
-
-  # Authentication & Authorization
-  - "Better-Auth v1.3.24+ fully integrated with custom Argon2id password hasher."
-  - "RBAC permissions drive both API guards and Svelte admin consoles via Better-Auth session enrichment."
-  - "27 permissions across 10 categories; 4 system roles (admin, manager, game_master, customer)."
-  - "Session cookies only (HttpOnly) - no localStorage for auth tokens."
-
-  # Real-Time & Networking
-  - "Socket.IO for real-time updates: session state, dashboard, timer broadcasts, bookings."
-  - "Offline command queueing: commands stored in Svelte stores when disconnected, replayed on reconnect."
-  - "Each game publishes a slugged session page delivering synchronized countdowns and hints via WebSocket."
-  - "mDNS address: escapeplan.local (production), localhost:4000 (API dev), localhost:5173 (Web dev)."
-
-  # Design & UX
-  - "Primary UI palette: charcoals/blacks with #C43131 (red) and #00D5C8 (teal) accents for high-contrast dark mode."
-  - "Mobile-first responsive layout with PWA install support and desktop control room scaling."
-  - "Offline-first posture with optional OTA update channel when WAN is available."
-
-  # Media & Assets
-  - "Dynamic asset path resolution via @escapeplan/contracts/paths module."
-  - "File size limits configurable via database settings (default: 10MB images, 25MB audio, 50MB video)."
-  - "RTSP camera streams transcoded to HLS via ffmpeg systemd workers."
-  - "Sharp for image processing, fluent-ffmpeg for video metadata extraction."
+  # Type Checking
+  lint_all: "pnpm -r run lint"
+  check_web: "pnpm --filter escapeplan-web check"
 
   # Deployment
-  - ".deb package for Raspberry Pi with systemd services, nginx config, and automatic migrations."
-  - "Zero-config installation: paths auto-detected, settings seeded on first run."
-  - "Backup system with configurable retention (default: 7 days) stored in database settings."
+  build_deb: "pnpm run build:deb"
+
+# ==============================================================================
+# COMPONENTS - System architecture breakdown
+# ==============================================================================
+components:
+  contracts_package:
+    description: "Shared TypeScript types, Drizzle schema, runtime detection, and validation"
+    responsibilities:
+      - "Define Drizzle schema (31+ tables) as single source of truth"
+      - "Export Zod validation schemas for API request/response"
+      - "Provide runtime environment detection (dev vs prod, no NODE_ENV)"
+      - "Export path resolution functions (database, assets, backups, logs)"
+      - "Define system settings types (database-backed configuration)"
+      - "Export RBAC type definitions (roles, permissions)"
+    technology: "TypeScript 5.5+ with Drizzle ORM 0.44.5+"
+    location: "packages/contracts"
+    dependencies: []
+    exports:
+      - "Drizzle schema and types"
+      - "Zod validation schemas"
+      - "Runtime detection functions"
+      - "Path resolution utilities"
+      - "RBAC type definitions"
+    consumers:
+      - "escapeplan_api"
+      - "escapeplan_web"
+
+  escapeplan_api:
+    description: "Fastify backend API with Better Auth, Socket.IO, and media processing"
+    responsibilities:
+      - "Expose REST API for CRUD operations (games, bookings, sessions, users)"
+      - "Handle authentication via Better Auth with Argon2id password hashing"
+      - "Manage database-driven RBAC (roles, permissions, role_permissions)"
+      - "Broadcast real-time events via Socket.IO (session updates, timer ticks)"
+      - "Process camera streams (RTSP→HLS via ffmpeg)"
+      - "Optimize images via Sharp (WebP conversion, thumbnails)"
+      - "Rotate logs via Winston with daily rotation"
+      - "Store and enforce alert rules"
+    technology: "Fastify 5.6.1+ with Socket.IO 4.8.1+, Better Auth 1.3.24+"
+    location: "apps/escapeplan-api"
+    dependencies:
+      - "contracts_package"
+    exports:
+      - "REST API endpoints (/api/*)"
+      - "Socket.IO server (session, dashboard, timer events)"
+      - "HLS camera streams"
+    consumers:
+      - "escapeplan_web"
+      - "Mobile devices (operator tablets)"
+
+  escapeplan_web:
+    description: "SvelteKit PWA operator console with real-time updates"
+    responsibilities:
+      - "Render operator dashboard with active sessions grid"
+      - "Provide game runner interface (timer, hints, puzzle tracking)"
+      - "Display bookings calendar with conflict detection"
+      - "Show system health dashboard (logs, alerts, network, storage)"
+      - "Manage users, roles, permissions, cameras, games via admin UI"
+      - "Connect to Socket.IO for real-time session/timer updates"
+      - "Queue commands offline and replay on reconnect"
+      - "Cache UI shell and assets via service worker (PWA)"
+    technology: "SvelteKit 2.43.0+ with Svelte 5.39.0, Tailwind CSS 4.1.13+, DaisyUI 5.1.25+"
+    location: "apps/escapeplan-web"
+    dependencies:
+      - "contracts_package"
+      - "escapeplan_api"
+    exports:
+      - "Operator PWA (installable on tablets)"
+      - "Room timer pages (/{game.slug})"
+    consumers:
+      - "Operators (tablets, desktops)"
+      - "Room displays (timer kiosks)"
+
+  database:
+    description: "SQLite embedded database with Drizzle ORM"
+    responsibilities:
+      - "Persist all application data (31+ tables)"
+      - "Enforce user_type/role boundaries via database triggers"
+      - "Store encrypted camera credentials (libsodium)"
+      - "Track system logs, alerts, and alert rules"
+      - "Maintain Better Auth sessions (user, session, account, verification tables)"
+    technology: "SQLite WAL mode with better-sqlite3 9.6.0+"
+    location: "apps/escapeplan-api/data/escapeplan.db (dev) or /var/lib/escapeplan/escapeplan.db (prod)"
+    dependencies: []
+    exports:
+      - "Database file (SQLite)"
+      - "Schema migrations (Drizzle Kit)"
+    consumers:
+      - "escapeplan_api"
+
+  ffmpeg_workers:
+    description: "Background ffmpeg processes for camera stream transcoding"
+    responsibilities:
+      - "Transcode RTSP camera streams to HLS format"
+      - "Generate .m3u8 playlists and .ts segments"
+      - "Monitor stream health and restart on failure"
+      - "Support MJPEG and ONVIF protocols"
+    technology: "ffmpeg 7.x via fluent-ffmpeg 2.1.3+"
+    location: "Managed by escapeplan-api, systemd service in production"
+    dependencies:
+      - "escapeplan_api"
+    exports:
+      - "HLS streams (.m3u8 playlists)"
+    consumers:
+      - "escapeplan_web (camera mosaic)"
+      - "Game runner (live feed)"
+
+# ==============================================================================
+# DATA FLOW - Key operation flows
+# ==============================================================================
+data_flow:
+  user_authentication:
+    - step: 1
+      component: escapeplan_web
+      action: "User submits email + password via login form"
+    - step: 2
+      component: escapeplan_api
+      action: "Better Auth validates credentials against user table"
+    - step: 3
+      component: escapeplan_api
+      action: "Generate session token, enrich with user_type + role_id + permissions"
+    - step: 4
+      component: escapeplan_api
+      action: "Set HttpOnly cookie (better-auth.session_token)"
+    - step: 5
+      component: escapeplan_web
+      action: "Store session in Svelte context, redirect to /admin/dashboard"
+
+  start_game_session:
+    - step: 1
+      component: escapeplan_web
+      action: "Operator clicks 'Start Session' on booking tile"
+    - step: 2
+      component: escapeplan_api
+      action: "Validate booking exists, no active session for same room"
+    - step: 3
+      component: database
+      action: "Insert new session record with status: 'in_progress'"
+    - step: 4
+      component: escapeplan_api
+      action: "Emit 'session:update' Socket.IO event with session data"
+    - step: 5
+      component: escapeplan_web
+      action: "Dashboard receives event, updates active sessions grid"
+    - step: 6
+      component: escapeplan_web
+      action: "Timer page (/{game.slug}) receives event, starts countdown"
+
+  send_hint:
+    - step: 1
+      component: escapeplan_web
+      action: "Game master clicks hint button in game runner"
+    - step: 2
+      component: escapeplan_api
+      action: "Record hint dispatch in session_hints table"
+    - step: 3
+      component: escapeplan_api
+      action: "Emit 'session:command' Socket.IO event to room channel"
+    - step: 4
+      component: escapeplan_web
+      action: "Timer page displays hint overlay (text/image/video)"
+    - step: 5
+      component: escapeplan_web
+      action: "Game runner updates hint history sidebar"
+
+  camera_stream_setup:
+    - step: 1
+      component: escapeplan_web
+      action: "Admin configures camera (RTSP URL, credentials) in /admin/cameras"
+    - step: 2
+      component: escapeplan_api
+      action: "Encrypt credentials with libsodium (sodium-native)"
+    - step: 3
+      component: database
+      action: "Store encrypted credentials in cameras table"
+    - step: 4
+      component: escapeplan_api
+      action: "Test connection with ffprobe (5s timeout)"
+    - step: 5
+      component: escapeplan_api
+      action: "Spawn ffmpeg worker for RTSP→HLS transcoding"
+    - step: 6
+      component: ffmpeg_workers
+      action: "Generate HLS playlist at /streams/{camera_id}/stream.m3u8"
+    - step: 7
+      component: escapeplan_web
+      action: "Load HLS stream in <video> tag via dashboard camera mosaic"
+
+# ==============================================================================
+# INTEGRATIONS
+# ==============================================================================
+integrations:
+  internal:
+    - source: escapeplan_web
+      target: escapeplan_api
+      protocol: "HTTP/REST"
+      pattern: "Request-Response"
+      description: "CRUD operations for all resources"
+
+    - source: escapeplan_web
+      target: escapeplan_api
+      protocol: "WebSocket (Socket.IO)"
+      pattern: "Pub-Sub"
+      description: "Real-time session updates, timer ticks, dashboard events"
+
+    - source: escapeplan_api
+      target: database
+      protocol: "SQLite via Drizzle ORM"
+      pattern: "Repository"
+      description: "All data persistence operations"
+
+    - source: escapeplan_api
+      target: ffmpeg_workers
+      protocol: "Child Process (spawn)"
+      pattern: "Worker Pool"
+      description: "Camera stream transcoding management"
+
+  external:
+    - service: "IP Cameras (RTSP)"
+      protocol: "RTSP over TCP/UDP"
+      authentication: "Basic Auth (username/password)"
+      pattern: "Streaming"
+      description: "Live camera feeds for game monitoring"
+
+    - service: "Raspberry Pi GPIO (future)"
+      protocol: "GPIO pins"
+      authentication: "None (local hardware)"
+      pattern: "Event-Driven"
+      description: "Optional puzzle sensor integration"
+
+# ==============================================================================
+# DIRECTORY STRUCTURE
+# ==============================================================================
+directory_structure:
+  monorepo_root:
+    packages:
+      contracts: "Shared types, schema, validation, runtime detection"
+    apps:
+      escapeplan-api: "Fastify backend API"
+      escapeplan-web: "SvelteKit PWA frontend"
+    project-docs:
+      project-tracking: "TODO.json, HANDOFF.md, session notes, schemas"
+      research: "Auth research, competitive analysis"
+      DOCS: "DATABASE_SYSTEM.md, API_CONTRACTS_SCHEMA_MANAGEMENT.md"
+    scripts: "build-deb.sh for Raspberry Pi packaging"
+
+# ==============================================================================
+# PATTERNS - Design patterns and conventions
+# ==============================================================================
+patterns:
+  database_access:
+    description: "Repository pattern via Drizzle ORM"
+    location: "apps/escapeplan-api/src/state.ts"
+    example: "export async function getUserById(id: string): Promise<UserProfile | null>"
+
+  validation:
+    description: "Zod schemas for request/response validation"
+    location: "packages/contracts/src/index.ts"
+    example: "export const createGameSchema = z.object({ name: z.string().min(1), ... })"
+
+  permission_checks:
+    description: "Database-driven RBAC via requirePermission() helper"
+    location: "apps/escapeplan-api/src/security.ts"
+    example: "await requirePermission(userId, 'manage_games')"
+
+  real_time_events:
+    description: "Socket.IO event broadcasting to specific rooms/namespaces"
+    location: "apps/escapeplan-api/src/socket.ts"
+    example: "io.to(`session:${sessionId}`).emit('timer:update', { remaining })"
+
+  offline_command_queue:
+    description: "Svelte stores queue commands when offline, replay on reconnect"
+    location: "apps/escapeplan-web/src/lib/stores/commandQueue.svelte.ts"
+    example: "commandQueue.add({ type: 'SEND_HINT', sessionId, hintId })"
+
+  runtime_detection:
+    description: "Zero-config environment detection via filesystem inspection"
+    location: "packages/contracts/src/runtime.ts"
+    example: "export function isProduction(): boolean"
+
+# ==============================================================================
+# ERROR HANDLING
+# ==============================================================================
+error_handling:
+  api_errors:
+    pattern: "HTTP status codes with JSON error payloads"
+    example: "{ error: 'PERMISSION_DENIED', message: 'Missing manage_games permission' }"
+
+  database_errors:
+    pattern: "Drizzle catches SQLite errors, wrap in custom error types"
+    example: "throw new ConflictError('Session already active for this room')"
+
+  validation_errors:
+    pattern: "Zod validation failures return 400 with field-specific errors"
+    example: "{ error: 'VALIDATION_ERROR', issues: [{ path: ['name'], message: 'Required' }] }"
+
+  socket_errors:
+    pattern: "Emit error events to client for acknowledgment"
+    example: "socket.emit('error', { code: 'SESSION_NOT_FOUND', sessionId })"
+
+  offline_handling:
+    pattern: "Queue failed requests in IndexedDB, show toast notification"
+    example: "Toast: 'Action queued. Will sync when online.'"
+
+# ==============================================================================
+# SECURITY
+# ==============================================================================
+security:
+  authentication:
+    mechanism: "Better Auth v1.3.24+ with Argon2id password hashing"
+    session_storage: "HttpOnly cookies (better-auth.session_token)"
+    session_duration: "7 days (configurable via Better Auth)"
+    enforcement: "hooks.server.ts checks session on all (app) routes"
+
+  authorization:
+    mechanism: "Database-driven RBAC (roles → role_permissions → permissions)"
+    enforcement_layers:
+      - "Database triggers (prevent customer from getting operator roles)"
+      - "API route guards (requirePermission() middleware)"
+      - "Frontend route guards (hooks.server.ts checks user_type)"
+      - "UI visibility (components check permissions before rendering)"
+    user_type_separation: "user_type field ('operator' | 'customer') enforced via triggers"
+
+  password_security:
+    algorithm: "Argon2id (argon2 npm package v0.40.3)"
+    parameters: "type: argon2id (default settings)"
+    reset_flow: "must_reset_password flag forces reset on first login"
+
+  rate_limiting:
+    status: "Not implemented (low priority for offline-first local network)"
+    future: "Consider rate limiting login attempts (5 per minute per IP)"
+
+  cors:
+    policy: "@fastify/cors configured for trusted origins"
+    allowed_origins: "http://localhost:5173 (dev), https://escapeplan.local (prod)"
+
+  credential_encryption:
+    mechanism: "libsodium (sodium-native v5.0.9+) for camera credentials"
+    key_management: "CAMERA_ENCRYPTION_KEY environment variable (generated on first boot)"
+
+# ==============================================================================
+# AGENT STRUCTURE - AI agent workflow
+# ==============================================================================
+agent_structure:
+  main_agent:
+    role: "Project orchestrator and architectural decision maker"
+    responsibilities:
+      - "Read and understand project.yaml, techstack.yaml, TODO.json, HANDOFF.md"
+      - "Break down user requests into subtasks"
+      - "Decide when to spawn implementation/QA/fix subagents"
+      - "Ensure all hard rules are followed"
+      - "Update TODO.json and session notes after work completion"
+      - "Validate against schemas before finalizing changes"
+
+  implementation_subagent:
+    role: "Write production-ready code following architectural patterns"
+    responsibilities:
+      - "Implement features according to TODO item acceptance criteria"
+      - "Follow patterns from project.yaml and techstack.yaml hard rules"
+      - "Write tests alongside implementation (minimum 80% coverage)"
+      - "Use Drizzle ORM for all database operations"
+      - "Validate with Zod schemas before database writes"
+      - "Check permissions via requirePermission() before protected actions"
+    context_required:
+      - "project.yaml (components, patterns, hard_rules)"
+      - "techstack.yaml (dependencies, quality_standards)"
+      - "TODO item acceptance criteria"
+      - "Relevant source files (schema, API routes, components)"
+    constraints:
+      - "NEVER use mock/placeholder data"
+      - "ALWAYS use TypeScript strict mode"
+      - "ALWAYS use Svelte 5 runes (not legacy stores)"
+      - "NEVER bypass RBAC checks"
+
+  qa_validation_subagent:
+    role: "Validate implementation against acceptance criteria and quality standards"
+    responsibilities:
+      - "Run test suite and verify minimum 80% coverage"
+      - "Check TypeScript compilation (pnpm lint)"
+      - "Run svelte-check for frontend code"
+      - "Validate schemas (project.yaml, techstack.yaml)"
+      - "Test permission enforcement (user_type, role boundaries)"
+      - "Verify database triggers work correctly"
+      - "Check offline command queueing and replay"
+    context_required:
+      - "TODO item acceptance criteria"
+      - "techstack.yaml quality_standards"
+      - "Test results and coverage reports"
+      - "Schema validation output"
+    output_format:
+      - "List of acceptance criteria with ✅/❌ status"
+      - "Test coverage percentage"
+      - "Schema validation results"
+      - "List of issues found (if any)"
+      - "Recommendation: PASS or FAIL with justification"
+
+  fix_subagent:
+    role: "Debug and fix issues found during QA or runtime"
+    responsibilities:
+      - "Analyze error messages and stack traces"
+      - "Identify root cause (logic error, type mismatch, permission issue, etc.)"
+      - "Implement minimal fix without introducing new issues"
+      - "Add regression test to prevent recurrence"
+      - "Re-run QA validation after fix"
+    context_required:
+      - "Error logs or QA failure report"
+      - "Relevant source files"
+      - "project.yaml patterns and hard_rules"
+      - "techstack.yaml dependencies and standards"
+    constraints:
+      - "NEVER introduce breaking changes"
+      - "ALWAYS add regression test"
+      - "ALWAYS re-run QA after fix"
+
+# ==============================================================================
+# CHECKPOINTING - When to save agent progress
+# ==============================================================================
+checkpointing:
+  triggers:
+    - "After completing a TODO item"
+    - "After QA validation (pass or fail)"
+    - "Before spawning a subagent"
+    - "After fixing a critical bug"
+    - "At the end of a work session"
+    - "After major refactoring (e.g., auth system optimization)"
+
+  content:
+    required_fields:
+      - "Session number and date"
+      - "TODO items worked on (IDs)"
+      - "Work completed (summary)"
+      - "Files modified (list with line counts)"
+      - "Commands run (validation, tests, builds)"
+      - "Issues encountered and resolutions"
+      - "Testing evidence (output snippets)"
+      - "Next steps"
+      - "Hours logged"
+
+  storage:
+    location: "project-docs/project-tracking/sessions/SESSION_{#}_NOTES.md"
+    format: "Markdown with structured sections (see SESSION_TEMPLATE.md)"
+
+  claude_md_sync:
+    required: false
+    timing: "Optional - update CLAUDE.md if architectural patterns change"
+
+# ==============================================================================
+# HARD RULES - Non-negotiable constraints for agents
+# ==============================================================================
+hard_rules:
+  # Database & Schema
+  - "ALWAYS use Drizzle ORM for database operations - no raw SQL except in specific helpers"
+  - "ALWAYS reference @escapeplan/contracts for shared types and schema"
+  - "ALWAYS use singular table names per Better Auth v1.3+ conventions (user, session, account, verification)"
+  - "NEVER use mock or placeholder data - always load from database or seeds"
+  - "ALWAYS validate with Zod schemas before database operations"
+
+  # Authentication & Authorization
+  - "ALWAYS use Better Auth session enrichment for user context (permissions, role, user_type)"
+  - "ALWAYS check user_type field for operator/customer separation"
+  - "ALWAYS use database-driven RBAC (roles → role_permissions → permissions tables)"
+  - "NEVER bypass permission checks with hardcoded role strings"
+  - "ALWAYS use HttpOnly cookies for auth - no localStorage tokens"
+  - "ALWAYS test database triggers enforce user_type/role boundaries"
+
+  # Frontend (Svelte)
+  - "ALWAYS use Svelte 5 runes ($state, $derived, $effect) - not legacy stores"
+  - "NEVER use legacy Svelte stores except for Socket.IO and command queue"
+  - "ALWAYS handle offline scenarios (command queueing, cached data)"
+
+  # Environment & Config
+  - "ALWAYS use environment auto-detection (@escapeplan/contracts/runtime) - no NODE_ENV"
+  - "NEVER commit .env files or hardcoded credentials"
+  - "ALWAYS use database-backed system settings (no hardcoded configuration)"
+
+  # Code Quality
+  - "ALWAYS use TypeScript strict mode with full type coverage"
+  - "ALWAYS write tests for new code (minimum 80% coverage)"
+  - "ALWAYS run type checking before committing (pnpm lint, svelte-check)"
+  - "NEVER introduce breaking changes without migration plan"
+
+  # Agent Workflow
+  - "ALWAYS read project.yaml, techstack.yaml, TODO.json, HANDOFF.md before starting work"
+  - "ALWAYS create session notes (SESSION_{#}_NOTES.md) documenting work"
+  - "ALWAYS update TODO.json status when completing items"
+  - "ALWAYS validate schemas after modifying project.yaml or techstack.yaml"
+  - "NEVER skip QA validation step"
+
+# ==============================================================================
+# NOTES
+# ==============================================================================
+notes:
+  - "This file is the architectural source of truth - update after major design changes"
+  - "See techstack.yaml for technology choices and dependency versions"
+  - "See TODO.json for current phase tasks and completion tracking"
+  - "See HANDOFF.md for latest project snapshot and session summary"
+  - "Monorepo build order: contracts → api → web (enforced via workspace dependencies)"
+  - "Zero-configuration deployment: paths auto-detected, settings seeded, no .env required"
+  - "Auth system modernized: user table (not operators), user_type field, database RBAC"
+  - "Better Auth v1.3.24+ with native singular table names and additionalFields"
+  - "Customer portal ready: user_type separation, route guards, permission scoping"
+  - "Offline-first: all features work without internet, PWA installable, command queueing"

@@ -171,8 +171,9 @@ Escape room operators need a **self-contained** local system that can be used to
 
 ### 3.1 Entities & Relationships
 
-* **users** (N:1 **roles**)
-* **roles** (Admin/Manager/Employee/Customer)
+* **user** (N:1 **roles**) - Better Auth singular naming
+* **session**, **account**, **verification** - Better Auth tables
+* **roles** (Admin/Manager/Game Master/Customer)
 * **permissions** (granular; role_permissions join)
 * **rooms** (1:N **game_room_map**, 1:N **cameras**)
 * **games** (1:N **game_room_map**, 1:N **puzzles**, 1:N **pricing_tiers**)
@@ -194,19 +195,58 @@ Escape room operators need a **self-contained** local system that can be used to
 ```sql
 PRAGMA journal_mode=WAL;
 
-CREATE TABLE roles (
-  id INTEGER PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL CHECK(name IN ('ADMIN','MANAGER','EMPLOYEE','CUSTOMER'))
+-- Better Auth Tables (singular naming per v1.3.24+)
+CREATE TABLE user (
+  id TEXT PRIMARY KEY,
+  username TEXT UNIQUE NOT NULL,
+  name TEXT NOT NULL,
+  email TEXT UNIQUE,
+  emailVerified INTEGER DEFAULT 0,
+  image TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL,
+  user_type TEXT NOT NULL DEFAULT 'operator', -- 'operator' | 'customer'
+  role_id TEXT NOT NULL REFERENCES roles(id),
+  -- Additional custom fields...
 );
 
-CREATE TABLE users (
-  id INTEGER PRIMARY KEY,
-  email TEXT UNIQUE NOT NULL,
-  display_name TEXT NOT NULL,
-  password_hash TEXT NOT NULL,
-  role_id INTEGER NOT NULL REFERENCES roles(id),
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+CREATE TABLE session (
+  id TEXT PRIMARY KEY,
+  token TEXT UNIQUE NOT NULL,
+  userId TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  expiresAt TEXT NOT NULL,
+  -- Additional fields...
+);
+
+CREATE TABLE account (
+  id TEXT PRIMARY KEY,
+  userId TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  accountId TEXT NOT NULL,
+  providerId TEXT NOT NULL,
+  accessToken TEXT,
+  refreshToken TEXT,
+  idToken TEXT,
+  expiresAt TEXT,
+  scope TEXT,
+  password TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+);
+
+CREATE TABLE verification (
+  id TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  value TEXT NOT NULL,
+  expiresAt TEXT NOT NULL,
+  createdAt TEXT,
+  updatedAt TEXT
+);
+
+CREATE TABLE roles (
+  id TEXT PRIMARY KEY,
+  name TEXT UNIQUE NOT NULL,
+  user_type_scope TEXT NOT NULL DEFAULT 'operator', -- 'operator' | 'customer' | 'both'
+  is_system INTEGER DEFAULT 0
 );
 
 CREATE TABLE rooms (
@@ -312,7 +352,7 @@ CREATE TABLE bookings (
   is_mobile INTEGER NOT NULL DEFAULT 0,
   location_notes TEXT,
   status TEXT NOT NULL CHECK(status IN ('PENDING','CONFIRMED','CANCELLED','COMPLETED')),
-  created_by_user_id INTEGER REFERENCES users(id),
+  created_by_user_id INTEGER REFERENCES user(id),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -340,7 +380,7 @@ CREATE TABLE hint_sends (
 CREATE TABLE events (
   id INTEGER PRIMARY KEY,
   ts TEXT NOT NULL DEFAULT (datetime('now')),
-  actor_user_id INTEGER REFERENCES users(id),
+  actor_user_id INTEGER REFERENCES user(id),
   kind TEXT NOT NULL,
   ref_type TEXT,
   ref_id INTEGER,
@@ -353,8 +393,9 @@ CREATE INDEX idx_sessions_status ON game_sessions(status);
 
 ### 3.3 Seed Data
 
-* Roles: `admin`, `manager`, `game_master`, `customer`.
-* Default credentials: `admin` / `escapeplan` (Argon2id-hashed, rotation endpoint available).
+* Roles: `admin`, `manager`, `game_master`, `customer` (with user_type_scope set appropriately).
+* Default credentials: `admin` / `escapeplan` (Argon2id-hashed via Better Auth, rotation endpoint available).
+* Default user has `user_type: 'operator'` and `role_id: 'role-admin'`.
 * Games: Pirate Mutiny only — hydrated from `project-docs/pirate-mutiny.txt` with canonical puzzles, narrative, and room metadata.
 * Rooms: `Harbor Hold` storefront bay mapped to Pirate Mutiny; more rooms added via admin console (no mock placeholders).
 * Network: Primary profile `escapeplan_net` created with default broadcast metadata for appliance Wi-Fi controls.
@@ -448,10 +489,12 @@ CREATE INDEX idx_sessions_status ON game_sessions(status);
 
 ### 5.3 Implementation Notes
 
-* Better Auth (v1.3.x) provides the authentication surface for Fastify and SvelteKit via the Drizzle SQLite adapter, username, and admin plugins.
+* Better Auth (v1.3.24+) provides the authentication surface for Fastify and SvelteKit via the Drizzle SQLite adapter, username, and admin plugins.
+* Table naming follows Better Auth v1.3+ conventions: `user`, `session`, `account`, `verification` (singular).
 * Sessions are issued as HttpOnly cookies (`better-auth.session_token`) with per-request validation through `requireSession` and SvelteKit `sveltekitCookies` middleware.
-* Operator records persist additional Better Auth fields (`permissions`, `bio`, `must_reset_password`, `password_hash`, `last_login_at`, ban metadata) with JSON-serialized permission sets aligned to the RBAC matrix above.
-* Seed tooling provisions the initial administrator through Better Auth’s adapter, ensuring hashed credentials and credential accounts stay in sync with the provider.
+* User records include `user_type` field ('operator' | 'customer') with database triggers enforcing role scope validation.
+* Custom session plugin enriches sessions with `role`, `role_id`, and `permissions[]` by querying role_permissions junction table.
+* Seed tooling provisions the initial administrator through Better Auth's adapter, ensuring hashed credentials and credential accounts stay in sync with the provider.
 * Password resets and change-password flows now call Better Auth endpoints, removing bespoke Argon2 verification helpers while retaining Argon2id hashing under the provider.
 * The SvelteKit shell calls the Fastify Better Auth endpoints directly; the login server action forwards the `Set-Cookie` header to the browser so the API owns session storage. Server-side fetch helpers forward the `better-auth.session_token` cookie on every API call.
 

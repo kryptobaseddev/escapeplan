@@ -302,7 +302,7 @@ export const PERMISSION_LABELS: Record<OperatorPermission, string> = {
   view_games: 'View game library and details',
   manage_games: 'Edit game settings, puzzles, and rooms',
   manage_users: 'Manage operator accounts',
-  archive_users: 'Archive and unarchive operators',
+  archive_users: 'Archive and unarchive users',
   view_roles: 'View roles and their permissions',
   manage_roles: 'Create, edit, and delete roles',
   view_permissions: 'View permission definitions',
@@ -327,113 +327,115 @@ export const PERMISSION_LABELS: Record<OperatorPermission, string> = {
 
 #### 1. `roles` Table (NEW)
 
-```sql
-CREATE TABLE roles (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE,
-  description TEXT,
-  is_system INTEGER NOT NULL DEFAULT 0, -- 1 for admin/manager/game_master/customer
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+```typescript
+// In apps/escapeplan-api/src/db/schema.ts
+export const roles = sqliteTable('roles', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(),
+  description: text('description'),
+  is_system: integer('is_system', { mode: 'boolean' }).notNull().default(false),
+  user_type_scope: text('user_type_scope').notNull(), // 'operator' | 'customer' | 'both'
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  systemIdx: index('idx_roles_system').on(table.is_system),
+  nameIdx: index('idx_roles_name').on(table.name)
+}));
 
-CREATE INDEX idx_roles_system ON roles(is_system);
-CREATE INDEX idx_roles_name ON roles(name);
-
--- Seed system roles
-INSERT INTO roles (id, name, description, is_system) VALUES
-  ('role-admin', 'admin', 'Administrator', 1),
-  ('role-manager', 'manager', 'Manager', 1),
-  ('role-game-master', 'game_master', 'Game Master', 1),
-  ('role-customer', 'customer', 'Customer', 1);
+// Seed in apps/escapeplan-api/src/db/seed.ts
+// System roles: admin, manager, game_master (operators), customer
 ```
 
 #### 2. `permissions` Table (NEW)
 
-```sql
-CREATE TABLE permissions (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL UNIQUE, -- 'view_dashboard', 'manage_users', etc.
-  label TEXT NOT NULL, -- Human-readable label
-  category TEXT NOT NULL, -- 'dashboard', 'users', 'games', 'network', etc.
-  description TEXT,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
+```typescript
+// In apps/escapeplan-api/src/db/schema.ts
+export const permissions = sqliteTable('permissions', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull().unique(), // 'view_dashboard', 'manage_users', etc.
+  label: text('label').notNull(), // Human-readable label
+  category: text('category').notNull(), // 'dashboard', 'users', 'games', 'network', etc.
+  description: text('description'),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  categoryIdx: index('idx_permissions_category').on(table.category),
+  nameIdx: index('idx_permissions_name').on(table.name)
+}));
 
-CREATE INDEX idx_permissions_category ON permissions(category);
-CREATE INDEX idx_permissions_name ON permissions(name);
-
--- Seed all 24 permissions (see permission list above)
+// Seed all 24 permissions in seed.ts (see permission list above)
 ```
 
 #### 3. `role_permissions` Table (NEW - Junction)
 
-```sql
-CREATE TABLE role_permissions (
-  id TEXT PRIMARY KEY,
-  role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-  permission_id TEXT NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
-  granted_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  granted_by TEXT REFERENCES operators(id),
-  UNIQUE(role_id, permission_id)
-);
-
-CREATE INDEX idx_role_permissions_role ON role_permissions(role_id);
-CREATE INDEX idx_role_permissions_permission ON role_permissions(permission_id);
+```typescript
+// In apps/escapeplan-api/src/db/schema.ts
+export const rolePermissions = sqliteTable('role_permissions', {
+  id: text('id').primaryKey(),
+  role_id: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+  permission_id: text('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
+  granted_at: text('granted_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  granted_by: text('granted_by').references(() => user.id)
+}, (table) => ({
+  roleIdx: index('idx_role_permissions_role').on(table.role_id),
+  permissionIdx: index('idx_role_permissions_permission').on(table.permission_id),
+  uniqueRolePermission: unique().on(table.role_id, table.permission_id)
+}));
 ```
 
 ### Modified Tables
 
-#### 1. `operators` Table - Add `role_id` FK
+#### 1. `user` Table - Add `role_id` FK
 
-```sql
--- Migration: Add role_id column
-ALTER TABLE operators ADD COLUMN role_id TEXT REFERENCES roles(id);
+```typescript
+// In apps/escapeplan-api/src/db/schema.ts
+export const user = sqliteTable('user', {
+  id: text('id').primaryKey(),
+  username: text('username').notNull().unique(),
+  name: text('name').notNull(),
+  email: text('email').unique(),
+  user_type: text('user_type').notNull().default('operator'),
+  role_id: text('role_id').notNull().references(() => roles.id), // ← Add this field
+  // ... other fields
+});
 
--- Migrate existing role strings to role_id FKs
-UPDATE operators SET role_id = 'role-admin' WHERE role = 'admin';
-UPDATE operators SET role_id = 'role-manager' WHERE role = 'manager';
-UPDATE operators SET role_id = 'role-game-master' WHERE role = 'game_master';
-UPDATE operators SET role_id = 'role-customer' WHERE role = 'customer';
+// Apply changes:
+// 1. Edit schema.ts (above)
+// 2. pnpm --filter @escapeplan/contracts build
+// 3. cd apps/escapeplan-api && npx drizzle-kit push
 
--- Add NOT NULL constraint after migration
-ALTER TABLE operators ALTER COLUMN role_id SET NOT NULL;
-
--- Create index
-CREATE INDEX idx_operators_role ON operators(role_id);
-
--- Note: Keep `role` column for Better-Auth compatibility, sync via trigger
+// Note: Keep `role` column for Better-Auth compatibility, sync via trigger
 ```
 
 #### 2. `cameras` Table (NEW)
 
-```sql
-CREATE TABLE cameras (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  room_id TEXT REFERENCES rooms(id) ON DELETE SET NULL,
-  protocol TEXT NOT NULL CHECK(protocol IN ('rtsp', 'mjpeg', 'onvif')),
-  host TEXT NOT NULL,
-  port INTEGER NOT NULL DEFAULT 554,
-  username TEXT,
-  password_encrypted TEXT, -- Encrypted with libsodium
-  stream_path TEXT,
-  resolution TEXT CHECK(resolution IN ('480p', '720p', '1080p', 'native')),
-  frame_rate INTEGER DEFAULT 15,
-  transport TEXT CHECK(transport IN ('tcp', 'udp', 'http')),
-  status TEXT NOT NULL DEFAULT 'offline' CHECK(status IN ('online', 'offline', 'testing', 'error')),
-  last_seen_at TEXT,
-  error_message TEXT,
-  hls_enabled INTEGER NOT NULL DEFAULT 0,
-  hls_bitrate INTEGER,
-  hls_fps INTEGER,
-  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_cameras_room ON cameras(room_id);
-CREATE INDEX idx_cameras_status ON cameras(status);
-CREATE INDEX idx_cameras_updated ON cameras(updated_at DESC);
+```typescript
+// In apps/escapeplan-api/src/db/schema.ts
+export const cameras = sqliteTable('cameras', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  room_id: text('room_id').references(() => rooms.id, { onDelete: 'set null' }),
+  protocol: text('protocol').notNull(), // 'rtsp' | 'mjpeg' | 'onvif'
+  host: text('host').notNull(),
+  port: integer('port').notNull().default(554),
+  username: text('username'),
+  password_encrypted: text('password_encrypted'), // Encrypted with libsodium
+  stream_path: text('stream_path'),
+  resolution: text('resolution'), // '480p' | '720p' | '1080p' | 'native'
+  frame_rate: integer('frame_rate').default(15),
+  transport: text('transport'), // 'tcp' | 'udp' | 'http'
+  status: text('status').notNull().default('offline'), // 'online' | 'offline' | 'testing' | 'error'
+  last_seen_at: text('last_seen_at'),
+  error_message: text('error_message'),
+  hls_enabled: integer('hls_enabled', { mode: 'boolean' }).notNull().default(false),
+  hls_bitrate: integer('hls_bitrate'),
+  hls_fps: integer('hls_fps'),
+  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+}, (table) => ({
+  roomIdx: index('idx_cameras_room').on(table.room_id),
+  statusIdx: index('idx_cameras_status').on(table.status),
+  updatedIdx: index('idx_cameras_updated').on(table.updated_at)
+}));
 ```
 
 ---
@@ -444,26 +446,25 @@ CREATE INDEX idx_cameras_updated ON cameras(updated_at DESC);
 **TODO:** P3-RBAC-001
 
 **Tasks:**
-1. Create migration: Add `roles`, `permissions`, `role_permissions` tables
-2. Create migration: Add `cameras` table
-3. Create migration: Add `role_id` FK to `operators` table
-4. Seed system roles (admin, manager, game_master, customer)
-5. Seed all 24 permissions with labels/categories
-6. Seed default role_permissions mappings
-7. Write migration script to backfill existing operator roles
-8. Test migrations: fresh DB + migration from Session 37 state
+1. Update schema.ts: Add `roles`, `permissions`, `role_permissions` tables
+2. Update schema.ts: Add `cameras` table
+3. Update schema.ts: Add `role_id` FK to `user` table
+4. Rebuild contracts: `pnpm --filter @escapeplan/contracts build`
+5. Apply schema changes: `cd apps/escapeplan-api && npx drizzle-kit push`
+6. Seed system roles (admin, manager, game_master, customer)
+7. Seed all 24 permissions with labels/categories
+8. Seed default role_permissions mappings
 
 **Files:**
-- `apps/escapeplan-api/migrations/0001_add_rbac_tables.sql`
-- `apps/escapeplan-api/migrations/0002_add_cameras_table.sql`
+- `apps/escapeplan-api/src/db/schema.ts` (update)
 - `apps/escapeplan-api/src/db/seed.ts` (update)
 
 **Acceptance Criteria:**
 - ✅ All new tables created with indexes
-- ✅ Existing operators migrated to role_id FKs
+- ✅ Schema changes applied with drizzle-kit push
 - ✅ 24 permissions seeded
 - ✅ 4 system roles seeded with permissions
-- ✅ Migration script tested on Session 37 database
+- ✅ Seed script tested on fresh database
 
 ---
 
@@ -943,7 +944,7 @@ const canManageSystemSettings = $derived(props.data.user?.permissions?.includes(
 
 5. **Migration Tests**
    - [ ] Migrate Session 37 database to new schema
-   - [ ] Existing operators retain permissions
+   - [ ] Existing users retain permissions
    - [ ] Old `/admin/network` redirects to `/admin/system#network`
    - [ ] Old `/admin/storage` redirects to `/admin/system#storage`
 
@@ -1069,40 +1070,56 @@ const canManageSystemSettings = $derived(props.data.user?.permissions?.includes(
    'manage_network'
    ```
 
-### Migration Steps
+### Schema Update Workflow
 
 1. **Backup Database**
    ```bash
-   cp apps/escapeplan-api/data/escapeplan.db apps/escapeplan-api/data/escapeplan-backup-session37.db
+   cp apps/escapeplan-api/data/escapeplan.db apps/escapeplan-api/data/escapeplan-backup.db
    ```
 
-2. **Run Migrations**
+2. **Update Schema**
+   ```bash
+   # Edit apps/escapeplan-api/src/db/schema.ts
+   # Add new tables: roles, permissions, role_permissions, cameras
+   # Add role_id field to user table
+   ```
+
+3. **Rebuild Contracts**
+   ```bash
+   pnpm --filter @escapeplan/contracts build
+   ```
+
+4. **Apply Schema Changes**
    ```bash
    cd apps/escapeplan-api
-   npx drizzle-kit migrate
+   npx drizzle-kit push
+   ```
+
+5. **Seed Database**
+   ```bash
    pnpm db:seed
    ```
 
-3. **Verify Migration**
+6. **Verify Schema**
    ```bash
-   # Check roles table
+   # Check roles table exists
    sqlite3 data/escapeplan.db "SELECT * FROM roles;"
 
-   # Check permissions
+   # Check permissions count
    sqlite3 data/escapeplan.db "SELECT COUNT(*) FROM permissions;"
    # Expected: 24
 
-   # Check operator role_id assignment
-   sqlite3 data/escapeplan.db "SELECT username, role, role_id FROM operators;"
+   # Check user table has role_id
+   sqlite3 data/escapeplan.db "PRAGMA table_info(user);"
    ```
 
-4. **Update Frontend Routes**
+7. **Update Frontend Routes**
    - Remove old `/admin/network` page
    - Remove old `/admin/storage` page
    - Remove old `/admin/system/alerts` page (keep for redirect)
    - Remove old `/admin/system/logs` page (keep for redirect)
 
-5. **Test Permissions**
+8. **Test Changes**
    ```bash
    # Run backend tests
    pnpm --filter escapeplan-api test

@@ -1,21 +1,17 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
-  import { invalidate } from '$app/navigation';
+  import { invalidate, goto } from '$app/navigation';
   import { openConfirmDialog } from '$lib/components/confirm-dialog';
   import ArchiveReasonContent from '$lib/components/ArchiveReasonContent.svelte';
-  import GameModal from '$lib/components/games/GameModal.svelte';
   import GameDetailsModal from '$lib/components/games/GameDetailsModal.svelte';
   import { apiFetch } from '$lib/api/client';
   import type { GameDetails } from '@escapeplan/contracts';
   import { formatDistanceToNow } from 'date-fns';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
 
-  let viewMode = $state<'list' | 'create' | 'edit'>('list');
-  let createModalGame = $state<GameDetails | null>(null);
-  let editingGame = $state<GameDetails | null>(null);
   let viewingGame = $state<GameDetails | null>(null);
   let showDetailsModal = $state(false);
   let pending = $state(false);
@@ -45,44 +41,9 @@
     await invalidate('app:admin:games');
   };
 
-  const cloneForDuplicate = (game: GameDetails): GameDetails => {
-    const timestamp = new Date().toISOString();
-    return {
-      ...game,
-      id: uid('game'),
-      slug: `${game.slug}-copy`,
-      name: `${game.name} Copy`,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      archivedAt: null,
-      archivedBy: null,
-      archivedReason: null,
-      puzzles: game.puzzles.map((puzzle) => ({
-        ...puzzle,
-        id: uid('puzzle'),
-        hints: puzzle.hints?.map((hint) => ({ ...hint, uuid: uid('hint') })) ?? []
-      }))
-    };
-  };
-
-  const handleCreateSuccess = async () => {
-    viewMode = 'list';
-    createModalGame = null;
-    await refreshGames();
-    handleFeedback('Game created successfully.');
-  };
-
-  const handleEditSuccess = async () => {
-    viewMode = 'list';
-    editingGame = null;
-    await refreshGames();
-    handleFeedback('Game updated successfully.');
-  };
-
-  const handleCancel = () => {
-    viewMode = 'list';
-    editingGame = null;
-    createModalGame = null;
+  const handleDuplicate = async (game: GameDetails) => {
+    // Navigate to create page with duplicate query param
+    await goto(`/admin/games/create?duplicate=${game.id}`);
   };
 
   const handleArchive = async (game: GameDetails) => {
@@ -167,11 +128,6 @@
     }
   };
 
-  const openDuplicateModal = (game: GameDetails) => {
-    createModalGame = cloneForDuplicate(game);
-    viewMode = 'create';
-  };
-
   const openDetailsModal = (game: GameDetails) => {
     viewingGame = game;
     showDetailsModal = true;
@@ -184,8 +140,7 @@
 
   const openEditFromDetails = (game: GameDetails) => {
     closeDetailsModal();
-    editingGame = game;
-    viewMode = 'edit';
+    goto(`/admin/games/${game.id}/edit`);
   };
 
   let gamesForFiltering = $state<GameDetails[]>(data.games ?? []);
@@ -232,18 +187,17 @@
 </script>
 
 <section class="space-y-8">
-  {#if viewMode === 'list'}
-    <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div>
-        <h1 class="section-heading">Game Management</h1>
-        <p class="mt-2 max-w-2xl text-sm text-base-content/60">
-          Configure EscapePlan games with mobile-first modals covering rooms, puzzles, pricing, and booking rules. Changes apply instantly across the operator console.
-        </p>
-      </div>
-      <button class="btn btn-primary w-full lg:w-auto" onclick={() => { createModalGame = null; viewMode = 'create'; }}>
-        + Add game
-      </button>
-    </header>
+  <header class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div>
+      <h1 class="section-heading">Game Management</h1>
+      <p class="mt-2 max-w-2xl text-sm text-base-content/60">
+        Configure EscapePlan games with mobile-first modals covering rooms, puzzles, pricing, and booking rules. Changes apply instantly across the operator console.
+      </p>
+    </div>
+    <a href="/admin/games/create" class="btn btn-primary w-full lg:w-auto">
+      + Add game
+    </a>
+  </header>
 
   <div class="glass-panel border-white/10 bg-base-200/70 p-5 rounded-2xl space-y-4">
     <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px_220px]">
@@ -337,8 +291,8 @@
                 </svg>
               </button>
               <ul class="dropdown-content menu menu-sm z-[1] w-full max-w-xs rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
-                <li><button type="button" onclick={() => { editingGame = game; viewMode = 'edit'; }}>Edit details</button></li>
-                <li><button type="button" onclick={() => openDuplicateModal(game)}>Duplicate</button></li>
+                <li><a href="/admin/games/{game.id}/edit">Edit details</a></li>
+                <li><button type="button" onclick={() => handleDuplicate(game)}>Duplicate</button></li>
                 {#if game.archivedAt}
                   <li><button type="button" onclick={() => handleUnarchive(game)} disabled={pending}>Restore</button></li>
                 {:else}
@@ -408,8 +362,8 @@
                         </svg>
                       </button>
                       <ul class="dropdown-content menu menu-sm z-[1] w-56 rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
-                        <li><button type="button" onclick={() => { editingGame = game; viewMode = 'edit'; }}>Edit details</button></li>
-                        <li><button type="button" onclick={() => openDuplicateModal(game)}>Duplicate</button></li>
+                        <li><a href="/admin/games/{game.id}/edit">Edit details</a></li>
+                        <li><button type="button" onclick={() => handleDuplicate(game)}>Duplicate</button></li>
                         {#if game.archivedAt}
                           <li><button type="button" onclick={() => handleUnarchive(game)} disabled={pending}>Restore</button></li>
                         {:else}
@@ -430,25 +384,6 @@
         </table>
       </div>
     </div>
-  {/if}
-  {:else if viewMode === 'create'}
-    <GameModal
-      open={true}
-      mode="create"
-      action="?/create"
-      game={createModalGame}
-      onclose={handleCancel}
-      onsuccess={handleCreateSuccess}
-    />
-  {:else if viewMode === 'edit' && editingGame}
-    <GameModal
-      open={true}
-      mode="edit"
-      action="?/update"
-      game={editingGame}
-      onclose={handleCancel}
-      onsuccess={handleEditSuccess}
-    />
   {/if}
 
   <!-- Game Details Modal -->

@@ -10,6 +10,7 @@ export const roles = sqliteTable('roles', {
   id: text('id').primaryKey(),
   name: text('name').notNull().unique(),
   description: text('description'),
+  user_type_scope: text('user_type_scope').notNull().default('operator'), // 'operator' | 'customer' | 'both'
   is_system: integer('is_system', { mode: 'boolean' }).notNull().default(false),
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
@@ -21,9 +22,57 @@ export const permissions = sqliteTable('permissions', {
   name: text('name').notNull().unique(),
   label: text('label').notNull(),
   category: text('category').notNull(), // dashboard, bookings, sessions, games, network, users, rbac, storage, cameras, system
+  user_type_scope: text('user_type_scope').notNull().default('operator'), // 'operator' | 'customer' | 'both'
   description: text('description'),
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
+
+// REFACTORED: Unified user table (operators and customers)
+export const user = sqliteTable('user', {
+  // Primary Key
+  id: text('id').primaryKey(),
+
+  // Better Auth Core Fields (minimal required)
+  name: text('name').notNull(),
+  email: text('email').unique(),
+  emailVerified: integer('emailVerified', { mode: 'boolean' }).notNull().default(false),
+  image: text('image'), // Better Auth expects this field name
+  createdAt: text('createdAt').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updatedAt').notNull().default(sql`CURRENT_TIMESTAMP`),
+
+  // EscapePlan Custom Fields
+  username: text('username').notNull().unique(),
+  user_type: text('user_type').notNull().default('operator'), // 'operator' | 'customer'
+
+  // RBAC (database-driven only, no string role or JSON permissions)
+  role_id: text('role_id').notNull().references(() => roles.id, { onDelete: 'restrict' }),
+
+  // Operator-Specific Fields (NULL for customers)
+  bio: text('bio'),
+  avatar_config: text('avatar_config', { mode: 'json' }),
+  must_reset_password: integer('must_reset_password', { mode: 'boolean' }).notNull().default(false),
+
+  // Customer-Specific Fields (NULL for operators)
+  loyalty_points: integer('loyalty_points').default(0),
+  preferred_difficulty: text('preferred_difficulty'),
+  marketing_opted_in: integer('marketing_opted_in', { mode: 'boolean' }).default(false),
+
+  // Security Fields (shared)
+  password_hash: text('password_hash'),
+  last_login_at: text('last_login_at'),
+  banned: integer('banned', { mode: 'boolean' }).notNull().default(false),
+  ban_reason: text('ban_reason'),
+  ban_expires: text('ban_expires'),
+
+  // Soft Delete
+  archived_at: text('archived_at'),
+  archived_by: text('archived_by').references((): any => user.id), // Self-reference
+  archived_reason: text('archived_reason')
+}, (table) => ({
+  userTypeIdx: index('idx_user_type').on(table.user_type),
+  emailIdx: index('idx_user_email').on(table.email),
+  usernameIdx: index('idx_user_username').on(table.username)
+}));
 
 // Database-driven RBAC: Junction table for role-permission mappings
 export const rolePermissions = sqliteTable(
@@ -33,73 +82,58 @@ export const rolePermissions = sqliteTable(
     role_id: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
     permission_id: text('permission_id').notNull().references(() => permissions.id, { onDelete: 'cascade' }),
     granted_at: text('granted_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-    granted_by: text('granted_by').references(() => operators.id)
+    granted_by: text('granted_by').references(() => user.id) // UPDATED: references user.id
   },
   (table) => ({
     uniqueRolePermission: index('idx_role_permission_unique').on(table.role_id, table.permission_id)
   })
 );
 
-export const operators = sqliteTable('operators', {
-  id: text('id').primaryKey(),
-  username: text('username').notNull().unique(),
-  name: text('name').notNull(),
-  email: text('email').unique(),
-  email_verified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
-  role: text('role').notNull(),
-  permissions: text('permissions', { mode: 'json' }).notNull().default(sql`'[]'`),
-  role_id: text('role_id').notNull().references(() => roles.id), // FK to roles table for database-driven RBAC
-  avatar_config: text('avatar_config', { mode: 'json' }), // JSON: DiceBear Bottts config
-  bio: text('bio'),
-  must_reset_password: integer('must_reset_password', { mode: 'boolean' }).notNull().default(false),
-  password_hash: text('password_hash'),
-  last_login_at: text('last_login_at'),
-  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  banned: integer('banned', { mode: 'boolean' }).notNull().default(false),
-  ban_reason: text('ban_reason'),
-  ban_expires: text('ban_expires'),
-  archived_at: text('archived_at'),
-  archived_by: text('archived_by'),
-  archived_reason: text('archived_reason')
-});
+// Legacy export for backward compatibility during transition
+export const operators = user;
 
-export const operatorAuthSessions = sqliteTable('operator_auth_sessions', {
+// Better Auth Tables (renamed to singular)
+export const session = sqliteTable('session', {
   id: text('id').primaryKey(),
   token: text('token').notNull().unique(),
-  user_id: text('user_id').notNull().references(() => operators.id),
-  expires_at: text('expires_at').notNull(),
-  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  ip_address: text('ip_address'),
-  user_agent: text('user_agent'),
-  impersonated_by: text('impersonated_by')
+  userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  expiresAt: text('expiresAt').notNull(),
+  createdAt: text('createdAt').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updatedAt').notNull().default(sql`CURRENT_TIMESTAMP`),
+  ipAddress: text('ipAddress'),
+  userAgent: text('userAgent'),
+  impersonatedBy: text('impersonatedBy').references(() => user.id)
 });
 
-export const operatorAccounts = sqliteTable('operator_accounts', {
+export const account = sqliteTable('account', {
   id: text('id').primaryKey(),
-  account_id: text('account_id').notNull(),
-  provider_id: text('provider_id').notNull(),
-  user_id: text('user_id').notNull().references(() => operators.id),
-  access_token: text('access_token'),
-  refresh_token: text('refresh_token'),
-  id_token: text('id_token'),
-  access_token_expires_at: text('access_token_expires_at'),
-  refresh_token_expires_at: text('refresh_token_expires_at'),
+  accountId: text('accountId').notNull(),
+  providerId: text('providerId').notNull(),
+  userId: text('userId').notNull().references(() => user.id, { onDelete: 'cascade' }),
+  accessToken: text('accessToken'),
+  refreshToken: text('refreshToken'),
+  idToken: text('idToken'),
+  accessTokenExpiresAt: text('accessTokenExpiresAt'),
+  refreshTokenExpiresAt: text('refreshTokenExpiresAt'),
   scope: text('scope'),
   password: text('password'),
-  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+  createdAt: text('createdAt').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updatedAt').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
 
-export const operatorVerifications = sqliteTable('operator_verifications', {
+export const verification = sqliteTable('verification', {
   id: text('id').primaryKey(),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
-  expires_at: text('expires_at').notNull(),
-  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
+  expiresAt: text('expiresAt').notNull(),
+  createdAt: text('createdAt').notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text('updatedAt').notNull().default(sql`CURRENT_TIMESTAMP`)
 });
+
+// Legacy exports for backward compatibility during transition
+export const operatorAuthSessions = session;
+export const operatorAccounts = account;
+export const operatorVerifications = verification;
 
 // ============================================================================
 // GAMES & ROOMS
@@ -125,6 +159,7 @@ export const games = sqliteTable('games', {
   default_volume: integer('default_volume').notNull().default(80), // 0-100, game-wide default for all media
   camera_ids: text('camera_ids', { mode: 'json' }).default(sql`'[]'`), // JSON array of camera IDs associated with this game
   media_config: text('media_config', { mode: 'json' }),
+  room_display_config: text('room_display_config', { mode: 'json' }), // Room Display background and visual settings
   pricing_config: text('pricing_config', { mode: 'json' }), // Enhanced: tiers with per-tier models
   booking_rules_config: text('booking_rules_config', { mode: 'json' }),
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -144,7 +179,7 @@ export const gamePuzzles = sqliteTable('game_puzzles', {
   media_asset: text('media_asset'),
   operator_actions: text('operator_actions'),
   display_order: integer('display_order').notNull().default(0),
-  hints: text('hints', { mode: 'json' }), // JSON array with volumeLevel per hint
+  hints: text('hints', { mode: 'json' }), // JSON array: { uuid, type, content, assetUrl?, volumeLevel?, order, penaltySeconds?, penaltyEnabled?, countAsHint? }
   media_asset_meta: text('media_asset_meta', { mode: 'json' }),
   slug: text('slug')
 });
@@ -164,6 +199,11 @@ export const gameMilestones = sqliteTable('game_milestones', {
   trigger_type: text('trigger_type').notNull(), // 'manual' | 'timer' | 'condition'
   trigger_config: text('trigger_config', { mode: 'json' }), // JSON: { minutes?, interval?, hintsUsed?, etc }
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  // Media display settings
+  display_duration_seconds: integer('display_duration_seconds'), // Display duration for media
+  loop: integer('loop', { mode: 'boolean' }).notNull().default(false), // Loop playback
+  loop_count: integer('loop_count'), // Number of loops (null = infinite when loop=true)
+  auto_dismiss: integer('auto_dismiss', { mode: 'boolean' }).notNull().default(true), // Auto-dismiss after playback
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`)
 }, (table) => ({
@@ -223,7 +263,7 @@ export const sessionPuzzles = sqliteTable('session_puzzles', {
   solution: text('solution'), // Copy from game_puzzles for quick access
   status: text('status').notNull(), // 'available' | 'in_progress' | 'completed'
   display_order: integer('display_order').notNull(),
-  hints: text('hints', { mode: 'json' }) // Copy of hints from game_puzzles with volumeLevel
+  hints: text('hints', { mode: 'json' }) // Copy of hints from game_puzzles: { uuid, type, content, assetUrl?, volumeLevel?, order, penaltySeconds?, penaltyEnabled?, countAsHint? }
 });
 
 export const sessionHints = sqliteTable('session_hints', {
@@ -250,7 +290,7 @@ export const sessionMilestones = sqliteTable('session_milestones', {
   asset_url: text('asset_url'), // Resolved asset URL at trigger time
   volume_level: integer('volume_level'), // Volume level used
   triggered_at: text('triggered_at').notNull(),
-  triggered_by: text('triggered_by').references(() => operators.id) // NULL for auto-triggers
+  triggered_by: text('triggered_by').references(() => user.id) // NULL for auto-triggers
 }, (table) => ({
   sessionIdIdx: index('idx_session_milestones_session').on(table.session_id),
   milestoneIdIdx: index('idx_session_milestones_milestone').on(table.milestone_id),
@@ -282,7 +322,7 @@ export const discountCodes = sqliteTable('discount_codes', {
   applies_to: text('applies_to').notNull().default('all'), // 'all' | 'selected'
   minimum_party_size: integer('minimum_party_size'),
   notes: text('notes'),
-  created_by: text('created_by').notNull().references(() => operators.id),
+  created_by: text('created_by').notNull().references(() => user.id),
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   archived_at: text('archived_at')
@@ -320,7 +360,7 @@ export const assets = sqliteTable('assets', {
   hint_order: integer('hint_order'),
   default_volume: integer('default_volume').notNull().default(80), // 0-100, default volume for this asset
   is_reusable: integer('is_reusable', { mode: 'boolean' }).notNull().default(false),
-  uploaded_by: text('uploaded_by').notNull().references(() => operators.id),
+  uploaded_by: text('uploaded_by').notNull().references(() => user.id),
   uploaded_at: text('uploaded_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   metadata: text('metadata', { mode: 'json' })
 }, (table) => ({
@@ -378,7 +418,7 @@ export const backups = sqliteTable('backups', {
   usb_device: text('usb_device'),
   checksum_sha256: text('checksum_sha256'),
   error_message: text('error_message'),
-  created_by: text('created_by').notNull().references(() => operators.id),
+  created_by: text('created_by').notNull().references(() => user.id),
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   completed_at: text('completed_at')
 }, (table) => ({
@@ -458,7 +498,7 @@ export const alerts = sqliteTable('alerts', {
   context: text('context', { mode: 'json' }), // JSON: { gameName?, roomName?, pausedBy?, etc }
   created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   dismissed_at: text('dismissed_at'),
-  dismissed_by: text('dismissed_by').references(() => operators.id)
+  dismissed_by: text('dismissed_by').references(() => user.id)
 }, (table) => ({
   sessionIdIdx: index('idx_alerts_session').on(table.session_id),
   levelIdx: index('idx_alerts_level').on(table.level),
@@ -497,7 +537,7 @@ export const systemSettings = sqliteTable('system_settings', {
   description: text('description'),
   is_editable: integer('is_editable', { mode: 'boolean' }).notNull().default(true),
   updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  updated_by: text('updated_by').references(() => operators.id)
+  updated_by: text('updated_by').references(() => user.id)
 });
 
 // ============================================================================
@@ -533,11 +573,15 @@ export const cameras = sqliteTable('cameras', {
 // ============================================================================
 
 export const schema = {
-  // Auth & Operators
-  operators,
-  operatorAuthSessions,
-  operatorAccounts,
-  operatorVerifications,
+  // Auth & Users
+  user,
+  session,
+  account,
+  verification,
+  // Database-driven RBAC
+  roles,
+  permissions,
+  rolePermissions,
   // Games & Rooms
   games,
   gamePuzzles,
@@ -569,17 +613,13 @@ export const schema = {
   // System Settings
   systemSettings,
   // Cameras
-  cameras,
-  // Database-driven RBAC
-  roles,
-  permissions,
-  rolePermissions
+  cameras
 };
 
-// Legacy export for Better Auth compatibility
+// Export for Better Auth
 export const authTables = {
-  operators,
-  operatorAuthSessions,
-  operatorAccounts,
-  operatorVerifications
+  user,
+  session,
+  account,
+  verification
 };

@@ -42,6 +42,20 @@ export const DEFAULT_AUTO_UPDATE_ENABLED = true;
 /** Default system volume (0-100) */
 export const DEFAULT_SYSTEM_VOLUME = 80;
 
+/** Business defaults for game configuration */
+export const BUSINESS_DEFAULTS = {
+  /** Minimum game duration in minutes */
+  GAME_DURATION_MIN_MINUTES: 30,
+  /** Maximum game duration in minutes */
+  GAME_DURATION_MAX_MINUTES: 240,
+  /** Default cancellation policy template */
+  DEFAULT_CANCELLATION_POLICY: 'Cancellations made 48 hours or more in advance will receive a full refund. Cancellations made within 48 hours are non-refundable but may be rescheduled subject to availability.',
+  /** Default booking buffer time in minutes */
+  DEFAULT_BOOKING_BUFFER_MINUTES: 15,
+  /** Default booking window in days */
+  DEFAULT_BOOKING_WINDOW_DAYS: 90
+} as const;
+
 /** Application name */
 export const APP_NAME = 'EscapePlan';
 
@@ -74,6 +88,14 @@ export const SETTING_KEYS = {
     GITHUB_REPO: 'updates.github_repo',
     AUTO_UPDATE_ENABLED: 'updates.auto_update_enabled'
   },
+  /** Business defaults */
+  BUSINESS: {
+    GAME_DURATION_MIN_MINUTES: 'business.game_duration_min_minutes',
+    GAME_DURATION_MAX_MINUTES: 'business.game_duration_max_minutes',
+    DEFAULT_CANCELLATION_POLICY: 'business.default_cancellation_policy',
+    DEFAULT_BOOKING_BUFFER_MINUTES: 'business.default_booking_buffer_minutes',
+    DEFAULT_BOOKING_WINDOW_DAYS: 'business.default_booking_window_days'
+  },
   /** System information (read-only) */
   SYSTEM: {
     INSTALL_PATH: 'system.install_path',
@@ -87,6 +109,7 @@ export const SETTING_CATEGORIES = {
   STORAGE: 'storage',
   BACKUP: 'backup',
   UPDATES: 'updates',
+  BUSINESS: 'business',
   SYSTEM: 'system',
   GENERAL: 'general'
 } as const;

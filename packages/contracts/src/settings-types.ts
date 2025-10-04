@@ -49,6 +49,13 @@ export interface SystemSettingValues {
   'updates.github_repo': string;
   'updates.auto_update_enabled': boolean;
 
+  // Business defaults
+  'business.game_duration_min_minutes': number;
+  'business.game_duration_max_minutes': number;
+  'business.default_cancellation_policy': string;
+  'business.default_booking_buffer_minutes': number;
+  'business.default_booking_window_days': number;
+
   // System (read-only)
   'system.install_path': string;
   'system.version': string;

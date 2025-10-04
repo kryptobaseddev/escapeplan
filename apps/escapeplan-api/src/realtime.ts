@@ -3,7 +3,8 @@ import type {
   CommandResponse,
   DashboardResponse,
   GameSessionDetails,
-  TimerBroadcast
+  TimerBroadcast,
+  RoomDisplayMediaEvent
 } from '@escapeplan/contracts';
 import type { Server } from 'socket.io';
 
@@ -31,4 +32,8 @@ export function emitTimerUpdate(broadcast: TimerBroadcast) {
 
 export function emitBookingsUpdate(payload: BookingCalendarResponse) {
   io?.emit('bookings:update', payload);
+}
+
+export function emitRoomDisplayMedia(event: RoomDisplayMediaEvent) {
+  io?.emit('room-display:media', event);
 }

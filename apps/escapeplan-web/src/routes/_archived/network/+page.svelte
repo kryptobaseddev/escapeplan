@@ -7,7 +7,7 @@
 
   type ActionPayload = { profile?: NetworkProfile; applied?: ApplyNetworkConfigResponse } | undefined;
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
 
   let profile = $state<NetworkProfile>(data.profile);
   let lastApplied = $state<ApplyNetworkConfigResponse | null>(null);

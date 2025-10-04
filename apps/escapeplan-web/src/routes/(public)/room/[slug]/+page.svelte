@@ -1,0 +1,120 @@
+<svelte:options runes={true} />
+
+<script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
+  import type { PageData } from './$types';
+  import { getSocket } from '$lib/realtime/socket';
+  import type { TimerBroadcast, RoomDisplayMediaEvent } from '@escapeplan/contracts';
+
+  import RoomBackground from './components/RoomBackground.svelte';
+  import RoomTimer from './components/RoomTimer.svelte';
+  import RoomTextHint from './components/RoomTextHint.svelte';
+  import RoomAudio from './components/RoomAudio.svelte';
+  import RoomImage from './components/RoomImage.svelte';
+  import RoomVideo from './components/RoomVideo.svelte';
+
+  let { data, params }: { data: PageData; params: { slug: string } } = $props();
+
+  let timer = $state<TimerBroadcast | null>(data.timer);
+  let errorMessage = $state<string | null>(data.timerError ?? null);
+  let currentMedia = $state<RoomDisplayMediaEvent | null>(null);
+  let unsub: (() => void) | null = null;
+
+  // WebSocket handlers
+  onMount(() => {
+    const socket = getSocket();
+    if (socket) {
+      // Timer updates
+      socket.on('timer:update', (broadcast: TimerBroadcast) => {
+        if (broadcast.slug === params.slug) {
+          timer = broadcast;
+          errorMessage = null;
+        }
+      });
+
+      // Media events
+      socket.on('room-display:media', (event: RoomDisplayMediaEvent) => {
+        if (event.slug === params.slug) {
+          currentMedia = event;
+        }
+      });
+
+      unsub = () => {
+        socket.off('timer:update');
+        socket.off('room-display:media');
+      };
+    }
+  });
+
+  onDestroy(() => unsub?.());
+
+  function clearMedia() {
+    currentMedia = null;
+  }
+</script>
+
+{#if errorMessage}
+  <div class="flex min-h-screen items-center justify-center bg-base-100">
+    <div class="text-center">
+      <h1 class="text-3xl font-display font-semibold text-error">Room Display Unavailable</h1>
+      <p class="mt-2 text-sm text-base-content/60">{errorMessage}</p>
+    </div>
+  </div>
+{:else if timer}
+  <section class="relative min-h-screen overflow-hidden">
+
+    <!-- Z-index 0: Background -->
+    <RoomBackground
+      background={timer.background}
+      config={timer.roomConfig}
+    />
+
+    <!-- Z-index 10: Timer -->
+    {#if timer.roomConfig?.showTimer !== false}
+      <RoomTimer
+        timer={timer.timer}
+        gameName={timer.gameName}
+        sessionId={timer.sessionId}
+        position={timer.roomConfig?.timerPosition ?? 'center'}
+      />
+    {/if}
+
+    <!-- Z-index 20+: Media Overlays -->
+    {#if currentMedia}
+      {#if currentMedia.mediaType === 'text'}
+        <RoomTextHint
+          content={currentMedia.content}
+          colors={currentMedia.textHintColors}
+        />
+      {:else if currentMedia.mediaType === 'audio'}
+        <RoomAudio
+          src={currentMedia.content}
+          volumeLevel={currentMedia.volumeLevel}
+          loop={currentMedia.loop}
+          loopCount={currentMedia.loopCount}
+          autoDismiss={currentMedia.autoDismiss}
+          onFinish={clearMedia}
+        />
+      {:else if currentMedia.mediaType === 'image'}
+        <RoomImage
+          src={currentMedia.content}
+          displayDuration={currentMedia.displayDurationSeconds}
+          autoDismiss={currentMedia.autoDismiss}
+          scale={timer.roomConfig?.defaultMediaScale ?? 90}
+          onDismiss={clearMedia}
+        />
+      {:else if currentMedia.mediaType === 'video'}
+        <RoomVideo
+          src={currentMedia.content}
+          volumeLevel={currentMedia.volumeLevel}
+          loop={currentMedia.loop}
+          loopCount={currentMedia.loopCount}
+          autoDismiss={currentMedia.autoDismiss}
+          scale={timer.roomConfig?.defaultMediaScale ?? 90}
+          onFinish={clearMedia}
+        />
+      {/if}
+    {/if}
+
+  </section>
+{/if}

@@ -2,7 +2,6 @@
 
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import type { SubmitFunction } from '@sveltejs/kit';
   import type {
     BotttsAvatarConfig,
     OperatorPermission,
@@ -12,6 +11,10 @@
   import { PERMISSION_LABELS, ROLE_LABELS, ROLE_PERMISSIONS } from '@escapeplan/contracts';
   import Avatar from '$lib/avatar/Avatar.svelte';
   import { randomSeed, randomizeAvatarConfig } from '$lib/avatar/avatar-utils';
+  import Modal from '$lib/components/ui/Modal.svelte';
+  import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
+  import { createFormHandler } from '$lib/utils/forms';
 
   type Mode = 'create' | 'edit';
 
@@ -29,7 +32,6 @@
 
   const props = $props();
 
-  let dialogElement = $state<HTMLDialogElement | null>(null);
   let errorMessage = $state<string | null>(null);
   let initialised = $state(false);
   let selectedRole = $state<OperatorRole>('manager');
@@ -39,6 +41,7 @@
   let avatarConfig = $state<BotttsAvatarConfig>({ seed: randomSeed() });
   let avatarOriginal = $state<BotttsAvatarConfig | null>(null);
   let avatarCustomized = $state(false);
+  let isSubmitting = $state(false);
 
   let openFlag = $derived(Boolean(props.open as boolean | undefined));
   let modeValue = $derived(((props.mode as Mode | undefined) ?? 'create') as Mode);
@@ -50,22 +53,21 @@
   let disableAdminOption = $derived(!canAssignAdminValue && (isCreate || userValue?.role !== 'admin'));
   let avatarPayload = $derived(JSON.stringify(avatarConfig));
 
-  const handleSubmit: SubmitFunction = () => {
-    return async ({ result, update }) => {
-      if (result.type === 'failure') {
-        const failureData = result.data as { message?: string } | undefined;
-        errorMessage = failureData?.message ?? 'Request failed. Please try again.';
-        return;
-      }
-      if (result.type === 'success') {
-        await update({ invalidateAll: false });
-        errorMessage = null;
-        (props.onsuccess as (() => void) | undefined)?.();
-        return;
-      }
-      await update();
-    };
-  };
+  const handleSubmit = createFormHandler({
+    onSubmit: () => {
+      isSubmitting = true;
+      errorMessage = null;
+    },
+    onSuccess: () => {
+      isSubmitting = false;
+      (props.onsuccess as (() => void) | undefined)?.();
+    },
+    onError: (result) => {
+      isSubmitting = false;
+      const failureData = result.data as { message?: string } | undefined;
+      errorMessage = failureData?.message ?? 'Request failed. Please try again.';
+    }
+  });
 
   function close() {
     (props.onclose as (() => void) | undefined)?.();
@@ -173,80 +175,80 @@
 
 </script>
 
-{#if openFlag}
-  <dialog
-    class="modal modal-bottom sm:modal-middle"
-    open
-    bind:this={dialogElement}
-    oncancel={(event) => {
-      event.preventDefault();
-      close();
-    }}
-  >
-    <div class="modal-box max-h-[92vh] w-full max-w-2xl overflow-y-auto px-6 py-6">
-      <header class="space-y-2">
-        <h2 class="text-lg font-semibold text-base-content">
-          {isCreate ? 'Add operator' : `Edit ${userValue?.name ?? 'operator'}`}
-        </h2>
-        <p class="text-sm text-base-content/70">
-          Provide real operator details. Archived accounts cannot sign in until restored.
-        </p>
-      </header>
+<Modal
+  open={openFlag}
+  title={isCreate ? 'Add operator' : `Edit ${userValue?.name ?? 'operator'}`}
+  description="Provide real operator details. Archived accounts cannot sign in until restored."
+  size="2xl"
+  onClose={close}
+>
+  {#if errorMessage}
+    <Alert type="error" class="mb-6">
+      {errorMessage}
+    </Alert>
+  {/if}
 
-      {#if errorMessage}
-        <div class="alert alert-error mt-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
-        </div>
-      {/if}
-
-      <form method="POST" action={actionValue} class="mt-6 space-y-5" use:enhance={handleSubmit}>
+  <form method="POST" action={actionValue} class="space-y-5" use:enhance={handleSubmit}>
         {#if isEdit}
           <input type="hidden" name="id" value={userValue?.id} />
         {/if}
 
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="form-control">
-            <span class="label-text">Username</span>
-            <input
-              class="input input-bordered"
-              name="username"
-              required
-              bind:value={usernameDraft}
-              readonly={isEdit}
-              placeholder="liv.operator"
-            />
-          </label>
-          <label class="form-control">
-            <span class="label-text">Display name</span>
-            <input
-              class="input input-bordered"
-              name="name"
-              required
-              value={userValue?.name ?? ''}
-              placeholder="Liv Operator"
-            />
-          </label>
-          <label class="form-control">
-            <span class="label-text">Email</span>
-            <input
-              class="input input-bordered"
-              type="email"
-              name="email"
-              value={userValue?.email ?? ''}
-              placeholder="liv@escapeplan.local"
-            />
-          </label>
-        </div>
-
+    <fieldset class="fieldset rounded-box border border-base-content/10 bg-base-200/50 p-4">
+      <legend class="fieldset-legend">User Information</legend>
+      <div class="grid gap-4 sm:grid-cols-2">
         <label class="form-control">
-          <span class="label-text">Bio</span>
-          <textarea
-            class="textarea textarea-bordered min-h-[6rem]"
-            name="bio"
-            maxlength="500"
-            placeholder="Operator details visible to managers."
-          >{userValue?.bio ?? ''}</textarea>
+          <span class="label-text">Username</span>
+          <input
+            class="input validator"
+            name="username"
+            type="text"
+            required
+            minlength="3"
+            pattern="^[a-zA-Z0-9._-]+$"
+            bind:value={usernameDraft}
+            readonly={isEdit}
+            placeholder="liv.operator"
+          />
+          <div class="validator-hint">At least 3 characters, alphanumeric with dots, dashes, or underscores</div>
         </label>
+        <label class="form-control">
+          <span class="label-text">Display name</span>
+          <input
+            class="input validator"
+            name="name"
+            type="text"
+            required
+            minlength="2"
+            value={userValue?.name ?? ''}
+            placeholder="Liv Operator"
+          />
+          <div class="validator-hint">At least 2 characters</div>
+        </label>
+        <label class="form-control">
+          <span class="label-text">Email</span>
+          <input
+            class="input validator"
+            type="email"
+            name="email"
+            required
+            value={userValue?.email ?? ''}
+            placeholder="liv@escapeplan.local"
+          />
+          <div class="validator-hint">Enter a valid email address</div>
+        </label>
+      </div>
+    </fieldset>
+
+    <label class="form-control">
+      <span class="label-text">Bio</span>
+      <textarea
+        class="textarea validator"
+        name="bio"
+        maxlength="500"
+        placeholder="Operator details visible to managers."
+      >{userValue?.bio ?? ''}</textarea>
+      <div class="validator-hint">Optional. Maximum 500 characters</div>
+    </label>
 
         <section class="rounded-2xl border border-white/10 bg-base-200/70 p-4">
           <header class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -301,65 +303,74 @@
 
         <input type="hidden" name="avatarConfig" value={avatarPayload} />
 
-        <div class="grid gap-4 sm:grid-cols-2">
-          <label class="form-control">
-            <span class="label-text">Role</span>
-            <select
-              class="select select-bordered"
-              name="role"
-              bind:value={selectedRole}
-            >
-              {#each roleOptions as roleOption}
-                <option
-                  value={roleOption}
-                  disabled={roleOption === 'admin' && disableAdminOption}
-                >
-                  {roleLabel(roleOption)}
-                </option>
-              {/each}
-            </select>
-            <span class="label-text-alt text-xs">
-              Defaults: {roleDefaults(selectedRole).map(permissionLabel).join(', ') || 'No default permissions'}
-            </span>
-          </label>
-          <label class="form-control">
-            <span class="label-text">Require password reset</span>
-            <input
-              type="checkbox"
-              class="toggle toggle-primary"
-              name="mustResetPassword"
-              bind:checked={mustReset}
-            />
-            <span class="label-text-alt text-xs">Forces new password on next login.</span>
-          </label>
-        </div>
+        <fieldset class="fieldset rounded-box border border-base-content/10 bg-base-200/50 p-4">
+          <legend class="fieldset-legend">Access Control</legend>
+          <div class="grid gap-4 sm:grid-cols-2">
+            <label class="form-control">
+              <span class="label-text">Role</span>
+              <select
+                class="select validator"
+                name="role"
+                required
+                bind:value={selectedRole}
+              >
+                {#each roleOptions as roleOption}
+                  <option
+                    value={roleOption}
+                    disabled={roleOption === 'admin' && disableAdminOption}
+                  >
+                    {roleLabel(roleOption)}
+                  </option>
+                {/each}
+              </select>
+              <div class="validator-hint">
+                Defaults: {roleDefaults(selectedRole).map(permissionLabel).join(', ') || 'No default permissions'}
+              </div>
+            </label>
+            <label class="form-control">
+              <span class="label-text">Require password reset</span>
+              <input
+                type="checkbox"
+                class="toggle toggle-primary"
+                name="mustResetPassword"
+                bind:checked={mustReset}
+              />
+              <span class="label-text-alt text-xs">Forces new password on next login.</span>
+            </label>
+          </div>
+        </fieldset>
 
-        {#if isCreate}
-          <label class="form-control">
-            <span class="label-text">Initial password</span>
-            <input
-              class="input input-bordered"
-              type="password"
-              name="password"
-              minlength="12"
-              required
-              bind:value={passwordValue}
-              placeholder="At least 12 characters"
-            />
-          </label>
-        {/if}
+    {#if isCreate}
+      <label class="form-control">
+        <span class="label-text">Initial password</span>
+        <input
+          class="input validator"
+          type="password"
+          name="password"
+          minlength="12"
+          required
+          bind:value={passwordValue}
+          placeholder="At least 12 characters"
+        />
+        <div class="validator-hint">Minimum 12 characters required</div>
+      </label>
+    {/if}
+  </form>
 
-        <footer class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={close}>
-            Cancel
-          </button>
-          <button type="submit" class="btn btn-primary w-full sm:w-auto min-h-[44px]">
-            {isCreate ? 'Create user' : 'Save changes'}
-          </button>
-        </footer>
-      </form>
-    </div>
-  </dialog>
-{/if}
+  {#snippet actions()}
+    <button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={close}>
+      Cancel
+    </button>
+    <LoadingButton
+      type="submit"
+      variant="primary"
+      loading={isSubmitting}
+      class="w-full sm:w-auto min-h-[44px]"
+      form={actionValue ? undefined : 'user-form'}
+    >
+      {isCreate ? 'Create user' : 'Save changes'}
+    </LoadingButton>
+  {/snippet}
+</Modal>
 
 <!-- Styling handled via global theme utilities -->

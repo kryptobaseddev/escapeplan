@@ -2,6 +2,7 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Alert from '$lib/components/ui/Alert.svelte';
 
 	let systemStats = $state({
 		cpu: 0,
@@ -95,10 +96,10 @@
 
 <div class="space-y-6">
 	{#if error}
-		<div class="alert alert-error">
+		<Alert type="error">
 			<span>{error}</span>
 			<button class="btn btn-sm" onclick={fetchSystemHealth}>Retry</button>
-		</div>
+		</Alert>
 	{/if}
 
 	{#if loading && services.length === 0}

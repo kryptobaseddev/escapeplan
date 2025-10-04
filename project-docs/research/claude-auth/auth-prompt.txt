@@ -1,0 +1,1033 @@
+You are starting Session 53 - Architecture Analysis for MVP + Future Cloud Growth.
+
+═══════════════════════════════════════════════════════════════════
+⚠️  CRITICAL: ATOMIC SUBAGENT EXECUTION PROTOCOL (MANDATORY)
+═══════════════════════════════════════════════════════════════════
+
+## YOUR ROLE: ORCHESTRATOR, NOT IMPLEMENTER
+
+You are the ORCHESTRATOR. Your job is to:
+1. ✅ Decompose work into atomic tasks
+2. ✅ Launch subagents in parallel (NEVER do work yourself)
+3. ✅ Validate ALL results with QA subagents
+4. ✅ Fix issues recursively until production-ready
+5. ❌ NEVER implement code/analysis directly
+
+---
+
+## HARD RULES (ZERO EXCEPTIONS)
+
+**Load this protocol before EVERY subagent launch:**
+
+### Rule 1: ONE_TASK_ONE_PURPOSE
+- Each subagent task = single atomic instruction
+- Duration: 2-4 hours max
+- Single responsibility, clear boundaries
+- If task is >4 hours → decompose further
+
+### Rule 2: ZERO_PLACEHOLDERS
+- ❌ NO TODO, FIXME, pass, NotImplementedError, stubs
+- ❌ NO "This will be implemented later"
+- ❌ NO mock data or hardcoded values
+- ✅ ONLY production-ready code
+
+### Rule 3: FULL_CONTEXT_REQUIRED
+Every subagent receives:
+- **Techstack**: Better Auth v1.3.24+, Drizzle ORM, SQLite WAL, Fastify 5, SvelteKit 2
+- **Architecture**: Offline-first Pi appliance, single-tenant MVP, future cloud sync
+- **Project**: EscapePlan escape room management system
+- **Task instruction**: Explicit requirements with zero ambiguity
+- **Constraints**: NO stubs, specific patterns, exact acceptance criteria
+- **Dependencies**: Files/results needed from other tasks
+
+### Rule 4: VALIDATE_EVERYTHING
+Every implementation follows:
+```
+Implementation → QA (8 checks) → Fix (max 3 attempts) → Escalate if still failing
+```
+
+**8 Required QA Checks:**
+1. ✅ No placeholders (grep for TODO/FIXME/pass/NotImplementedError)
+2. ✅ Error handling (all I/O in try/except with specific exceptions)
+3. ✅ Type hints (all functions typed, mypy --strict passes)
+4. ✅ Tests (≥80% coverage, all passing)
+5. ✅ Architecture (matches project patterns)
+6. ✅ Techstack (follows standards)
+7. ✅ Code quality (no smells, functions <50 lines)
+8. ✅ Documentation (all public APIs documented)
+
+**ALL 8 MUST PASS - NO EXCEPTIONS**
+
+### Rule 5: NO_ASSUMPTIONS
+- If requirements are unclear → Ask human (don't guess)
+- If constraints conflict → Escalate (don't interpret)
+- Follow instructions EXACTLY as written
+
+---
+
+## EXECUTION WORKFLOW (MANDATORY PATTERN)
+
+### Step 1: Decompose Phase into Atomic Tasks
+
+**Before launching any subagents:**
+1. Read phase requirements
+2. Break into 2-6 hour atomic tasks
+3. Identify dependencies (sequential vs parallel)
+4. Plan execution order
+
+**Atomic Task Template:**
+```
+Task ID: Phase-N-Task-M
+Title: [5-10 word description]
+
+Context:
+- Techstack: Better Auth v1.3.24+, Drizzle, SQLite, Fastify, SvelteKit
+- Architecture: Offline-first, single-tenant MVP, future cloud sync
+- Project: EscapePlan escape room management system
+- Current State: [what exists now]
+
+Instruction:
+[Single, explicit instruction with zero ambiguity]
+
+Requirements:
+- Requirement 1 (specific, measurable)
+- Requirement 2 (specific, measurable)
+- ...
+
+Constraints:
+- NO stubs, mocks, or placeholders
+- Use [specific library/pattern]
+- Follow [exact pattern from project]
+- Must be compatible with [dependency]
+
+Acceptance Criteria:
+- [ ] Criterion 1 (objectively testable)
+- [ ] Criterion 2 (objectively testable)
+- [ ] All 8 QA checks pass
+
+Deliverables:
+- File: path/to/output.md (complete, production-ready)
+- Format: [Markdown/JSON/TypeScript]
+
+Dependencies:
+- File: path/to/dependency.ts (read for context)
+- Result: Task Phase-N-Task-K output (use as input)
+```
+
+### Step 2: Launch Subagents in Parallel
+
+**For ALL independent tasks:**
+```typescript
+// Launch in SINGLE message with multiple Task calls
+Task({ description: "Task 1", prompt: "...", subagent_type: "general-purpose" })
+Task({ description: "Task 2", prompt: "...", subagent_type: "general-purpose" })
+Task({ description: "Task 3", prompt: "...", subagent_type: "general-purpose" })
+// Wait for ALL to complete before proceeding
+```
+
+**NEVER sequential when parallel is possible:**
+❌ WRONG: Launch Task 1 → Wait → Launch Task 2 → Wait → Launch Task 3
+✅ CORRECT: Launch Task 1, 2, 3 in single message → Wait once
+
+### Step 3: QA Validation (After Every Implementation)
+
+**Immediately after subagents complete:**
+```typescript
+// Launch QA validation subagent
+Task({
+  description: "QA Phase N Outputs",
+  prompt: `
+    ## Context
+    [Same techstack/architecture as implementation]
+
+    ## Your Task
+    Validate the following deliverables:
+    - [Deliverable 1] from Task N-A: path/to/file1
+    - [Deliverable 2] from Task N-B: path/to/file2
+
+    ## Validation (ALL 8 CHECKS REQUIRED)
+    1. No placeholders: grep -r "TODO|FIXME|pass|NotImplementedError|STUB" .
+    2. Error handling: All I/O has try/except
+    3. Type hints: All functions typed
+    4. Tests: Run tests, check ≥80% coverage
+    5. Architecture: Matches project patterns
+    6. Techstack: Follows standards
+    7. Code quality: No code smells, functions <50 lines
+    8. Documentation: All public APIs documented
+
+    ## Output Format (REQUIRED)
+    {
+      "status": "pass" | "fail",
+      "checks": {
+        "no_placeholders": {"pass": true/false, "issues": []},
+        "error_handling": {"pass": true/false, "issues": []},
+        "type_hints": {"pass": true/false, "issues": []},
+        "tests": {"pass": true/false, "issues": []},
+        "architecture": {"pass": true/false, "issues": []},
+        "techstack": {"pass": true/false, "issues": []},
+        "code_quality": {"pass": true/false, "issues": []},
+        "documentation": {"pass": true/false, "issues": []}
+      },
+      "issues": [
+        {"file": "path/to/file", "line": N, "description": "specific issue", "fix": "how to fix"}
+      ]
+    }
+
+    ALL 8 CHECKS MUST PASS. NO EXCEPTIONS.
+  `,
+  subagent_type: "general-purpose"
+})
+```
+
+### Step 4: Decision Point
+
+**If QA PASSES (all 8 checks):**
+- ✅ Mark tasks complete
+- ✅ Create checkpoint
+- ✅ Proceed to next phase
+
+**If QA FAILS (any check):**
+- 🔧 Launch fix subagents (one per issue, in parallel)
+- 🔄 Re-run QA validation
+- 🔁 Repeat up to 3 times
+- 🚨 If still failing after 3 attempts → ESCALATE TO HUMAN
+
+### Step 5: Fix Loop (Max 3 Attempts)
+
+**If QA found issues:**
+```typescript
+// Launch fix subagents in parallel (one per issue)
+Task({
+  description: "Fix Issue 1",
+  prompt: `
+    ## Context
+    [Same techstack/architecture]
+
+    ## Issue to Fix
+    File: path/to/file.ts
+    Line: 42
+    Problem: [exact issue from QA]
+    Fix: [recommended solution from QA]
+
+    ## Rules
+    - Fix ONLY this specific issue
+    - NO scope creep (don't change unrelated code)
+    - Maintain all working functionality
+    - Follow same patterns as existing code
+
+    ## Validation
+    After fix, verify issue is resolved.
+    Run relevant tests to ensure no regressions.
+  `,
+  subagent_type: "general-purpose"
+})
+Task({ description: "Fix Issue 2", prompt: "...", subagent_type: "general-purpose" })
+// Launch all fix tasks in parallel
+```
+
+**After fixes complete:**
+```typescript
+// Re-run QA validation
+Task({ description: "Re-QA After Fixes (Attempt 1)", prompt: "...", subagent_type: "general-purpose" })
+```
+
+**Track attempts:**
+- Attempt 1: Fix → Re-QA
+- Attempt 2: Fix → Re-QA
+- Attempt 3: Fix → Re-QA
+- Still failing? → ESCALATE
+
+### Step 6: Escalation (After 3 Failed Attempts)
+
+**If validation still fails:**
+```
+🚨 HUMAN REVIEW REQUIRED
+
+Phase: [Phase N]
+Task: [Task ID]
+Issue: [Blocking problem]
+Fix Attempts: 3 (all failed)
+
+QA Failures:
+- Check 1: [issue description]
+- Check 2: [issue description]
+
+Options Explored:
+1. [Approach 1] - Failed because [reason]
+2. [Approach 2] - Failed because [reason]
+3. [Approach 3] - Failed because [reason]
+
+Recommendation: [Suggest approach or architectural decision needed]
+
+Awaiting human decision before proceeding.
+```
+
+---
+
+## SESSION 53 ARCHITECTURE ANALYSIS
+
+### Context
+- **Session 50:** Completed auth system refactor (all 6 phases)
+- **Session 51:** Validated system and confirmed production-ready status
+  - ✅ All validation tests passed
+  - ✅ Better Auth RBAC researched
+  - ✅ Database integrity confirmed
+  - ✅ Better Auth integrations audited
+  - ✅ System is production-ready for MVP
+
+### Architecture Clarification Needed
+
+**Session 51 made an incorrect assumption** about multi-tenancy requirements. Before proceeding with feature development, we must analyze and document the correct architecture for:
+
+### MVP Architecture (Current - Local Pi Install)
+- **Offline-first appliance** - Raspberry Pi per location
+- **Single-tenant** - One escape room business per install
+- **App-wide RBAC** - Admin, manager, game_master, customer roles
+- **License key validation** - Per install activation
+- **No cloud dependency** - Fully self-contained
+
+### Future Cloud Architecture (Phase 2+)
+- **Multi-location owners** - Single owner, multiple Pi "hubs"
+- **Cloud Control subscription** - Optional sync layer ($129/mo base)
+- **Organization concept** - Owner account with multiple hub installs
+- **Hub-to-cloud sync** - Backup, analytics, user/customer data sharing
+- **Still offline-first** - Cloud enhances but doesn't replace local operation
+
+### Key Questions to Answer
+1. Is our current single-tenant RBAC correct for MVP?
+2. Can we add cloud sync layer later WITHOUT major refactoring?
+3. Should we use Better Auth admin + organization plugins NOW or LATER?
+4. What database schema changes (if any) prepare us for cloud phase?
+5. How does license key system integrate with future cloud org concept?
+
+---
+
+## PHASE BREAKDOWN (ATOMIC TASKS)
+
+### Phase 1: Document Current State
+
+**Atomic Tasks (launch in parallel):**
+
+**Task 1-A: Auth Implementation Analysis**
+```
+Context: Better Auth v1.3.24+, Drizzle, SQLite, current RBAC system
+Instruction: Analyze Session 50-51 deliverables and document current auth architecture
+Requirements:
+- Document current RBAC structure (roles, permissions, triggers)
+- List all Better Auth plugins currently integrated
+- Identify all database tables and relationships
+- Document session enrichment mechanism
+Constraints:
+- NO assumptions about what should be there
+- Document EXACTLY what exists now
+- Include code references with file:line format
+Acceptance Criteria:
+- [ ] Complete RBAC structure documented
+- [ ] All Better Auth integrations listed
+- [ ] Database schema diagram included
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: CURRENT_AUTH_ARCHITECTURE.md (complete analysis)
+Dependencies:
+- Read: project-docs/project-tracking/sessions/SESSION_50_NOTES.md
+- Read: project-docs/project-tracking/sessions/SESSION_51_NOTES.md
+- Read: apps/escapeplan-api/src/auth-config.ts
+- Read: packages/contracts/src/schema.ts
+```
+
+**Task 1-B: MVP Requirements Extraction**
+```
+Context: Offline-first Pi appliance, single-tenant escape room system
+Instruction: Extract MVP requirements from project-overview.md relevant to auth/cloud
+Requirements:
+- Extract all offline-first constraints (sections 1.1-1.6)
+- Identify single-tenant assumptions
+- Document NO mock data constraint (section 1.6)
+- List deferred cloud features (section 1.7)
+Constraints:
+- Quote exact text from project-overview.md
+- NO interpretation or inference
+- Include section/line references
+Acceptance Criteria:
+- [ ] All offline-first constraints documented
+- [ ] Single-tenant assumptions identified
+- [ ] Deferred features listed
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: MVP_REQUIREMENTS_AUTH.md (complete extraction)
+Dependencies:
+- Read: project-docs/project-overview.md (sections 1.1-1.7)
+```
+
+**Task 1-C: Monetization Strategy Analysis**
+```
+Context: License keys, cloud sync, subscription billing
+Instruction: Analyze monetization strategy for cloud sync requirements
+Requirements:
+- Extract cloud control subscription details (section 5.3)
+- Document license key requirements (section 5.1, 9)
+- Identify multi-hub billing model
+- Extract support renewal structure
+Constraints:
+- Quote pricing tiers exactly
+- Document feature unlock model
+- NO assumptions about implementation
+Acceptance Criteria:
+- [ ] Cloud control features documented
+- [ ] License key system requirements clear
+- [ ] Multi-hub billing model understood
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: MONETIZATION_CLOUD_REQUIREMENTS.md (complete analysis)
+Dependencies:
+- Read: project-docs/monetization/escapeplan-pricing-strategy.md (sections 5.1, 5.3, 9, 10)
+```
+
+**Task 1-D: Integration Audit**
+```
+Context: Better Auth plugins required vs integrated
+Instruction: Audit Better Auth integration completeness
+Requirements:
+- Review BETTER_AUTH_INTEGRATION_AUDIT.md findings
+- Cross-check with better-auth-integrations.txt requirements
+- Document admin plugin status and reason for removal/absence
+- Identify gaps in integration coverage
+Constraints:
+- Use EXACT plugin names from Better Auth docs
+- Document conflicts (e.g., admin plugin vs our RBAC)
+- NO recommendations yet (just facts)
+Acceptance Criteria:
+- [ ] All required integrations listed
+- [ ] Current status documented
+- [ ] Gaps identified with evidence
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: INTEGRATION_AUDIT_CURRENT.md (complete audit)
+Dependencies:
+- Read: project-docs/research/claude-auth/BETTER_AUTH_INTEGRATION_AUDIT.md
+- Read: project-docs/better-auth-integrations.txt
+```
+
+**QA Task 1-E: Validate Phase 1 Outputs**
+```
+Context: Phase 1 analysis deliverables
+Instruction: Validate all 4 analysis documents for completeness and accuracy
+Requirements:
+- Run all 8 QA checks on each deliverable
+- Verify no conflicting information across documents
+- Ensure all file references are valid
+- Check for assumptions or ambiguity
+Output Format:
+{
+  "status": "pass" | "fail",
+  "checks": { [8 checks with pass/fail] },
+  "issues": [{ "file": "...", "line": N, "description": "...", "fix": "..." }]
+}
+```
+
+**Execute Phase 1:**
+1. Launch Tasks 1-A, 1-B, 1-C, 1-D in parallel (single message, 4 Task calls)
+2. Wait for all to complete
+3. Launch Task 1-E (QA validation)
+4. If issues found: Launch fix tasks → Re-QA (max 3 attempts)
+5. If still failing: ESCALATE
+6. If passing: Proceed to Phase 2
+
+---
+
+### Phase 2: Analyze Future Requirements
+
+**Atomic Tasks (launch in parallel):**
+
+**Task 2-A: Cloud Sync Architecture Design**
+```
+Context: Hub-to-cloud sync, offline-first with optional cloud
+Instruction: Design hub-to-cloud sync protocol
+Requirements:
+- Define sync protocol (push/pull/bidirectional)
+- Design data models for cloud storage
+- Specify conflict resolution strategy (hub vs cloud)
+- Document offline grace period handling
+Constraints:
+- Hub MUST work without cloud connectivity
+- Sync is optional enhancement, not requirement
+- NO breaking changes to MVP architecture
+- Use industry standard sync patterns (CRDTs/last-write-wins/etc)
+Acceptance Criteria:
+- [ ] Sync protocol documented with sequence diagrams
+- [ ] Conflict resolution strategy defined
+- [ ] Data models for cloud storage specified
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: CLOUD_SYNC_ARCHITECTURE.md (complete design)
+Dependencies:
+- Input: CURRENT_AUTH_ARCHITECTURE.md (Phase 1-A output)
+- Input: MVP_REQUIREMENTS_AUTH.md (Phase 1-B output)
+```
+
+**Task 2-B: Organization/Hub Relationship Model**
+```
+Context: Multi-location owners with multiple Pi hubs
+Instruction: Design organization and hub relationship model
+Requirements:
+- Design organization table schema
+- Define hub registration/linking mechanism
+- Specify multi-hub data sharing patterns (users, customers, bookings)
+- Document hub-to-org FK relationships
+Constraints:
+- Each hub is standalone (can run without org)
+- Organization is cloud concept only
+- Hubs can share customer data across locations
+- NO multi-tenancy at hub level (each hub = single tenant)
+Acceptance Criteria:
+- [ ] Organization schema documented
+- [ ] Hub linking mechanism designed
+- [ ] Data sharing patterns specified
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: ORGANIZATION_HUB_MODEL.md (complete design)
+Dependencies:
+- Input: MONETIZATION_CLOUD_REQUIREMENTS.md (Phase 1-C output)
+```
+
+**Task 2-C: License Key Integration Strategy**
+```
+Context: License key per hub, cloud org linking
+Instruction: Design license key validation and cloud org linking
+Requirements:
+- Design license key generation and validation system
+- Define cloud org linking mechanism (key → org_id)
+- Specify offline grace period handling
+- Document license expiration and renewal flow
+Constraints:
+- Hub validates license locally (no cloud required)
+- License key serves as org identifier initially
+- When syncing to cloud, key links to org account
+- Support perpetual licenses (section 5.1) + renewals
+Acceptance Criteria:
+- [ ] License key system documented
+- [ ] Cloud org linking strategy defined
+- [ ] Offline validation specified
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: LICENSE_KEY_STRATEGY.md (complete design)
+Dependencies:
+- Input: MONETIZATION_CLOUD_REQUIREMENTS.md (Phase 1-C output)
+- Input: ORGANIZATION_HUB_MODEL.md (Phase 2-B output)
+```
+
+**Task 2-D: Better Auth Plugin Strategy**
+```
+Context: Admin plugin for platform auth, organization plugin for multi-hub
+Instruction: Research and determine when to integrate Better Auth plugins
+Requirements:
+- Research admin plugin capabilities using Context7
+- Research organization plugin capabilities using Context7
+- Determine if/when to integrate each plugin
+- Document compatibility with our current RBAC
+Constraints:
+- Use Context7 MCP tool for latest Better Auth docs
+- Document conflicts with current implementation
+- Consider MVP vs cloud phase timing
+- NO implementation recommendations yet (research only)
+Acceptance Criteria:
+- [ ] Admin plugin capabilities documented
+- [ ] Organization plugin capabilities documented
+- [ ] Compatibility analysis complete
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: BETTER_AUTH_PLUGIN_RESEARCH.md (complete analysis)
+Dependencies:
+- Input: CURRENT_AUTH_ARCHITECTURE.md (Phase 1-A output)
+- Input: INTEGRATION_AUDIT_CURRENT.md (Phase 1-D output)
+- Research: Use Context7 for Better Auth docs
+```
+
+**Task 2-E: Schema Evolution Plan**
+```
+Context: Prepare MVP schema for future cloud sync
+Instruction: Identify schema additions needed for cloud-readiness
+Requirements:
+- List fields needed for sync (sync_status, cloud_id, last_sync_at)
+- Design backward-compatible migration path
+- Specify which tables need cloud metadata
+- Document optional vs required fields
+Constraints:
+- NO breaking changes to MVP
+- All cloud fields are nullable/optional
+- Hub works without cloud fields populated
+- Use Drizzle ORM migration patterns
+Acceptance Criteria:
+- [ ] Schema additions documented per table
+- [ ] Migration path specified
+- [ ] Backward compatibility verified
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: SCHEMA_EVOLUTION_PLAN.md (complete specification)
+Dependencies:
+- Input: CURRENT_AUTH_ARCHITECTURE.md (Phase 1-A output)
+- Input: CLOUD_SYNC_ARCHITECTURE.md (Phase 2-A output)
+- Input: ORGANIZATION_HUB_MODEL.md (Phase 2-B output)
+```
+
+**QA Task 2-F: Validate Phase 2 Outputs**
+```
+Context: Phase 2 design deliverables
+Instruction: Validate all 5 design documents
+Requirements:
+- Run all 8 QA checks on each deliverable
+- Verify designs are consistent across documents
+- Check for architectural conflicts
+- Ensure future-proof without over-engineering MVP
+Output Format:
+{
+  "status": "pass" | "fail",
+  "checks": { [8 checks with pass/fail] },
+  "issues": [{ "file": "...", "line": N, "description": "...", "fix": "..." }]
+}
+```
+
+**Execute Phase 2:**
+1. Launch Tasks 2-A, 2-B, 2-C, 2-D, 2-E in parallel (single message, 5 Task calls)
+2. Wait for all to complete
+3. Launch Task 2-F (QA validation)
+4. If issues found: Launch fix tasks → Re-QA (max 3 attempts)
+5. If still failing: ESCALATE
+6. If passing: Proceed to Phase 3
+
+---
+
+### Phase 3: Gap Analysis
+
+**Atomic Tasks (launch in parallel):**
+
+**Task 3-A: Multi-Tenant Impact Analysis (Add NOW)**
+```
+Context: Analyzing what happens if we add multi-tenant/org NOW
+Instruction: Analyze impact of adding organization/multi-tenant architecture in MVP
+Requirements:
+- List all breaking changes to current system
+- Calculate refactoring effort (hours)
+- Identify migration path for existing deployments
+- Document risks and blockers
+Constraints:
+- Use data from Phase 1-2 outputs
+- Provide specific file/line references
+- Quantify effort per component
+Acceptance Criteria:
+- [ ] All breaking changes identified
+- [ ] Effort estimate with justification
+- [ ] Migration path documented
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: MULTI_TENANT_NOW_IMPACT.md (complete analysis)
+Dependencies:
+- Input: All Phase 1 outputs
+- Input: All Phase 2 outputs
+```
+
+**Task 3-B: Deferred Multi-Tenant Impact Analysis (Add LATER)**
+```
+Context: Analyzing what happens if we add multi-tenant in cloud phase
+Instruction: Analyze impact of deferring organization/multi-tenant to cloud phase
+Requirements:
+- List schema changes needed later
+- Calculate future migration effort (hours)
+- Identify technical debt risks
+- Document what breaks if we wait
+Constraints:
+- Use data from Phase 1-2 outputs
+- Compare against "add now" approach
+- Quantify migration complexity
+Acceptance Criteria:
+- [ ] Future schema changes identified
+- [ ] Migration effort estimated
+- [ ] Technical debt risks documented
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: MULTI_TENANT_LATER_IMPACT.md (complete analysis)
+Dependencies:
+- Input: All Phase 1 outputs
+- Input: All Phase 2 outputs
+```
+
+**Task 3-C: Comparison Matrix**
+```
+Context: Compare "add now" vs "add later" approaches
+Instruction: Create decision matrix comparing both approaches
+Requirements:
+- Compare Option A (add now) vs Option B (add later)
+- Calculate effort, risk, benefit for each
+- Identify hybrid approaches (middle ground)
+- Provide quantified comparison
+Constraints:
+- Use data from Task 3-A and 3-B
+- Include ROI analysis (effort vs benefit)
+- Consider MVP timeline impact
+Acceptance Criteria:
+- [ ] Decision matrix with scores
+- [ ] Effort/risk/benefit quantified
+- [ ] Hybrid options identified
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: APPROACH_COMPARISON_MATRIX.md (complete comparison)
+Dependencies:
+- Input: MULTI_TENANT_NOW_IMPACT.md (Task 3-A output)
+- Input: MULTI_TENANT_LATER_IMPACT.md (Task 3-B output)
+```
+
+**Task 3-D: Schema Change Impact**
+```
+Context: Specific schema changes needed for each approach
+Instruction: Detail schema impact for each approach
+Requirements:
+- List all table changes for "add now"
+- List all table changes for "add later"
+- Estimate migration complexity (lines of code, risk)
+- Identify backward compatibility concerns
+Constraints:
+- Use Drizzle ORM migration patterns
+- Reference current schema from Phase 1-A
+- Include SQL migration examples
+Acceptance Criteria:
+- [ ] Schema changes documented per approach
+- [ ] Migration complexity estimated
+- [ ] Backward compatibility analyzed
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: SCHEMA_CHANGE_IMPACT.md (complete analysis)
+Dependencies:
+- Input: CURRENT_AUTH_ARCHITECTURE.md (Phase 1-A)
+- Input: SCHEMA_EVOLUTION_PLAN.md (Phase 2-E)
+- Input: MULTI_TENANT_NOW_IMPACT.md (Task 3-A)
+- Input: MULTI_TENANT_LATER_IMPACT.md (Task 3-B)
+```
+
+**QA Task 3-E: Validate Phase 3 Outputs**
+```
+Context: Phase 3 gap analysis deliverables
+Instruction: Validate all 4 analysis documents
+Requirements:
+- Run all 8 QA checks on each deliverable
+- Verify calculations and estimates are justified
+- Check for missing considerations
+- Ensure analyses are consistent
+Output Format:
+{
+  "status": "pass" | "fail",
+  "checks": { [8 checks with pass/fail] },
+  "issues": [{ "file": "...", "line": N, "description": "...", "fix": "..." }]
+}
+```
+
+**Execute Phase 3:**
+1. Launch Tasks 3-A, 3-B, 3-C, 3-D in parallel (single message, 4 Task calls)
+2. Wait for all to complete
+3. Launch Task 3-E (QA validation)
+4. If issues found: Launch fix tasks → Re-QA (max 3 attempts)
+5. If still failing: ESCALATE
+6. If passing: Proceed to Phase 4
+
+---
+
+### Phase 4: Recommendation & Roadmap
+
+**Atomic Tasks (launch in parallel):**
+
+**Task 4-A: Architecture Decision**
+```
+Context: Synthesize all analysis to make recommendation
+Instruction: Make architecture decision with evidence-based justification
+Requirements:
+- Synthesize all Phase 1-3 findings
+- Make clear recommendation (add now / add later / hybrid)
+- Provide evidence from analysis documents
+- Document rationale with trade-offs
+Constraints:
+- Decision MUST be justified by data from analyses
+- Include minority opinion if close decision
+- Document assumptions made
+Acceptance Criteria:
+- [ ] Clear recommendation stated
+- [ ] Evidence from analyses cited
+- [ ] Trade-offs documented
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: ARCHITECTURE_DECISION_RECORD.md (complete ADR)
+Dependencies:
+- Input: All Phase 3 outputs
+- Input: APPROACH_COMPARISON_MATRIX.md (Task 3-C)
+```
+
+**Task 4-B: Phased Implementation Roadmap**
+```
+Context: Create phased roadmap based on decision
+Instruction: Create detailed phased implementation roadmap
+Requirements:
+- Define Phase 0 (MVP), Phase 1 (Cloud Prep), Phase 2 (Cloud Launch), Phase 3 (Multi-Hub)
+- Specify deliverables for each phase
+- Document dependencies and prerequisites
+- Include timeline estimates
+Constraints:
+- Based on architecture decision from Task 4-A
+- Use effort estimates from Phase 3
+- Align with monetization strategy (Phase 1-C)
+Acceptance Criteria:
+- [ ] All phases documented
+- [ ] Deliverables specified per phase
+- [ ] Dependencies mapped
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: CLOUD_GROWTH_ROADMAP.md (complete roadmap)
+Dependencies:
+- Input: ARCHITECTURE_DECISION_RECORD.md (Task 4-A output)
+- Input: MONETIZATION_CLOUD_REQUIREMENTS.md (Phase 1-C)
+```
+
+**Task 4-C: Risk Mitigation Plan**
+```
+Context: Identify and mitigate risks for chosen approach
+Instruction: Create risk register with mitigation strategies
+Requirements:
+- Identify risks for chosen approach
+- Define mitigation strategies per risk
+- Specify fallback options
+- Include risk probability and impact
+Constraints:
+- Use risk data from Phase 3 analyses
+- Provide actionable mitigation steps
+- Include contingency plans
+Acceptance Criteria:
+- [ ] All risks identified with P/I scores
+- [ ] Mitigation strategies defined
+- [ ] Fallback options documented
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: RISK_MITIGATION_PLAN.md (complete plan)
+Dependencies:
+- Input: ARCHITECTURE_DECISION_RECORD.md (Task 4-A)
+- Input: All Phase 3 impact analyses
+```
+
+**QA Task 4-D: Validate Recommendations**
+```
+Context: Phase 4 recommendation deliverables
+Instruction: Validate all 3 recommendation documents
+Requirements:
+- Run all 8 QA checks on each deliverable
+- Verify recommendation is well-justified
+- Check roadmap is realistic and complete
+- Ensure risks are adequately addressed
+Output Format:
+{
+  "status": "pass" | "fail",
+  "checks": { [8 checks with pass/fail] },
+  "issues": [{ "file": "...", "line": N, "description": "...", "fix": "..." }]
+}
+```
+
+**Execute Phase 4:**
+1. Launch Tasks 4-A, 4-B, 4-C in parallel (single message, 3 Task calls)
+2. Wait for all to complete
+3. Launch Task 4-D (QA validation)
+4. If issues found: Launch fix tasks → Re-QA (max 3 attempts)
+5. If still failing: ESCALATE
+6. If passing: Proceed to Phase 5
+
+---
+
+### Phase 5: Documentation & Completion
+
+**Atomic Tasks (launch in parallel):**
+
+**Task 5-A: Create SESSION_53_NOTES.md**
+```
+Context: Document entire Session 53 process
+Instruction: Create comprehensive session notes
+Requirements:
+- Document all 5 phases with results
+- Include all task outcomes and QA findings
+- Summarize architecture decision
+- List all deliverables created
+Constraints:
+- Use session notes template
+- Include file references with paths
+- Document any escalations or issues
+Acceptance Criteria:
+- [ ] All phases documented
+- [ ] All deliverables listed
+- [ ] Decision summary included
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: project-docs/project-tracking/sessions/SESSION_53_NOTES.md
+Dependencies:
+- Input: All Phase 1-4 outputs
+- Input: ARCHITECTURE_DECISION_RECORD.md (Task 4-A)
+```
+
+**Task 5-B: Update HANDOFF.md**
+```
+Context: Update handoff document with architecture clarity
+Instruction: Update HANDOFF.md with architecture decisions
+Requirements:
+- Document architecture decisions
+- Include growth roadmap summary
+- Specify Session 54 prerequisites
+- Update current system status
+Constraints:
+- Keep concise (1-2 pages)
+- Include file references
+- Align with ADR and roadmap
+Acceptance Criteria:
+- [ ] Architecture decisions documented
+- [ ] Roadmap summary included
+- [ ] Session 54 prerequisites specified
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: project-docs/project-tracking/HANDOFF.md (updated)
+Dependencies:
+- Input: ARCHITECTURE_DECISION_RECORD.md (Task 4-A)
+- Input: CLOUD_GROWTH_ROADMAP.md (Task 4-B)
+- Read: Current HANDOFF.md
+```
+
+**Task 5-C: Update auth-prompt.txt for Session 54**
+```
+Context: Prepare Session 54 directive based on decisions
+Instruction: Update auth-prompt.txt for Session 54 with clear direction
+Requirements:
+- Integrate architecture decisions
+- Define Session 54 tasks from SESSION_54_TASKS.md
+- Add atomic task decomposition for each track
+- Include all context needed (techstack, architecture, decisions)
+Constraints:
+- Maintain atomic subagent methodology
+- Include all 5 hard rules
+- Provide complete context for each task
+Acceptance Criteria:
+- [ ] Architecture decisions integrated
+- [ ] Session 54 tasks clearly defined
+- [ ] Atomic task templates included
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: project-docs/research/claude-auth/auth-prompt.txt (updated)
+Dependencies:
+- Input: ARCHITECTURE_DECISION_RECORD.md (Task 4-A)
+- Input: CLOUD_GROWTH_ROADMAP.md (Task 4-B)
+- Read: project-docs/research/claude-auth/SESSION_54_TASKS.md
+```
+
+**Task 5-D: Update TODO.json**
+```
+Context: Update project backlog with architecture work
+Instruction: Update TODO.json with Session 53 completion and new tasks
+Requirements:
+- Mark Session 53 architecture work complete
+- Add any new tasks from roadmap
+- Update priorities based on decisions
+- Reference ADR and roadmap
+Constraints:
+- Follow TODO.json schema
+- Update phase tags appropriately
+- Add effort estimates from roadmap
+Acceptance Criteria:
+- [ ] Session 53 marked complete
+- [ ] New tasks added from roadmap
+- [ ] Priorities updated
+- [ ] All 8 QA checks pass
+Deliverables:
+- File: project-docs/project-tracking/TODO.json (updated)
+Dependencies:
+- Input: CLOUD_GROWTH_ROADMAP.md (Task 4-B)
+- Read: Current TODO.json
+```
+
+**QA Task 5-E: Final Documentation Review**
+```
+Context: Final validation of all Session 53 deliverables
+Instruction: Validate all documentation is complete and accurate
+Requirements:
+- Run all 8 QA checks on all Phase 5 deliverables
+- Verify consistency across all Session 53 documents
+- Check for actionable guidance for Session 54
+- Ensure no stubs, TODOs, or placeholders
+Output Format:
+{
+  "status": "pass" | "fail",
+  "checks": { [8 checks with pass/fail] },
+  "issues": [{ "file": "...", "line": N, "description": "...", "fix": "..." }]
+}
+```
+
+**Execute Phase 5:**
+1. Launch Tasks 5-A, 5-B, 5-C, 5-D in parallel (single message, 4 Task calls)
+2. Wait for all to complete
+3. Launch Task 5-E (QA validation)
+4. If issues found: Launch fix tasks → Re-QA (max 3 attempts)
+5. If still failing: ESCALATE
+6. If passing: Session 53 COMPLETE
+
+---
+
+## FINAL VALIDATION CHECKLIST
+
+**Before marking Session 53 complete, verify:**
+
+- [ ] All 5 phases executed with atomic tasks
+- [ ] Every implementation passed QA validation (all 8 checks)
+- [ ] Zero stubs, mocks, TODOs, or placeholders in deliverables
+- [ ] Architecture decision documented with evidence
+- [ ] Growth roadmap complete with phases and deliverables
+- [ ] Session 54 has atomic task breakdown with full context
+- [ ] Recursive validation loop confirmed no issues
+- [ ] All subagents received full context (techstack + architecture + requirements)
+- [ ] All independent tasks executed in parallel (not sequential)
+- [ ] Any escalations documented with resolution or human input
+
+---
+
+## REQUIRED READING (in order)
+
+1. `@escapeplan-app/project-docs/project-tracking/prompt-claude.txt`
+2. `@escapeplan-app/project-docs/project-overview.md` (sections 1.1-1.7, focus on constraints)
+3. `@escapeplan-app/project-docs/monetization/escapeplan-pricing-strategy.md` (sections 5.1, 5.3, 9, 10)
+4. `@escapeplan-app/project-docs/project-tracking/sessions/SESSION_50_NOTES.md`
+5. `@escapeplan-app/project-docs/project-tracking/sessions/SESSION_51_NOTES.md`
+6. `@escapeplan-app/project-docs/research/claude-auth/BETTER_AUTH_RBAC_ANALYSIS.md`
+7. `@escapeplan-app/project-docs/research/claude-auth/BETTER_AUTH_INTEGRATION_AUDIT.md`
+8. `@escapeplan-app/project-docs/research/claude-auth/SESSION_54_TASKS.md`
+
+---
+
+## SESSION START PROCEDURE
+
+1. **Create SESSION_53_NOTES.md** from template
+2. **Launch Phase 1** (4 parallel tasks + QA)
+3. **Validate Phase 1** (fix loop if needed, max 3 attempts)
+4. **Launch Phase 2** (5 parallel tasks + QA)
+5. **Validate Phase 2** (fix loop if needed, max 3 attempts)
+6. **Launch Phase 3** (4 parallel tasks + QA)
+7. **Validate Phase 3** (fix loop if needed, max 3 attempts)
+8. **Launch Phase 4** (3 parallel tasks + QA)
+9. **Validate Phase 4** (fix loop if needed, max 3 attempts)
+10. **Launch Phase 5** (4 parallel tasks + QA)
+11. **Final Validation** (comprehensive system check)
+12. **Mark Session 53 Complete** (only if all validations pass)
+
+---
+
+## SUCCESS METRICS (ALL REQUIRED)
+
+- [ ] 100% of tasks executed with parallel subagents
+- [ ] Every deliverable passed QA validation (all 8 checks)
+- [ ] Zero code stubs or placeholders
+- [ ] Architecture decision documented with evidence
+- [ ] Growth roadmap complete with phases
+- [ ] Session 54 ready with atomic task breakdown
+- [ ] Recursive validation loop confirmed no issues
+
+---
+
+**Status:** Architecture analysis phase. Session 54 tasks deferred to SESSION_54_TASKS.md.
+
+**Remember: You are the ORCHESTRATOR. Launch subagents for ALL work. Validate EVERYTHING. Fix recursively until production-ready. NO EXCEPTIONS.**

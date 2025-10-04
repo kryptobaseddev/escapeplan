@@ -4,28 +4,34 @@
   import { goto, invalidate, invalidateAll } from '$app/navigation';
   import { browser } from '$app/environment';
   import { page } from '$app/stores';
+  import { onMount } from 'svelte';
   import { openConfirmDialog } from '$lib/components/confirm-dialog';
   import ArchiveReasonContent from '$lib/components/ArchiveReasonContent.svelte';
   import PasswordResetModal from '$lib/components/PasswordResetModal.svelte';
-  import UserModal from '$lib/components/UserModal.svelte';
-  import RoleModal from '$lib/components/RoleModal.svelte';
   import RolesTab from '$lib/components/RolesTab.svelte';
   import PermissionsTab from '$lib/components/PermissionsTab.svelte';
   import Avatar from '$lib/avatar/Avatar.svelte';
+  import SkeletonLoader from '$lib/components/ui/SkeletonLoader.svelte';
+  import EmptyState from '$lib/components/ui/EmptyState.svelte';
   import { formatDistanceToNow } from 'date-fns';
   import type { OperatorRole, OperatorSummary } from '@escapeplan/contracts';
   import { ROLE_LABELS } from '@escapeplan/contracts';
   import type { PageData } from './$types';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
+
+  let isLoading = $state(true);
+
+  onMount(() => {
+    setTimeout(() => {
+      isLoading = false;
+    }, 500);
+  });
 
   // Determine default tab based on permissions
   const defaultTab = data.canManageUsers ? 'users' : data.canViewRoles ? 'roles' : 'permissions';
   let activeTab = $state<'users' | 'roles' | 'permissions'>(defaultTab);
 
-  let createModalOpen = $state(false);
-  let createRoleModalOpen = $state(false);
-  let editingUser = $state<OperatorSummary | null>(null);
   let resettingUser = $state<OperatorSummary | null>(null);
   let isSubmitting = $state(false);
   let feedback = $state<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -111,33 +117,10 @@
     await invalidate('app:admin:users');
   }
 
-  async function handleCreateSuccess() {
-    createModalOpen = false;
-    await refreshData();
-    feedback = { type: 'success', message: 'Operator created successfully.' };
-  }
-
-  async function handleEditSuccess() {
-    const wasCurrentUser = editingUser ? isCurrentUser(editingUser) : false;
-    editingUser = null;
-    await refreshData();
-    // If editing current user, invalidate all to refresh session/layout data
-    if (wasCurrentUser) {
-      await invalidateAll();
-    }
-    feedback = { type: 'success', message: 'Operator updated successfully.' };
-  }
-
   async function handleResetSuccess() {
     resettingUser = null;
     await refreshData();
     feedback = { type: 'success', message: 'Password reset successfully.' };
-  }
-
-  function closeModals() {
-    createModalOpen = false;
-    editingUser = null;
-    resettingUser = null;
   }
 
   async function submitAction(action: string, fields: Record<string, string | null | undefined>) {
@@ -243,11 +226,6 @@
     }
   }
 
-  function handleEdit(user: OperatorSummary) {
-    editingUser = user;
-    feedback = null;
-  }
-
   function handleReset(user: OperatorSummary) {
     resettingUser = user;
     feedback = null;
@@ -263,14 +241,14 @@
       </p>
     </div>
     {#if activeTab === 'users' && data.canManageUsers}
-      <button class="btn btn-primary w-full sm:w-auto" onclick={() => { feedback = null; createModalOpen = true; }}>
+      <a href="/admin/users/create" class="btn btn-primary w-full sm:w-auto">
         + Add user
-      </button>
+      </a>
     {/if}
     {#if activeTab === 'roles' && data.canManageRoles}
-      <button class="btn btn-primary w-full sm:w-auto" onclick={() => { feedback = null; createRoleModalOpen = true; }}>
+      <a href="/admin/roles/create" class="btn btn-primary w-full sm:w-auto">
         + Create role
-      </button>
+      </a>
     {/if}
   </header>
 
@@ -399,10 +377,13 @@
     {/if}
   </div>
 
-  {#if data.users.length === 0}
-    <p class="rounded-2xl border border-dashed border-base-content/15 bg-base-100/60 px-6 py-10 text-center text-sm text-base-content/60">
-      No operators found with the current filters.
-    </p>
+  {#if isLoading}
+    <SkeletonLoader type="table" rows={8} />
+  {:else if data.users.length === 0}
+    <EmptyState
+      title="No users"
+      message="Add your first operator to get started."
+    />
   {:else}
     <div class="space-y-4 sm:hidden">
       {#each data.users as user (user.id)}
@@ -443,7 +424,7 @@
                 </svg>
               </button>
               <ul class="dropdown-content menu menu-sm z-[1] w-full max-w-xs rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
-                <li><button type="button" onclick={() => handleEdit(user)}>Edit details</button></li>
+                <li><a href="/admin/users/{user.id}/edit">Edit details</a></li>
                 <li><button type="button" onclick={() => handleReset(user)}>Reset password</button></li>
                 {#if user.archivedAt}
                   <li>
@@ -533,7 +514,7 @@
                         </svg>
                       </button>
                       <ul class="dropdown-content menu menu-sm z-[1] w-48 rounded-2xl border border-white/10 bg-base-200/95 p-2 text-sm shadow-lg">
-                        <li><button type="button" onclick={() => handleEdit(user)}>Edit details</button></li>
+                        <li><a href="/admin/users/{user.id}/edit">Edit details</a></li>
                         <li><button type="button" onclick={() => handleReset(user)}>Reset password</button></li>
                         {#if user.archivedAt}
                           <li>
@@ -597,27 +578,6 @@
   {/if}
 </section>
 
-<UserModal
-  open={createModalOpen}
-  mode="create"
-  action="?/create"
-  canAssignAdmin={data.canAssignAdmin}
-  onclose={closeModals}
-  onsuccess={handleCreateSuccess}
-/>
-
-{#if editingUser}
-  <UserModal
-    open={true}
-    mode="edit"
-    action="?/update"
-    canAssignAdmin={data.canAssignAdmin}
-    user={editingUser}
-    onclose={() => (editingUser = null)}
-    onsuccess={handleEditSuccess}
-  />
-{/if}
-
 {#if resettingUser}
   <PasswordResetModal
     open={true}
@@ -627,13 +587,3 @@
     onsuccess={handleResetSuccess}
   />
 {/if}
-
-<RoleModal
-  open={createRoleModalOpen}
-  onclose={() => (createRoleModalOpen = false)}
-  onsuccess={async () => {
-    createRoleModalOpen = false;
-    await refreshData();
-    feedback = { type: 'success', message: 'Role created successfully.' };
-  }}
-/>

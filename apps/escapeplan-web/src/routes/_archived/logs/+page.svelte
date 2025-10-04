@@ -6,7 +6,7 @@
   import { apiFetch } from '$lib/api/client';
   import { goto } from '$app/navigation';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
 
   let logs = $state<SystemLog[]>(data.logs ?? []);
   let total = $state(data.total ?? 0);

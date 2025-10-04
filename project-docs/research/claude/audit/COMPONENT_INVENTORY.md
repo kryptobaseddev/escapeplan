@@ -1,5 +1,8 @@
 # EscapePlan UI Component Inventory
 
+> **⚠️ DEPRECATED:** Component inventory incorporated into [`../UI-OPTIMIZATION-PLAN.md`](../UI-OPTIMIZATION-PLAN.md)
+> **See:** Component Architecture Overhaul section.
+
 **Date:** 2025-10-02
 **Auditor:** Claude (UI Design System Audit - Session 52)
 **Tech Stack:** DaisyUI 5.1.25+, Tailwind CSS 4, SvelteKit 2, Svelte 5 (runes)

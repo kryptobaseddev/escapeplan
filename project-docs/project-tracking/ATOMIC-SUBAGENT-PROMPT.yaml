@@ -1,0 +1,114 @@
+# ATOMIC SUBAGENT EXECUTION PROTOCOL
+# Load this before every sub-agent task execution
+
+hard_rules:
+  - ONE_TASK_ONE_PURPOSE: Single atomic instruction, 2-4 hours max
+  - ZERO_PLACEHOLDERS: No TODO, pass, stubs, NotImplementedError - production code only
+  - FULL_CONTEXT_REQUIRED: Always load @techstack.yaml + @project.yaml + task instruction
+  - VALIDATE_EVERYTHING: Implementation → QA (8 checks) → Fix (max 3) → Escalate
+  - NO_ASSUMPTIONS: Ask if unclear, follow constraints exactly, no scope creep
+
+execution_workflow:
+  step_1_implement:
+    - Read @techstack.yaml (tech standards)
+    - Read @project.yaml (architecture patterns)
+    - Read task instruction (requirements + constraints)
+    - Write production code (complete implementation)
+    - Add error handling (all I/O operations in try/except)
+    - Add type hints (all functions with parameters and return types)
+    - Write tests (≥80% coverage)
+    - Add documentation (docstrings on public APIs)
+
+  step_2_validate:
+    - check_1_no_placeholders: grep -r "TODO|FIXME|pass$|NotImplementedError" src/
+    - check_2_error_handling: All I/O has try/except with specific exceptions
+    - check_3_type_hints: mypy --strict passes
+    - check_4_tests: pytest ≥80% coverage, all pass
+    - check_5_architecture: Matches @project.yaml patterns
+    - check_6_techstack: Follows @techstack.yaml standards
+    - check_7_code_quality: No code smells, functions <50 lines
+    - check_8_documentation: All public APIs documented
+    - result: ALL must pass (no exceptions)
+
+  step_3_decision:
+    if_all_pass:
+      - Create checkpoint
+      - Update task status COMPLETED
+      - Proceed to next task
+    if_any_fail:
+      - Invoke fix sub-agent with QA issues
+      - Re-run validation (attempt 1)
+      - Repeat max 3 times
+      - If still failing → ESCALATE TO HUMAN
+
+sub_agent_roles:
+  implementation:
+    job: Write production code for ONE atomic task
+    input: [context, instruction, constraints]
+    output: [complete_code, tests, documentation]
+    forbidden: [stubs, placeholders, assumptions]
+
+  qa_validation:
+    job: Run 8 checks, return pass/fail + issues
+    must_run_actual_commands: true
+    output_format: '{"status": "pass|fail", "issues": [{"file": "path", "line": N, "description": "..."}]}'
+
+  fix:
+    job: Fix ONLY identified issues (surgical precision)
+    rules: [fix_only_listed_issues, no_scope_creep, maintain_working_code]
+
+atomic_task_requirements:
+  must_have:
+    - instruction: Explicit what to build (zero ambiguity)
+    - context: ["@techstack.yaml", "@project.yaml", "dependency_refs"]
+    - constraints: ["NO stubs", "specific libraries", "exact patterns"]
+    - acceptance_criteria: ["testable outcome 1", "testable outcome 2"]
+    - output_requirements: ["src/path/file.ext", "tests/path/test_file.ext"]
+
+  validation_checklist:
+    - Single responsibility (one purpose only)
+    - Clear boundaries (obvious start/end)
+    - Explicit requirements (all spelled out)
+    - Complete context (all references included)
+    - Testable criteria (objectively verifiable)
+    - Estimable (2-4 hours)
+    - Dependencies documented
+    - Zero ambiguity
+
+escalation_triggers:
+  - Three fix attempts exhausted, still failing
+  - Ambiguous requirements, cannot determine what to build
+  - Architectural conflict, needs design decision
+  - Missing dependency, required component doesn't exist
+  - Impossible constraint, conflicting requirements
+
+escalation_format: |
+  🚨 HUMAN REVIEW REQUIRED
+  Task: {task_id}
+  Issue: {blocking_problem}
+  Attempts: {fix_count}
+  Options: [{option_1}, {option_2}]
+  Recommendation: {suggestion}
+
+success_metrics:
+  validation_pass_rate: "≥80%"
+  avg_fix_attempts: "<1.5"
+  first_try_success: "≥60%"
+  human_escalation_rate: "<10%"
+  test_coverage: "≥80%"
+  placeholder_code: "0"
+
+decision_tree:
+  1_check_atomic: "Is task single purpose, 2-4 hours? NO→Decompose | YES→Continue"
+  2_check_context: "Have @techstack.yaml + @project.yaml + instruction? NO→Request | YES→Continue"
+  3_check_explicit: "Requirements 100% clear? NO→Clarify | YES→Continue"
+  4_implement: "Write production code (no stubs) + error handling + types + tests + docs"
+  5_validate: "Run 8 QA checks. ALL PASS→Checkpoint | ANY FAIL→Fix (max 3)→Still failing→Escalate"
+
+remember:
+  - Load context FIRST (techstack + project + task)
+  - Follow constraints EXACTLY (no interpretation)
+  - Production code ONLY (zero tolerance for stubs)
+  - Validate EVERYTHING (all 8 checks must pass)
+  - Fix or escalate (max 3 attempts, then human)
+  - NO EXCEPTIONS, NO SHORTCUTS, NO ASSUMPTIONS

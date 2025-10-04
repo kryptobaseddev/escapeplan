@@ -25,7 +25,7 @@
 
 ## System Overview
 
-EscapePlan uses a **single SQLite database** with **20 interconnected tables** managing:
+EscapePlan uses a **single SQLite database** with **23 interconnected tables** managing:
 - Operator authentication & authorization (Better Auth)
 - Game definitions with rooms and puzzles
 - Booking and session tracking
@@ -65,11 +65,11 @@ EscapePlan uses a **single SQLite database** with **20 interconnected tables** m
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    AUTH & OPERATORS (4 tables)              │
+│                    AUTH TABLES (4 tables)                   │
 ├─────────────────────────────────────────────────────────────┤
-│  operators, operator_auth_sessions,                         │
-│  operator_accounts, operator_verifications                  │
-│  roles, role_permissions, permissions                       │
+│  user, session, account, verification                       │
+│  (Better Auth v1.3.24+ aligned naming)                     │
+│  + RBAC: roles, role_permissions, permissions              │
 │  Purpose: Better Auth user management & sessions            │
 └─────────────────────────────────────────────────────────────┘
 
@@ -110,7 +110,7 @@ EscapePlan uses a **single SQLite database** with **20 interconnected tables** m
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Total Tables:** 20
+**Total Tables:** 23
 **Total Indexes:** 15 (plus SQLite auto-indexes)
 
 ---
@@ -155,7 +155,7 @@ SQLite doesn't have a native UUID type. TEXT is optimal because:
 | Puzzles | UUID v4 | `b4e61f1e-...` | `randomUUID()` |
 | Bookings | UUID v4 | `a3d4f5e6-...` | `randomUUID()` |
 | Sessions | UUID v4 | `c7d8e9f0-...` | `randomUUID()` |
-| Operators | UUID v4 | `12345678-...` | Better Auth |
+| Users | UUID v4 | `12345678-...` | Better Auth |
 | Assets | UUID v4 | `9abcdef0-...` | `randomUUID()` |
 | Logs | UUID v4 | `fedcba98-...` | `randomUUID()` |
 | Alerts | UUID v4 | `11223344-...` | `randomUUID()` |
@@ -215,9 +215,9 @@ sessions (id)
   ├─→ timer_slugs (session_id) [CASCADE]
   └─→ alerts (session_id) [CASCADE]
 
-operators (id)
-  ├─→ operator_auth_sessions (user_id) [CASCADE]
-  ├─→ operator_accounts (user_id) [CASCADE]
+user (id)
+  ├─→ session (userId) [CASCADE]
+  ├─→ account (userId) [CASCADE]
   ├─→ assets (uploaded_by) [NO ACTION]
   ├─→ alerts (dismissed_by) [NO ACTION]
   └─→ games (archived_by) [NO ACTION]
@@ -232,53 +232,118 @@ assets (id)
 |----------------|------------------|-------------|
 | `games` | `rooms`, `game_puzzles`, `assets` | Game definitions are tightly coupled |
 | `sessions` | `session_puzzles`, `session_hints`, `timer_slugs`, `alerts` | Session data is ephemeral |
-| `operators` | `operator_auth_sessions`, `operator_accounts` | User auth data must be removed |
+| `user` | `session`, `account` | User auth data must be removed |
 | `assets` | `asset_usage` | Asset references are metadata |
 
 **NO CASCADE:**
 - `bookings` → `sessions` - Sessions can outlive bookings for audit trail
 - `rooms` → `bookings` - Bookings must not be deleted if room is removed
-- `operators` → `assets` - Assets remain if uploader is deleted
+- `user` → `assets` - Assets remain if uploader is deleted
 
 ---
 
 ## Table Specifications
 
-### 1. operators
+## Auth & Users
 
-**Purpose:** User accounts for system operators (admins, managers, game masters)
+### user (Unified operator and customer table)
+**Purpose:** Stores all system users (operators and customers) with type separation.
 
-**Schema:**
-```typescript
-{
-  id: text('id').primaryKey(),
-  username: text('username').notNull().unique(),
-  name: text('name').notNull(),
-  email: text('email').unique(),
-  email_verified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
-  role: text('role').notNull(), // 'admin' | 'manager' | 'game_master' | 'customer'
-  avatar_config: text('avatar_config', { mode: 'json' }), // DiceBear Bottts config
-  bio: text('bio'),
-  permissions: text('permissions', { mode: 'json' }).notNull().default(sql`'[]'`), // Array of strings
-  must_reset_password: integer('must_reset_password', { mode: 'boolean' }).notNull().default(false),
-  password_hash: text('password_hash'),
-  last_login_at: text('last_login_at'),
-  created_at: text('created_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  updated_at: text('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
-  banned: integer('banned', { mode: 'boolean' }).notNull().default(false),
-  ban_reason: text('ban_reason'),
-  ban_expires: text('ban_expires'),
-  archived_at: text('archived_at'),
-  archived_by: text('archived_by'),
-  archived_reason: text('archived_reason')
-}
-```
+**Fields:**
+- `id` (TEXT, PK) - UUID v4
+- `username` (TEXT, UNIQUE, NOT NULL)
+- `name` (TEXT, NOT NULL)
+- `email` (TEXT, UNIQUE)
+- `emailVerified` (BOOLEAN, NOT NULL, default false) - Better Auth camelCase
+- `image` (TEXT) - Better Auth field for avatar JSON
+- `createdAt` (TEXT, NOT NULL) - Better Auth camelCase
+- `updatedAt` (TEXT, NOT NULL) - Better Auth camelCase
+- `user_type` (TEXT, NOT NULL, default 'operator') - **'operator' | 'customer'**
+- `role_id` (TEXT, FK roles.id, NOT NULL)
+- `bio` (TEXT)
+- `avatar_config` (JSON) - DiceBear config
+- `must_reset_password` (BOOLEAN, default false)
+- `loyalty_points` (INTEGER, default 0) - Customer only
+- `preferred_difficulty` (TEXT) - Customer only
+- `marketing_opted_in` (BOOLEAN, default false) - Customer only
+- `password_hash` (TEXT)
+- `last_login_at` (TEXT)
+- `banned` (BOOLEAN, default false)
+- `ban_reason` (TEXT)
+- `ban_expires` (TEXT)
+- Soft delete: `archived_at`, `archived_by`, `archived_reason`
 
-**Key Features:**
-- RBAC permissions stored as JSON array
-- Soft delete via `archived_at`
-- Avatar config for DiceBear integration
-- Ban system with expiration
+**Indexes:**
+- `idx_user_type` on `user_type`
+- `idx_user_email` on `email`
+- `idx_user_username` on `username`
+
+**Triggers:** See Security Triggers section below.
+
+### session (Better Auth sessions)
+**Purpose:** Better Auth session tokens.
+
+**Fields:**
+- `id` (TEXT, PK)
+- `token` (TEXT, UNIQUE, NOT NULL)
+- `userId` (TEXT, FK user.id, NOT NULL, CASCADE)
+- `expiresAt` (TEXT, NOT NULL)
+- `ipAddress`, `userAgent` (TEXT)
+- `impersonatedBy` (TEXT, FK user.id)
+- `createdAt`, `updatedAt` (TEXT, timestamps)
+
+### account (Better Auth OAuth)
+**Purpose:** OAuth accounts (future social login).
+
+**Fields:**
+- `id` (TEXT, PK)
+- `accountId`, `providerId` (TEXT, NOT NULL)
+- `userId` (TEXT, FK user.id, NOT NULL, CASCADE)
+- `accessToken`, `refreshToken`, `idToken` (TEXT)
+- Token expiry fields
+- `createdAt`, `updatedAt` (TEXT, timestamps)
+
+### verification (Email verification)
+**Purpose:** Email verification tokens.
+
+**Fields:**
+- `id` (TEXT, PK)
+- `identifier` (TEXT, NOT NULL) - Email address
+- `value` (TEXT, NOT NULL) - Verification code
+- `expiresAt` (TEXT, NOT NULL)
+- `createdAt`, `updatedAt` (TEXT, timestamps)
+
+## Security Triggers
+
+The system uses 5 database triggers to enforce user_type and role boundaries automatically:
+
+### 1. `prevent_customer_operator_role`
+**Trigger:** BEFORE INSERT ON user
+**Purpose:** Prevents customers from being assigned operator-only roles
+**Logic:** Blocks if `user_type = 'customer'` AND `role_id` has `user_type_scope = 'operator'`
+
+### 2. `prevent_operator_customer_role`
+**Trigger:** BEFORE INSERT ON user
+**Purpose:** Prevents operators from being assigned customer-only roles
+**Logic:** Blocks if `user_type = 'operator'` AND `role_id` has `user_type_scope = 'customer'`
+
+### 3. `prevent_user_type_change`
+**Trigger:** BEFORE UPDATE OF user_type ON user
+**Purpose:** Makes user_type immutable after creation
+**Logic:** Blocks any attempt to change user_type after initial INSERT
+
+### 4. `enforce_role_user_type_scope` (INSERT)
+**Trigger:** BEFORE INSERT ON user
+**Purpose:** Validates role matches user_type scope
+**Logic:** Blocks if `role_id.user_type_scope` NOT IN (`user_type`, 'both')
+
+### 5. `enforce_role_user_type_scope_update` (UPDATE)
+**Trigger:** BEFORE UPDATE OF role_id ON user
+**Purpose:** Validates role updates match user_type scope
+**Logic:** Blocks if new `role_id.user_type_scope` NOT IN (`user_type`, 'both')
+
+**Location:** `apps/escapeplan-api/drizzle/triggers.sql`
+**Applied:** Automatically when database is seeded
 
 ---
 
@@ -474,7 +539,7 @@ interface GameHintDefinition {
   puzzle_id: text('puzzle_id'),
   hint_order: integer('hint_order'),
   is_reusable: integer('is_reusable', { mode: 'boolean' }).notNull().default(false),
-  uploaded_by: text('uploaded_by').notNull().references(() => operators.id),
+  uploaded_by: text('uploaded_by').notNull().references(() => user.id),
   uploaded_at: text('uploaded_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   metadata: text('metadata', { mode: 'json' })
 }
@@ -536,8 +601,8 @@ categories: text('categories', { mode: 'json' }) // string[] in TypeScript
 
 | Table | Column | Type | Purpose |
 |-------|--------|------|---------|
-| operators | avatar_config | object | DiceBear config |
-| operators | permissions | string[] | RBAC permissions |
+| user | avatar_config | object | DiceBear config |
+| user | permissions | string[] | RBAC permissions |
 | games | categories | string[] | Game categories |
 | games | media_config | object | Asset references |
 | games | pricing_config | object | Pricing tiers/discounts |
@@ -742,7 +807,7 @@ import * as schema from './db/schema.ts';
 import { db } from './db/client.ts';
 
 // All tables available
-const { games, rooms, gamePuzzles, operators, assets } = schema;
+const { games, rooms, gamePuzzles, user, assets } = schema;
 ```
 
 ---
@@ -756,28 +821,31 @@ const { games, rooms, gamePuzzles, operators, assets } = schema;
 
 ## Appendix: Full Table List
 
-1. operators
-2. operator_auth_sessions
-3. operator_accounts
-4. operator_verifications
-5. games
-6. rooms
-7. game_puzzles
-8. bookings
-9. sessions
-10. session_puzzles
-11. session_hints
-12. timer_slugs
-13. assets
-14. asset_usage
-15. storage_metrics
-16. network_profiles
-17. network_health
-18. system_logs
-19. alerts
-20. alert_rules
+1. user
+2. session
+3. account
+4. verification
+5. roles
+6. permissions
+7. role_permissions
+8. games
+9. rooms
+10. game_puzzles
+11. bookings
+12. sessions
+13. session_puzzles
+14. session_hints
+15. timer_slugs
+16. assets
+17. asset_usage
+18. storage_metrics
+19. network_profiles
+20. network_health
+21. system_logs
+22. alerts
+23. alert_rules
 
-**Total:** 20 tables, 15 custom indexes, 100% Drizzle ORM coverage
+**Total:** 23 tables, 15 custom indexes, 100% Drizzle ORM coverage
 
 ---
 

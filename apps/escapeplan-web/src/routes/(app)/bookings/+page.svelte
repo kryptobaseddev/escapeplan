@@ -7,12 +7,21 @@
   import { onDestroy, onMount } from 'svelte';
   import { initializeRealtime } from '$lib/realtime';
   import { bookingsStore } from '$lib/realtime/stores';
+  import SkeletonLoader from '$lib/components/ui/SkeletonLoader.svelte';
+  import EmptyState from '$lib/components/ui/EmptyState.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
   let bookings = $state(data.calendar?.bookings ?? []);
   let conflicts = $state(data.calendar?.conflicts ?? []);
+  let isLoading = $state(true);
 
   onMount(() => {
+    // Simulate data loading
+    setTimeout(() => {
+      isLoading = false;
+    }, 500);
+
     initializeRealtime({
       bookings: data.calendar ? [data.calendar] : []
     });
@@ -97,10 +106,15 @@
     </div>
   </form>
 
-  {#if data.calendarError}
-    <div class="alert alert-error border border-error/40 bg-error/10 text-error-content">
-      <span>{data.calendarError}</span>
+  {#if isLoading}
+    <div class="grid gap-6 lg:grid-cols-2">
+      <SkeletonLoader type="card" count={1} class="h-96" />
+      <SkeletonLoader type="table" rows={5} />
     </div>
+  {:else if data.calendarError}
+    <Alert type="error">
+      <span>{data.calendarError}</span>
+    </Alert>
   {:else if data.calendar}
     <section class="glass-panel border-white/10 bg-base-200/70 p-6">
       <header class="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -115,9 +129,10 @@
 
       <div class="mt-6 space-y-6">
         {#if bookings.length === 0}
-          <p class="rounded-xl border border-dashed border-base-content/20 bg-base-100/40 px-4 py-6 text-center text-sm text-base-content/60">
-            No bookings scheduled for this scope.
-          </p>
+          <EmptyState
+            title="No bookings"
+            message="No bookings scheduled for this scope."
+          />
         {:else}
           <div class="space-y-4">
             {#each bookings as booking}

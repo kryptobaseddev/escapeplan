@@ -1,109 +1,311 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://project-tracking-template/schemas/project-schema.json",
-  "title": "Project Tracker Config Schema",
+  "title": "Project Architecture Schema",
+  "description": "Schema for validating project.yaml - system architecture, design patterns, and project tracking",
   "type": "object",
-  "required": [
-    "project_name",
-    "project_version",
-    "overview_path",
-    "current_phase",
-    "stack",
-    "commands"
-  ],
+  "required": ["project", "components", "commands", "agent_structure", "hard_rules"],
   "properties": {
     "$schema": {
       "type": "string",
-      "description": "Relative path to this schema file"
+      "description": "Path to this schema file"
     },
-    "project_name": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Name of the project"
+    "project": {
+      "type": "object",
+      "required": ["name", "version", "current_phase"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Project name"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$",
+          "description": "Semantic version (e.g., 0.1.0)"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short project description (elevator pitch)"
+        },
+        "goal": {
+          "type": "string",
+          "description": "Primary success metric or outcome"
+        },
+        "architecture_style": {
+          "type": "string",
+          "enum": ["monolith", "microservices", "serverless", "hybrid"],
+          "description": "Overall architecture pattern"
+        },
+        "overview_path": {
+          "type": "string",
+          "description": "Path to detailed project overview document"
+        },
+        "current_phase": {
+          "type": "string",
+          "pattern": "^PHASE_\\d+$",
+          "description": "Current development phase (e.g., PHASE_3)"
+        }
+      }
     },
-    "project_version": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Current project version"
-    },
-    "summary": {
-      "type": "string",
-      "description": "Short description of the project"
-    },
-    "goal": {
-      "type": "string",
-      "description": "Primary success metric or outcome"
-    },
-    "overview_path": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Path to the detailed project overview document"
-    },
-    "current_phase": {
-      "type": "string",
-      "pattern": "^PHASE_\\d+$",
-      "description": "Current phase identifier"
-    },
-    "stack": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "string",
-        "minLength": 1
-      },
-      "description": "List of core technologies"
+    "components": {
+      "type": "object",
+      "minProperties": 1,
+      "description": "System components/services/packages",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "object",
+          "required": ["description", "responsibilities", "technology", "location"],
+          "properties": {
+            "description": {
+              "type": "string",
+              "description": "What this component does"
+            },
+            "responsibilities": {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 1,
+              "description": "Key responsibilities of this component"
+            },
+            "technology": {
+              "type": "string",
+              "description": "Primary technology/framework used"
+            },
+            "location": {
+              "type": "string",
+              "description": "File path or directory location"
+            },
+            "dependencies": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Other components this depends on"
+            },
+            "exports": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "What this component exports/provides"
+            },
+            "consumers": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "What depends on this component"
+            }
+          }
+        }
+      }
     },
     "commands": {
       "type": "object",
-      "description": "Key commands that agents should run",
+      "required": ["validate"],
+      "description": "Key commands that agents and developers should run",
       "minProperties": 1,
       "additionalProperties": {
         "anyOf": [
-          { "type": "string", "minLength": 1 },
+          {"type": "string", "minLength": 1},
           {
             "type": "array",
             "minItems": 1,
-            "items": { "type": "string", "minLength": 1 }
+            "items": {"type": "string", "minLength": 1}
           }
         ]
       },
       "properties": {
         "validate": {
           "anyOf": [
-            { "type": "string", "minLength": 1 },
-            {
-              "type": "array",
-              "minItems": 1,
-              "items": { "type": "string", "minLength": 1 }
-            }
+            {"type": "string", "minLength": 1},
+            {"type": "array", "items": {"type": "string"}}
           ],
           "description": "Command to validate tracking files"
         },
         "quick_check": {
           "anyOf": [
-            { "type": "string", "minLength": 1 },
-            {
-              "type": "array",
-              "minItems": 1,
-              "items": { "type": "string", "minLength": 1 }
-            }
+            {"type": "string", "minLength": 1},
+            {"type": "array", "items": {"type": "string"}}
           ],
           "description": "Command for quick project health summary"
         }
-      },
-      "required": ["validate"]
+      }
     },
-    "environments": {
-      "type": "string",
-      "description": "Notes about environments or deployment targets"
+    "data_flow": {
+      "type": "object",
+      "description": "Step-by-step data flows for key operations",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["step", "component", "action"],
+            "properties": {
+              "step": {"type": "integer", "minimum": 1},
+              "component": {"type": "string"},
+              "action": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "integrations": {
+      "type": "object",
+      "description": "Internal and external service integrations",
+      "properties": {
+        "internal": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["source", "target", "protocol", "pattern"],
+            "properties": {
+              "source": {"type": "string"},
+              "target": {"type": "string"},
+              "protocol": {"type": "string"},
+              "pattern": {"type": "string"},
+              "description": {"type": "string"}
+            }
+          }
+        },
+        "external": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["service", "protocol", "pattern"],
+            "properties": {
+              "service": {"type": "string"},
+              "protocol": {"type": "string"},
+              "authentication": {"type": "string"},
+              "pattern": {"type": "string"},
+              "description": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "directory_structure": {
+      "type": "object",
+      "description": "Key directory structure and organization"
+    },
+    "patterns": {
+      "type": "object",
+      "description": "Design patterns and conventions used",
+      "patternProperties": {
+        "^[a-z_]+$": {
+          "type": "object",
+          "properties": {
+            "description": {"type": "string"},
+            "location": {"type": "string"},
+            "example": {"type": "string"}
+          }
+        }
+      }
+    },
+    "error_handling": {
+      "type": "object",
+      "description": "Error handling strategies and conventions"
+    },
+    "security": {
+      "type": "object",
+      "description": "Security architecture and policies",
+      "properties": {
+        "authentication": {"type": "object"},
+        "authorization": {"type": "object"},
+        "password_security": {"type": "object"},
+        "rate_limiting": {"type": "object"},
+        "cors": {"type": "object"}
+      }
+    },
+    "agent_structure": {
+      "type": "object",
+      "required": ["main_agent"],
+      "description": "AI agent workflow and responsibilities",
+      "properties": {
+        "main_agent": {
+          "type": "object",
+          "required": ["role", "responsibilities"],
+          "properties": {
+            "role": {"type": "string"},
+            "responsibilities": {
+              "type": "array",
+              "items": {"type": "string"},
+              "minItems": 1
+            }
+          }
+        },
+        "implementation_subagent": {
+          "type": "object",
+          "properties": {
+            "role": {"type": "string"},
+            "responsibilities": {"type": "array", "items": {"type": "string"}},
+            "context_required": {"type": "array", "items": {"type": "string"}},
+            "constraints": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "qa_validation_subagent": {
+          "type": "object",
+          "properties": {
+            "role": {"type": "string"},
+            "responsibilities": {"type": "array", "items": {"type": "string"}},
+            "context_required": {"type": "array", "items": {"type": "string"}},
+            "output_format": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "fix_subagent": {
+          "type": "object",
+          "properties": {
+            "role": {"type": "string"},
+            "responsibilities": {"type": "array", "items": {"type": "string"}},
+            "context_required": {"type": "array", "items": {"type": "string"}},
+            "constraints": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
+    "checkpointing": {
+      "type": "object",
+      "required": ["triggers", "content", "storage"],
+      "description": "When and how to checkpoint agent progress",
+      "properties": {
+        "triggers": {
+          "type": "array",
+          "items": {"type": "string"},
+          "minItems": 1,
+          "description": "Events that trigger checkpoints"
+        },
+        "content": {
+          "type": "object",
+          "required": ["required_fields"],
+          "properties": {
+            "required_fields": {
+              "type": "array",
+              "items": {"type": "string"},
+              "description": "Data that must be in checkpoints"
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "required": ["location", "format"],
+          "properties": {
+            "location": {"type": "string"},
+            "format": {"type": "string"}
+          }
+        },
+        "claude_md_sync": {
+          "type": "object",
+          "properties": {
+            "required": {"type": "boolean"},
+            "timing": {"type": "string"}
+          }
+        }
+      }
+    },
+    "hard_rules": {
+      "type": "array",
+      "items": {"type": "string"},
+      "minItems": 1,
+      "description": "Non-negotiable architectural constraints for agents"
     },
     "notes": {
       "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Additional free-form notes"
+      "items": {"type": "string"},
+      "description": "Additional project notes and reminders"
     }
-  },
-  "additionalProperties": false
+  }
 }

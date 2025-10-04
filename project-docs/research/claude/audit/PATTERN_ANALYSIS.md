@@ -1,5 +1,8 @@
 # EscapePlan UI Pattern Analysis
 
+> **⚠️ DEPRECATED:** Pattern analysis consolidated into [`../UI-OPTIMIZATION-PLAN.md`](../UI-OPTIMIZATION-PLAN.md)
+> **See:** SOLID/DRY Violation Catalog section for comprehensive analysis.
+
 **Date:** 2025-10-02
 **Auditor:** Claude (UI Design System Audit)
 **Tech Stack:** SvelteKit 2, Svelte 5 (runes), DaisyUI 5.1.25+, Tailwind CSS 4

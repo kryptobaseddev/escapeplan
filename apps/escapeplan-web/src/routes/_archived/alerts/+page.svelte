@@ -5,7 +5,7 @@
   import type { AlertRule, UpdateAlertRuleRequest } from '@escapeplan/contracts';
   import { apiFetch } from '$lib/api/client';
 
-  let { data } = $props<{ data: PageData }>();
+  let { data }: { data: PageData } = $props();
 
   let rules = $state<AlertRule[]>(data.rules ?? []);
   let editingRule = $state<string | null>(null);

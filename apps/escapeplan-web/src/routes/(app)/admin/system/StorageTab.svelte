@@ -4,6 +4,7 @@
 	import { apiFetch } from '$lib/api/client';
 	import AssetBrowser from '$lib/components/assets/AssetBrowser.svelte';
 	import AssetUpload from '$lib/components/assets/AssetUpload.svelte';
+	import Alert from '$lib/components/ui/Alert.svelte';
 
 	interface StorageMetrics {
 		total?: {
@@ -413,7 +414,7 @@
 			{/if}
 
 			<!-- Last Backup -->
-			<div class="alert alert-info">
+			<Alert type="info">
 				<svg
 					class="h-6 w-6"
 					xmlns="http://www.w3.org/2000/svg"
@@ -432,7 +433,7 @@
 					<div class="text-sm font-medium">Last Backup</div>
 					<div class="text-xs opacity-80">{formatDate(metrics?.lastBackupAt)}</div>
 				</div>
-			</div>
+			</Alert>
 		</div>
 	{:else if activeTab === 'library'}
 		<div class="space-y-6">
@@ -468,7 +469,7 @@
 		<div class="space-y-6">
 			<!-- Success/Error Messages -->
 			{#if backupSuccess}
-				<div class="alert alert-success">
+				<Alert type="success">
 					<svg
 						class="h-6 w-6"
 						xmlns="http://www.w3.org/2000/svg"
@@ -484,11 +485,11 @@
 						/>
 					</svg>
 					<span>Backup created successfully!</span>
-				</div>
+				</Alert>
 			{/if}
 
 			{#if backupError}
-				<div class="alert alert-error">
+				<Alert type="error">
 					<svg
 						class="h-6 w-6"
 						xmlns="http://www.w3.org/2000/svg"
@@ -504,7 +505,7 @@
 						/>
 					</svg>
 					<span>{backupError}</span>
-				</div>
+				</Alert>
 			{/if}
 
 			<div class="card bg-base-200 shadow-xl">
@@ -542,7 +543,7 @@
 							</button>
 						{/if}
 					</div>
-					<div class="alert alert-warning">
+					<Alert type="warning">
 						<svg
 							class="h-6 w-6"
 							xmlns="http://www.w3.org/2000/svg"
@@ -563,7 +564,7 @@
 								Automated backups run daily at 2:00 AM. Last 7 backups are retained.
 							</div>
 						</div>
-					</div>
+					</Alert>
 					<div
 						class="rounded-xl border border-dashed border-base-content/20 bg-base-100/70 p-12 text-center"
 					>

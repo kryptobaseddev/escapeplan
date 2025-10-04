@@ -155,7 +155,7 @@ CREATE TABLE system_settings (
   description TEXT,
   is_editable INTEGER NOT NULL DEFAULT 1,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_by TEXT REFERENCES operators(id)
+  updated_by TEXT REFERENCES user(id)
 );
 ```
 
@@ -306,7 +306,7 @@ WantedBy=multi-user.target
 
 ### Drizzle ORM Integration
 
-EscapePlan uses **Drizzle ORM** for type-safe database operations and migrations.
+EscapePlan uses **Drizzle ORM** for type-safe database operations with a push-only schema workflow.
 
 **Config Location:** `apps/escapeplan-api/drizzle.config.ts`
 
@@ -331,30 +331,25 @@ export default defineConfig({
 All tables defined here are shared between:
 - API (for database operations)
 - Web (for type definitions)
-- Drizzle Kit (for migrations)
+- Drizzle Kit (for schema synchronization)
 
-### Migration Workflow
+### Schema Change Workflow
 
 ```bash
-# 1. Modify schema
-vim packages/contracts/src/schema.ts
+# 1. Edit schema
+vim apps/escapeplan-api/src/db/schema.ts
 
 # 2. Rebuild contracts
 pnpm --filter @escapeplan/contracts build
 
-# 3. Generate migration
-cd apps/escapeplan-api
-npx drizzle-kit generate
+# 3. Apply to database (push-only workflow)
+cd apps/escapeplan-api && npx drizzle-kit push
 
-# 4. Review migration
-cat drizzle/0001_*.sql
-
-# 5. Apply migration (development)
-npx drizzle-kit push
-
-# 6. Apply migration (production - automatic on startup or via systemd)
-npx drizzle-kit migrate
+# 4. Verify with seed data
+pnpm --filter escapeplan-api db:seed
 ```
+
+**Note:** EscapePlan uses a push-only workflow. No migration files are generated or tracked. Schema changes are applied directly to the database via `drizzle-kit push`.
 
 ### System Settings Seeding
 
@@ -471,7 +466,6 @@ api.post('/upload', async (request, reply) => {
 /opt/escapeplan/
 ├── api/
 │   ├── dist/              # Built JavaScript
-│   ├── drizzle/           # Migration files
 │   └── package.json
 └── web/
     └── build/             # SvelteKit static output
@@ -496,9 +490,11 @@ api.post('/upload', async (request, reply) => {
 mkdir -p /var/lib/escapeplan/assets
 mkdir -p /var/backups/escapeplan
 
-# Run migrations
+# Apply schema (push-only workflow)
+# Note: EscapePlan uses direct schema sync via drizzle-kit push
+# No migration files are tracked - schema changes are applied directly
 cd /opt/escapeplan/api
-npx drizzle-kit migrate
+npx drizzle-kit push --force
 
 # Seed settings (idempotent)
 node dist/db/seed-settings.js
@@ -558,7 +554,7 @@ curl http://localhost:4000/api/health | jq '.environment'
 ## Related Documentation
 
 ### Core System Docs
-- **[Database System](./DATABASE_SYSTEM.md)** - SQLite schema, Drizzle ORM, migrations
+- **[Database System](./DATABASE_SYSTEM.md)** - SQLite schema, Drizzle ORM, push-only workflow
 - **[API Contracts & Schema Management](./API_CONTRACTS_SCHEMA_MANAGEMENT.md)** - Schema changes, Drizzle + Zod patterns
 - **[Asset Storage Architecture](./ASSET_STORAGE_ARCHITECTURE.md)** - File uploads, path resolution, storage limits
 
@@ -572,7 +568,7 @@ curl http://localhost:4000/api/health | jq '.environment'
 #### With Database System
 - `system_settings` table stores runtime configuration
 - Settings seeded via `seed-settings.ts` on startup
-- Migrations applied automatically in production via Drizzle
+- Schema changes applied automatically in production via `drizzle-kit push`
 
 #### With API Contracts
 - Settings schema defined in `packages/contracts/src/schema.ts`

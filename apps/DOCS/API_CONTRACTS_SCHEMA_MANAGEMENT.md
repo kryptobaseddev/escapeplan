@@ -30,7 +30,7 @@ This is the **BIBLE** for maintaining database schemas, API contracts, and valid
 │ Layer 1: DATABASE SCHEMA (Drizzle)                      │
 │ Location: packages/contracts/src/schema.ts              │
 │ Purpose: SQLite table definitions, relationships        │
-│ Tool: drizzle-kit for migrations                        │
+│ Tool: drizzle-kit push for direct schema sync          │
 └─────────────────────────────────────────────────────────┘
                           ↓
 ┌─────────────────────────────────────────────────────────┐
@@ -65,10 +65,7 @@ apps/escapeplan-api/
 │   │   └── client.ts    # Drizzle connection (imports schema from contracts)
 │   ├── state.ts         # Business logic (uses types from contracts)
 │   └── index.ts         # API routes (uses validation from contracts)
-├── drizzle/             # Generated migrations
-│   ├── meta/
-│   └── *.sql
-└── drizzle.config.ts    # Migration configuration
+└── drizzle.config.ts    # Drizzle configuration for push command
 ```
 
 ---
@@ -115,6 +112,8 @@ const created = createGame(parsed.data); // ✅ All fields guaranteed present
 
 ## Schema Management Workflow
 
+> **IMPORTANT (Session 35):** This project uses **push-only workflow** with NO migration files. All migration scripts were removed in Session 35. Schema changes are applied directly to the database using `drizzle-kit push`.
+
 ### 1. Update Drizzle Schema
 
 Edit `packages/contracts/src/schema.ts`:
@@ -129,40 +128,7 @@ export const games = sqliteTable('games', {
 });
 ```
 
-### 2. Generate Migration
-
-```bash
-cd apps/escapeplan-api
-npx drizzle-kit generate
-```
-
-**What this does:**
-- Compares current schema with database state
-- Generates SQL migration in `drizzle/*.sql`
-- Updates metadata in `drizzle/meta/_journal.json`
-- Uses runtime-detected database path automatically
-
-**Output:**
-```
-✔ Your SQL migration file ➜ drizzle/0004_new_field.sql
-```
-
-> **Note:** Drizzle automatically uses the correct database path based on runtime environment detection. See **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md#path-resolution)** for how paths are resolved in development vs production.
-
-### 3. Apply Migration
-
-**Development:**
-```bash
-# Migrations auto-apply on dev server restart
-pnpm --filter escapeplan-api dev
-```
-
-**Production:**
-```bash
-npx drizzle-kit migrate
-```
-
-### 4. Update Zod Validation Schema
+### 2. Update Zod Validation Schema
 
 Edit `packages/contracts/src/validation.ts`:
 
@@ -177,13 +143,34 @@ export const saveGameSchema = z.object({
 export type SaveGameRequest = z.infer<typeof saveGameSchema>;
 ```
 
-### 5. Rebuild Contracts
+### 3. Rebuild Contracts
 
 ```bash
 pnpm --filter @escapeplan/contracts build
 ```
 
 **Why:** API and Web apps import from contracts, need updated types.
+
+### 4. Apply Schema Changes to Database
+
+```bash
+cd apps/escapeplan-api
+npx drizzle-kit push
+```
+
+**What this does:**
+- Compares current schema with database state
+- Applies changes directly to the database (NO migration files)
+- Uses runtime-detected database path automatically
+- Prompts for confirmation before applying changes
+
+> **Note:** Drizzle automatically uses the correct database path based on runtime environment detection. See **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md#path-resolution)** for how paths are resolved in development vs production.
+
+### 5. Test Changes
+
+```bash
+pnpm --filter escapeplan-api test
+```
 
 ### 6. Use in API/Web
 
@@ -214,6 +201,50 @@ const payload: SaveGameRequest = {
 
 ---
 
+## Working with Better Auth Tables
+
+### Native Table Names
+Better Auth v1.3.24+ expects these exact singular table names:
+- `user` - Main user table
+- `session` - Session tokens
+- `account` - OAuth accounts
+- `verification` - Email verification
+
+**DO NOT** use `modelName` or `fields` overrides in auth config - let Better Auth use native names.
+
+### Custom Fields on user Table
+Use `additionalFields` in auth-config.ts:
+
+```typescript
+user: {
+  additionalFields: {
+    user_type: {
+      type: 'string',
+      fieldName: 'user_type',
+      required: true,
+      returned: true,
+      input: false,  // Server-managed only
+      defaultValue: 'operator'
+    },
+    role_id: {
+      type: 'string',
+      fieldName: 'role_id',
+      required: true,
+      returned: true,
+      input: false,  // Server-managed only
+      defaultValue: 'role-manager'
+    }
+  }
+}
+```
+
+### Field Naming Convention
+- **Better Auth core fields:** camelCase (`emailVerified`, `createdAt`, `updatedAt`)
+- **Custom application fields:** snake_case (`user_type`, `role_id`)
+- **Drizzle schema:** Match database column names exactly
+
+---
+
 ## Adding New Fields
 
 ### Step-by-Step Example: Adding `estimatedSetupMinutes` to Games
@@ -228,14 +259,7 @@ export const games = sqliteTable('games', {
 });
 ```
 
-#### 2. Generate Migration
-
-```bash
-cd apps/escapeplan-api
-npx drizzle-kit generate
-```
-
-#### 3. Update Zod Schema
+#### 2. Update Zod Schema
 
 `packages/contracts/src/validation.ts`:
 ```typescript
@@ -245,10 +269,17 @@ export const saveGameSchema = z.object({
 });
 ```
 
-#### 4. Rebuild Contracts
+#### 3. Rebuild Contracts
 
 ```bash
 pnpm --filter @escapeplan/contracts build
+```
+
+#### 4. Apply Schema Changes
+
+```bash
+cd apps/escapeplan-api
+npx drizzle-kit push
 ```
 
 #### 5. Use in UI
@@ -288,15 +319,7 @@ export const equipment = sqliteTable('equipment', {
 });
 ```
 
-#### 2. Generate Migration
-
-```bash
-cd apps/escapeplan-api
-npx drizzle-kit generate
-# Creates: drizzle/0005_equipment_table.sql
-```
-
-#### 3. Create Zod Validation Schemas
+#### 2. Create Zod Validation Schemas
 
 `packages/contracts/src/validation.ts`:
 ```typescript
@@ -320,7 +343,7 @@ export type CreateEquipmentRequest = z.infer<typeof createEquipmentSchema>;
 export type UpdateEquipmentRequest = z.infer<typeof updateEquipmentSchema>;
 ```
 
-#### 4. Export from Contracts
+#### 3. Export from Contracts
 
 `packages/contracts/src/index.ts`:
 ```typescript
@@ -338,10 +361,17 @@ export {
 } from './validation.js';
 ```
 
-#### 5. Rebuild Contracts
+#### 4. Rebuild Contracts
 
 ```bash
 pnpm --filter @escapeplan/contracts build
+```
+
+#### 5. Apply Schema Changes
+
+```bash
+cd apps/escapeplan-api
+npx drizzle-kit push
 ```
 
 #### 6. Create State Functions
@@ -813,21 +843,23 @@ pnpm --filter @escapeplan/contracts build
 2. Compare request body with schema definition
 3. Ensure field names match (camelCase in API, snake_case in DB)
 
-### Migration Error: "Column already exists"
+### Schema Push Error: "Column already exists"
 
-**Cause:** Migration already applied but journal out of sync
+**Cause:** Schema change already applied but Drizzle state out of sync
 
 **Fix:**
 ```bash
 cd apps/escapeplan-api
 
-# Check current schema version
-sqlite3 data/escapeplan.db ".schema migrations"
+# Check current schema
+sqlite3 data/escapeplan.db ".schema TABLE_NAME"
 
-# Reset migrations (DANGER: development only!)
-rm -rf drizzle/
-npx drizzle-kit generate
-npx drizzle-kit migrate
+# Force push (DANGER: development only!)
+npx drizzle-kit push --force
+
+# Or reset database and reseed
+rm -f data/escapeplan.db*
+pnpm db:seed
 ```
 
 ### Runtime Error: "Cannot read property 'X' of undefined"
@@ -947,20 +979,21 @@ export const saveGameSchema = z.object({
 When adding a new field:
 
 - [ ] Update Drizzle schema in `packages/contracts/src/schema.ts`
-- [ ] Run `npx drizzle-kit generate` to create migration
 - [ ] Update Zod schema in `packages/contracts/src/validation.ts`
 - [ ] Run `pnpm --filter @escapeplan/contracts build`
+- [ ] Run `cd apps/escapeplan-api && npx drizzle-kit push` to apply schema changes
+- [ ] Run `pnpm --filter escapeplan-api test` to verify changes
 - [ ] Rebuild API: `pnpm --filter escapeplan-api build`
-- [ ] Test CRUD operations
 - [ ] Update UI components to use new field
 
 When adding a new entity:
 
 - [ ] Define Drizzle table in `packages/contracts/src/schema.ts`
-- [ ] Run `npx drizzle-kit generate`
 - [ ] Create Zod schemas in `packages/contracts/src/validation.ts`
 - [ ] Export from `packages/contracts/src/index.ts`
 - [ ] Run `pnpm --filter @escapeplan/contracts build`
+- [ ] Run `cd apps/escapeplan-api && npx drizzle-kit push` to create table
+- [ ] Run `pnpm --filter escapeplan-api test` to verify changes
 - [ ] Add state functions in `apps/escapeplan-api/src/state.ts`
 - [ ] Add API endpoints in `apps/escapeplan-api/src/index.ts`
 - [ ] Create UI components in `apps/escapeplan-web`
@@ -968,11 +1001,8 @@ When adding a new entity:
 ### Essential Commands
 
 ```bash
-# Generate migration from schema changes
-cd apps/escapeplan-api && npx drizzle-kit generate
-
-# Apply migrations
-cd apps/escapeplan-api && npx drizzle-kit migrate
+# Apply schema changes to database (NO migrations - push only!)
+cd apps/escapeplan-api && npx drizzle-kit push
 
 # Rebuild contracts
 pnpm --filter @escapeplan/contracts build
@@ -997,14 +1027,167 @@ This guide establishes the **SINGLE SOURCE OF TRUTH** pattern for EscapePlan:
 2. **Zod defines validation** (`packages/contracts/src/validation.ts`)
 3. **Types are inferred** (`z.infer<typeof schema>`)
 4. **API endpoints pass validated data directly** (no manual reconstruction)
+5. **Schema changes applied via push** (`drizzle-kit push` - NO migrations)
+
+**Session 35 Architectural Decision:**
+- ✅ **Push-only workflow** - Direct schema sync with `drizzle-kit push`
+- ❌ **NO migration files** - All migration scripts removed in Session 35
+- ❌ **NO drizzle-kit generate** - Not used in this project
+- ❌ **NO drizzle-kit migrate** - Not used in this project
 
 **Follow this guide religiously** and you will never experience:
 - ❌ Missing fields in payloads
 - ❌ Type mismatches between layers
 - ❌ Validation drift
 - ❌ Duplicate type definitions
+- ❌ Migration file conflicts
 
 **The milestone save bug is permanently fixed** and cannot recur when following this pattern.
+
+---
+
+## Room Display Media System
+
+### Room Display Configuration
+
+**Schema:** `games.room_display_config` (JSON)
+
+```typescript
+interface RoomDisplayConfig {
+  backgroundType: 'asset' | 'solid' | 'gradient';
+  backgroundAssetId?: string;
+  backgroundColor?: string; // hex
+  gradientFrom?: string; // hex
+  gradientTo?: string; // hex
+  gradientDirection?: 'to-b' | 'to-t' | 'to-r' | 'to-l' | 'to-br' | 'to-tl' | 'radial';
+  backgroundOpacity: number; // 0-100
+  defaultMediaScale: number; // 10-100
+  showTimer: boolean;
+  timerPosition: 'center' | 'top' | 'bottom';
+  textHintTextColor?: string; // hex
+  textHintBackgroundColor?: string; // hex
+}
+```
+
+**Defaults:**
+- `backgroundType`: 'solid'
+- `backgroundOpacity`: 40
+- `defaultMediaScale`: 90
+- `showTimer`: true
+- `timerPosition`: 'center'
+- `textHintTextColor`: '#000000'
+- `textHintBackgroundColor`: '#FFA500'
+
+**Example:**
+```json
+{
+  "backgroundType": "gradient",
+  "gradientFrom": "#0a1929",
+  "gradientTo": "#1e3a5f",
+  "gradientDirection": "to-br",
+  "backgroundOpacity": 40,
+  "defaultMediaScale": 90,
+  "showTimer": true,
+  "timerPosition": "center",
+  "textHintTextColor": "#ffffff",
+  "textHintBackgroundColor": "#FFA500"
+}
+```
+
+### Hint Display Settings
+
+**Schema:** `game_puzzles.hints` (JSON array)
+
+Each hint object now includes:
+```typescript
+{
+  uuid: string;
+  type: 'text' | 'image' | 'audio' | 'video';
+  content: string;
+  assetUrl?: string;
+  volumeLevel?: number; // 0-100
+  order: number;
+  penaltySeconds?: number; // existing
+  penaltyEnabled?: boolean; // existing
+  countAsHint?: boolean; // existing
+  displayDurationSeconds?: number; // NEW - required for images
+  loop?: boolean; // NEW - default false
+  loopCount?: number; // NEW - undefined = infinite
+  autoDismiss?: boolean; // NEW - default true
+}
+```
+
+**Validation:**
+- Image hints: `displayDurationSeconds` REQUIRED
+- Audio/Video hints: `displayDurationSeconds` optional (auto-detect from media)
+- Text hints: display settings ignored
+
+### Milestone Display Settings
+
+**Schema:** `game_milestones` table
+
+New columns:
+- `display_duration_seconds`: INTEGER (optional)
+- `loop`: INTEGER/BOOLEAN (default 0)
+- `loop_count`: INTEGER (optional, null = infinite)
+- `auto_dismiss`: INTEGER/BOOLEAN (default 1)
+
+**Migration:**
+```sql
+ALTER TABLE game_milestones ADD COLUMN display_duration_seconds INTEGER;
+ALTER TABLE game_milestones ADD COLUMN loop INTEGER DEFAULT 0;
+ALTER TABLE game_milestones ADD COLUMN loop_count INTEGER;
+ALTER TABLE game_milestones ADD COLUMN auto_dismiss INTEGER DEFAULT 1;
+```
+
+### WebSocket Events
+
+**New Event:** `room-display:media`
+
+```typescript
+interface RoomDisplayMediaEvent {
+  slug: string;
+  sessionId: string;
+  mediaType: 'text' | 'image' | 'audio' | 'video';
+  content: string; // Text content OR asset URL
+  volumeLevel?: number; // 0-100
+  loop?: boolean;
+  loopCount?: number;
+  autoDismiss?: boolean;
+  displayDurationSeconds?: number;
+  triggeredAt: string;
+  source: 'hint' | 'milestone';
+  textHintColors?: {
+    textColor: string;
+    backgroundColor: string;
+  };
+}
+```
+
+**Emitted when:**
+- Operator sends hint via Game Runner
+- Milestone is triggered (manual or automatic)
+
+**Consumed by:**
+- Room Display page (`/room/[slug]`)
+
+### Deprecated Fields
+
+**REMOVED:**
+- `media_config.roomScreenAssetId` (replaced by `room_display_config.backgroundAssetId`)
+
+**Migration path:**
+```typescript
+// If old field exists, migrate to new structure
+if (game.media?.roomScreenAssetId) {
+  game.roomDisplayConfig = {
+    backgroundType: 'asset',
+    backgroundAssetId: game.media.roomScreenAssetId,
+    // ... other defaults
+  };
+  delete game.media.roomScreenAssetId;
+}
+```
 
 ---
 

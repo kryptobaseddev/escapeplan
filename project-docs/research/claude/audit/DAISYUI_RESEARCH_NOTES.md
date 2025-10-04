@@ -1,5 +1,8 @@
 # DaisyUI 5.0.50 Research Notes
 
+> **⚠️ DEPRECATED:** DaisyUI reference updated for v5.1.26 in [`../UI-OPTIMIZATION-PLAN.md`](../UI-OPTIMIZATION-PLAN.md)
+> **See:** DaisyUI 5.1.26 Implementation Guide section.
+
 **Date:** 2025-10-02
 **Source:** Context7 Library Documentation
 **Library:** `/saadeghi/daisyui/v5_0_50`

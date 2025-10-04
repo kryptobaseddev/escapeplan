@@ -634,6 +634,18 @@ export async function buildServer() {
       if (!parsed.success) {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
+
+      // Validate duration against system settings
+      const minDuration = settings.getGameDurationMinMinutes();
+      const maxDuration = settings.getGameDurationMaxMinutes();
+      if (parsed.data.durationMinutes < minDuration || parsed.data.durationMinutes > maxDuration) {
+        return reply.status(400).send({
+          statusCode: 400,
+          message: `Duration must be between ${minDuration} and ${maxDuration} minutes`,
+          details: { durationMinutes: `Must be between ${minDuration} and ${maxDuration}` }
+        });
+      }
+
       try {
         const created = createGame(parsed.data);
         return created;
@@ -653,6 +665,18 @@ export async function buildServer() {
         request.log.error({ validation: parsed.error.flatten() }, 'Game validation failed');
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
+
+      // Validate duration against system settings
+      const minDuration = settings.getGameDurationMinMinutes();
+      const maxDuration = settings.getGameDurationMaxMinutes();
+      if (parsed.data.durationMinutes < minDuration || parsed.data.durationMinutes > maxDuration) {
+        return reply.status(400).send({
+          statusCode: 400,
+          message: `Duration must be between ${minDuration} and ${maxDuration} minutes`,
+          details: { durationMinutes: `Must be between ${minDuration} and ${maxDuration}` }
+        });
+      }
+
       try {
         const updated = updateGame(id, parsed.data);
         return updated;

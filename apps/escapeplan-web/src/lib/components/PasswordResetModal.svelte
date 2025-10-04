@@ -2,8 +2,11 @@
 
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import type { SubmitFunction } from '@sveltejs/kit';
   import type { OperatorSummary } from '@escapeplan/contracts';
+  import Modal from '$lib/components/ui/Modal.svelte';
+  import LoadingButton from '$lib/components/ui/LoadingButton.svelte';
+  import Alert from '$lib/components/ui/Alert.svelte';
+  import { createFormHandler } from '$lib/utils/forms';
 
   interface Props {
     open?: boolean;
@@ -15,47 +18,54 @@
 
   const props = $props();
 
-  let dialogElement = $state<HTMLDialogElement | null>(null);
   let errorMessage = $state<string | null>(null);
   let password = $state('');
+  let confirmPassword = $state('');
   let forceReset = $state(true);
   let initialised = $state(false);
+  let isSubmitting = $state(false);
 
   const openFlag = $derived(Boolean(props.open as boolean | undefined));
   const actionValue = $derived((props.action as string | undefined) ?? '');
   const userValue = $derived((props.user as OperatorSummary | null | undefined) ?? null);
 
-  const handleSubmit: SubmitFunction = () => {
-    return async ({ result, update }) => {
-      if (result.type === 'failure') {
-        const failureData = result.data as { message?: string } | undefined;
-        errorMessage = failureData?.message ?? 'Request failed.';
-        return;
-      }
-      if (result.type === 'success') {
-        await update({ invalidateAll: false });
-        errorMessage = null;
-        (props.onsuccess as (() => void) | undefined)?.();
-        return;
-      }
-      await update();
-    };
-  };
+  // Strong password pattern: 8+ chars with number, lowercase, and uppercase
+  const passwordPattern = '(?=.*\\d)(?=.*[a-z])(?=.*[A-Z]).{8,}';
+
+  const handleSubmit = createFormHandler({
+    onSubmit: () => {
+      isSubmitting = true;
+      errorMessage = null;
+    },
+    onSuccess: () => {
+      isSubmitting = false;
+      (props.onsuccess as (() => void) | undefined)?.();
+    },
+    onError: (result) => {
+      isSubmitting = false;
+      const failureData = result.data as { message?: string } | undefined;
+      errorMessage = failureData?.message ?? 'Request failed.';
+    }
+  });
 
   function close() {
-    (props.onclose as (() => void) | undefined)?.();
+    if (!isSubmitting) {
+      (props.onclose as (() => void) | undefined)?.();
+    }
   }
 
   $effect(() => {
     if (!openFlag && initialised) {
       initialised = false;
       password = '';
+      confirmPassword = '';
     }
   });
 
   $effect(() => {
     if (openFlag && !initialised) {
       password = '';
+      confirmPassword = '';
       forceReset = true;
       errorMessage = null;
       initialised = true;
@@ -63,57 +73,96 @@
   });
 </script>
 
-{#if openFlag}
-  <dialog class="modal modal-bottom sm:modal-middle" open bind:this={dialogElement} oncancel={(e) => { e.preventDefault(); close(); }}>
-    <div class="modal-box max-h-[90vh] w-full max-w-lg overflow-y-auto px-6 py-6">
-      <header class="space-y-1">
-        <h2 class="text-lg font-semibold text-base-content">Reset password</h2>
-        <p class="text-sm text-base-content/70">Generate a new password for {userValue?.name ?? 'this user'}.</p>
-      </header>
+<Modal
+  open={openFlag}
+  title="Reset password"
+  description="Generate a new password for {userValue?.name ?? 'this user'}."
+  size="lg"
+  onClose={close}
+>
+  {#if errorMessage}
+    <Alert type="error" class="mb-6">
+      {errorMessage}
+    </Alert>
+  {/if}
 
-      {#if errorMessage}
-        <div class="alert alert-error mt-4 border border-error/30 bg-error/10 text-sm text-error-content">
-          <span>{errorMessage}</span>
+  <form method="POST" action={actionValue} class="space-y-4" use:enhance={handleSubmit}>
+    <input type="hidden" name="id" value={userValue?.id} />
+
+    <fieldset class="border border-base-300 rounded-lg p-4 space-y-4">
+      <legend class="text-sm font-semibold px-2">Reset Password</legend>
+
+      <label class="form-control">
+        <div class="label">
+          <span class="label-text">New Password <span class="text-error">*</span></span>
         </div>
-      {/if}
+        <input
+          type="password"
+          class="input input-bordered validator"
+          name="password"
+          required
+          minlength="8"
+          pattern={passwordPattern}
+          placeholder="Enter new password"
+          title="Must be 8+ characters with number, lowercase, and uppercase letter"
+          bind:value={password}
+          disabled={isSubmitting}
+        />
+        <div class="validator-hint">
+          Must be at least 8 characters including:
+          <br/>• At least one number
+          <br/>• At least one lowercase letter
+          <br/>• At least one uppercase letter
+        </div>
+      </label>
 
-      <form method="POST" action={actionValue} class="mt-6 space-y-4" use:enhance={handleSubmit}>
-        <input type="hidden" name="id" value={userValue?.id} />
+      <label class="form-control">
+        <div class="label">
+          <span class="label-text">Confirm Password <span class="text-error">*</span></span>
+        </div>
+        <input
+          type="password"
+          class="input input-bordered validator"
+          name="confirmPassword"
+          required
+          minlength="8"
+          pattern={password.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}
+          placeholder="Re-enter new password"
+          title="Passwords must match"
+          bind:value={confirmPassword}
+          disabled={isSubmitting}
+        />
+        <div class="validator-hint">
+          Please re-enter the password to confirm
+        </div>
+      </label>
+    </fieldset>
 
-        <label class="form-control">
-          <span class="label-text">New password</span>
-          <input
-            class="input input-bordered"
-            type="password"
-            name="password"
-            minlength="12"
-            required
-            bind:value={password}
-            placeholder="At least 12 characters"
-          />
-        </label>
-
-        <label class="form-control">
-          <span class="label-text">Require reset on next login</span>
-          <input
-            type="checkbox"
-            class="toggle toggle-primary"
-            name="forceReset"
-            bind:checked={forceReset}
-          />
-        </label>
-
-        <footer class="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={close}>
-            Cancel
-          </button>
-          <button type="submit" class="btn btn-secondary w-full sm:w-auto min-h-[44px]">
-            Reset password
-          </button>
-        </footer>
-      </form>
+    <div class="form-control">
+      <label class="label cursor-pointer justify-start gap-3">
+        <input
+          type="checkbox"
+          class="toggle toggle-primary"
+          name="forceReset"
+          bind:checked={forceReset}
+          disabled={isSubmitting}
+        />
+        <span class="label-text">Require reset on next login</span>
+      </label>
     </div>
-  </dialog>
-{/if}
+  </form>
 
-<!-- no component-scoped styles; rely on DaisyUI theme utilities -->
+  {#snippet actions()}
+    <button type="button" class="btn btn-ghost w-full sm:w-auto" onclick={close} disabled={isSubmitting}>
+      Cancel
+    </button>
+    <LoadingButton
+      type="submit"
+      variant="secondary"
+      loading={isSubmitting}
+      class="w-full sm:w-auto min-h-[44px]"
+    >
+      Reset password
+    </LoadingButton>
+  {/snippet}
+</Modal>
