@@ -3,6 +3,8 @@
 <script lang="ts">
 	import { apiFetch } from '$lib/api/client';
 	import MediaModal from '../media/MediaModal.svelte';
+	import Alert from '$lib/components/ui/Alert.svelte';
+	import { openConfirmDialog } from '$lib/components/confirm-dialog';
 
 	interface AssetRecord {
 		id: string;
@@ -26,8 +28,10 @@
 		mediaType?: string;
 		isReusable?: boolean;
 		onSelect?: (asset: AssetRecord) => void;
+		onSelectMultiple?: (assets: AssetRecord[]) => void;
 		selectedAssetId?: string;
 		showSearch?: boolean;
+		selectionMode?: 'single' | 'multiple';
 	}
 
 	let {
@@ -36,8 +40,10 @@
 		mediaType = undefined,
 		isReusable = undefined,
 		onSelect = undefined,
+		onSelectMultiple = undefined,
 		selectedAssetId = undefined,
-		showSearch = true
+		showSearch = true,
+		selectionMode = 'single'
 	}: AssetBrowserProps = $props();
 
 	let assets = $state<AssetRecord[]>([]);
@@ -54,10 +60,15 @@
 	let currentMediaSrc = $state('');
 	let currentMediaTitle = $state('');
 	let currentMediaType = $state<'image' | 'audio' | 'video'>('image');
+	let currentPreviewAsset = $state<AssetRecord | null>(null);
 
 	// Info popup state
 	let infoPopupOpen = $state(false);
 	let currentAssetInfo = $state<AssetRecord | null>(null);
+
+	// Game info popup state
+	let gameInfoPopupOpen = $state(false);
+	let currentGameInfo = $state<any | null>(null);
 
 	// Dynamic filter options
 	let availableAssetTypes = $state<string[]>([]);
@@ -138,6 +149,7 @@
 	function openMedia(asset: AssetRecord) {
 		currentMediaSrc = asset.url;
 		currentMediaTitle = asset.originalFilename;
+		currentPreviewAsset = asset;
 
 		// Determine media type
 		if (asset.mediaType === 'video') {
@@ -155,6 +167,14 @@
 		mediaModalOpen = false;
 		currentMediaSrc = '';
 		currentMediaTitle = '';
+		currentPreviewAsset = null;
+	}
+
+	function selectPreviewAsset() {
+		if (currentPreviewAsset && onSelect) {
+			onSelect(currentPreviewAsset);
+			closeMedia();
+		}
 	}
 
 	function openInfo(asset: AssetRecord, event: Event) {
@@ -168,14 +188,55 @@
 		currentAssetInfo = null;
 	}
 
+	async function openGameInfo(asset: AssetRecord, event: Event) {
+		event.stopPropagation();
+		if (!asset.gameId) return;
+
+		try {
+			const gameData = await apiFetch<any>(
+				fetch,
+				`/admin/games/${asset.gameId}`,
+				{ credentials: 'include' }
+			);
+			currentGameInfo = gameData;
+			gameInfoPopupOpen = true;
+		} catch (err) {
+			console.error('Failed to load game details:', err);
+			await openConfirmDialog({
+				title: 'Failed to Load Game',
+				message: 'Failed to load game information: ' + (err instanceof Error ? err.message : 'Unknown error'),
+				confirmText: 'OK',
+				variant: 'danger'
+			});
+		}
+	}
+
+	function closeGameInfo() {
+		gameInfoPopupOpen = false;
+		currentGameInfo = null;
+	}
+
 	function toggleSelectAsset(assetId: string, event: Event) {
 		event.stopPropagation();
 		const newSet = new Set(selectedAssets);
-		if (newSet.has(assetId)) {
-			newSet.delete(assetId);
+
+		if (selectionMode === 'single') {
+			// Single mode: clear all selections first, then add new asset (radio-style)
+			if (newSet.has(assetId)) {
+				newSet.delete(assetId);
+			} else {
+				newSet.clear();
+				newSet.add(assetId);
+			}
 		} else {
-			newSet.add(assetId);
+			// Multiple mode: toggle behavior (checkbox-style)
+			if (newSet.has(assetId)) {
+				newSet.delete(assetId);
+			} else {
+				newSet.add(assetId);
+			}
 		}
+
 		selectedAssets = newSet;
 	}
 
@@ -200,7 +261,18 @@
 	}
 
 	async function deleteSelected() {
-		if (!confirm(`Delete ${selectedAssets.size} asset(s)? This cannot be undone.`)) {
+		const assetCount = selectedAssets.size;
+		const assetWord = assetCount === 1 ? 'asset' : 'assets';
+
+		const confirmed = await openConfirmDialog({
+			title: `Delete ${assetCount} ${assetWord}`,
+			message: `Are you sure you want to delete ${assetCount === 1 ? 'this asset' : `these ${assetCount} assets`}? This action cannot be undone.`,
+			confirmText: 'Delete',
+			cancelText: 'Cancel',
+			variant: 'danger'
+		});
+
+		if (!confirmed) {
 			return;
 		}
 
@@ -214,7 +286,31 @@
 			clearSelection();
 			await loadAssets();
 		} catch (err) {
-			alert('Failed to delete assets: ' + (err instanceof Error ? err.message : 'Unknown error'));
+			await openConfirmDialog({
+				title: 'Delete Failed',
+				message: 'Failed to delete assets: ' + (err instanceof Error ? err.message : 'Unknown error'),
+				confirmText: 'OK',
+				variant: 'danger'
+			});
+		}
+	}
+
+	function handleSelectMultiple() {
+		if (onSelectMultiple) {
+			const selectedAssetsList = assets.filter(a => selectedAssets.has(a.id));
+			onSelectMultiple(selectedAssetsList);
+			clearSelection();
+		}
+	}
+
+	function handleSelectSingle() {
+		if (onSelect && selectedAssets.size > 0) {
+			const assetId = Array.from(selectedAssets)[0];
+			const asset = assets.find(a => a.id === assetId);
+			if (asset) {
+				onSelect(asset);
+				clearSelection();
+			}
 		}
 	}
 
@@ -245,7 +341,10 @@
 	// Load assets on mount and when user input changes
 	let debounceTimer: ReturnType<typeof setTimeout> | undefined;
 	$effect(() => {
-		// Watch user inputs
+		// Watch ALL filter inputs including props
+		gameId;
+		assetType;
+		mediaType;
 		searchQuery;
 		filterAssetType;
 		filterMediaType;
@@ -271,23 +370,27 @@
 				class="input input-bordered input-sm flex-1 min-w-[200px]"
 				bind:value={searchQuery}
 			/>
-			<select class="select select-bordered select-sm" bind:value={filterAssetType}>
-				<option value="all">All Asset Types</option>
-				{#each availableAssetTypes as type}
-					{#if type}
-						<option value={type}>{type.replace(/_/g, ' ')}</option>
-					{/if}
-				{/each}
-			</select>
-			<select class="select select-bordered select-sm" bind:value={filterMediaType}>
-				<option value="all">All Media Types</option>
-				<option value="image">Images</option>
-				{#each availableMediaTypes as type}
-					{#if type}
-						<option value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
-					{/if}
-				{/each}
-			</select>
+			{#if !assetType}
+				<select class="select select-bordered select-sm" bind:value={filterAssetType}>
+					<option value="all">All Asset Types</option>
+					{#each availableAssetTypes as type}
+						{#if type}
+							<option value={type}>{type.replace(/_/g, ' ')}</option>
+						{/if}
+					{/each}
+				</select>
+			{/if}
+			{#if !mediaType}
+				<select class="select select-bordered select-sm" bind:value={filterMediaType}>
+					<option value="all">All Media Types</option>
+					<option value="image">Images</option>
+					{#each availableMediaTypes as type}
+						{#if type}
+							<option value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</option>
+						{/if}
+					{/each}
+				</select>
+			{/if}
 			<button type="button" class="btn btn-secondary btn-sm" onclick={loadAssets}>
 				<svg
 					class="h-4 w-4"
@@ -307,32 +410,105 @@
 		</div>
 	{/if}
 
-	<!-- Multi-select Actions -->
-	{#if selectedAssets.size > 0}
+	<!-- Multi-select Actions (only show in multiple mode) -->
+	{#if selectionMode === 'multiple'}
+		{#if selectedAssets.size > 0}
+			<div class="flex items-center justify-between bg-base-200 rounded-lg p-3">
+				<span class="text-sm font-medium">{selectedAssets.size} selected</span>
+				<div class="flex gap-2">
+					<button type="button" class="btn btn-sm btn-ghost" onclick={clearSelection}>
+						Clear
+					</button>
+					{#if onSelectMultiple}
+						<button type="button" class="btn btn-sm btn-primary" onclick={handleSelectMultiple}>
+							<svg
+								class="h-4 w-4"
+								xmlns="http://www.w3.org/2000/svg"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M5 13l4 4L19 7"
+								/>
+							</svg>
+							Use Selected
+						</button>
+					{/if}
+					<button type="button" class="btn btn-sm btn-info" onclick={downloadSelected}>
+						<svg
+							class="h-4 w-4"
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+							/>
+						</svg>
+						Download
+					</button>
+					<button type="button" class="btn btn-sm btn-error" onclick={deleteSelected}>
+						<svg
+							class="h-4 w-4"
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+							/>
+						</svg>
+						Delete
+					</button>
+				</div>
+			</div>
+		{:else}
+			<div class="flex justify-end">
+				<button type="button" class="btn btn-sm btn-ghost" onclick={selectAll}>Select All</button>
+			</div>
+		{/if}
+	{/if}
+
+	<!-- Single-select Actions (only show in single mode with selection) -->
+	{#if selectionMode === 'single' && selectedAssets.size > 0}
 		<div class="flex items-center justify-between bg-base-200 rounded-lg p-3">
-			<span class="text-sm font-medium">{selectedAssets.size} selected</span>
+			<span class="text-sm font-medium">1 selected</span>
 			<div class="flex gap-2">
 				<button type="button" class="btn btn-sm btn-ghost" onclick={clearSelection}>
 					Clear
 				</button>
-				<button type="button" class="btn btn-sm btn-info" onclick={downloadSelected}>
-					<svg
-						class="h-4 w-4"
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-					>
-						<path
-							stroke-linecap="round"
-							stroke-linejoin="round"
-							stroke-width="2"
-							d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-						/>
-					</svg>
-					Download
-				</button>
-				<button type="button" class="btn btn-sm btn-error" onclick={deleteSelected}>
+				{#if onSelect}
+					<button type="button" class="btn btn-success btn-sm" onclick={handleSelectSingle}>
+						<svg
+							class="h-4 w-4"
+							xmlns="http://www.w3.org/2000/svg"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M5 13l4 4L19 7"
+							/>
+						</svg>
+						<span class="hidden sm:inline">Use Selected</span>
+					</button>
+				{/if}
+				<button type="button" class="btn btn-error btn-sm" onclick={deleteSelected}>
 					<svg
 						class="h-4 w-4"
 						xmlns="http://www.w3.org/2000/svg"
@@ -347,13 +523,9 @@
 							d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
 						/>
 					</svg>
-					Delete
+					<span class="hidden sm:inline">Delete</span>
 				</button>
 			</div>
-		</div>
-	{:else}
-		<div class="flex justify-end">
-			<button type="button" class="btn btn-sm btn-ghost" onclick={selectAll}>Select All</button>
 		</div>
 	{/if}
 
@@ -363,7 +535,7 @@
 			<span class="loading loading-spinner loading-lg"></span>
 		</div>
 	{:else if error}
-		<div class="alert alert-error">
+		<Alert type="error">
 			<svg
 				class="h-6 w-6"
 				xmlns="http://www.w3.org/2000/svg"
@@ -379,7 +551,7 @@
 				/>
 			</svg>
 			<span>{error}</span>
-		</div>
+		</Alert>
 	{:else if assets.length === 0}
 		<div
 			class="rounded-xl border border-dashed border-base-content/20 bg-base-100/70 p-12 text-center"
@@ -407,8 +579,11 @@
 				<div
 					class={`card card-compact bg-base-200 shadow-sm transition-all hover:shadow-md cursor-pointer ${
 						selectedAssets.has(asset.id) ? 'ring-2 ring-primary' : ''
-					}`}
-					onclick={() => openMedia(asset)}
+					} ${selectedAssetId === asset.id ? 'ring-2 ring-accent' : ''}`}
+					onclick={() => {
+						// Always open preview modal when clicking the card
+						openMedia(asset);
+					}}
 				>
 					<!-- Thumbnail -->
 					<figure class="relative h-32 bg-base-300">
@@ -439,7 +614,7 @@
 								</svg>
 							</div>
 						{/if}
-						<!-- Select Checkbox -->
+						<!-- Select Checkbox (show in both single and multiple modes) -->
 						<div class="absolute top-2 left-2" onclick={(e) => e.stopPropagation()}>
 							<input
 								type="checkbox"
@@ -470,17 +645,32 @@
 								<span class="badge badge-xs badge-outline">{getFileExtension(asset.filename).toUpperCase()}</span>
 								<span class="text-[10px] text-base-content/60">{formatFileSize(asset.sizeBytes)}</span>
 							</div>
-							<!-- Info Button -->
-							<button
-								type="button"
-								class="btn btn-xs btn-circle btn-ghost"
-								onclick={(e) => openInfo(asset, e)}
-								title="View details"
-							>
-								<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-									<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
-								</svg>
-							</button>
+							<div class="flex items-center gap-1">
+								<!-- Game Badge (only show if asset has gameId) -->
+								{#if asset.gameId}
+									<button
+										type="button"
+										class="btn btn-xs btn-circle btn-ghost"
+										onclick={(e) => openGameInfo(asset, e)}
+										title="View game info"
+									>
+										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+										</svg>
+									</button>
+								{/if}
+								<!-- Info Button -->
+								<button
+									type="button"
+									class="btn btn-xs btn-circle btn-ghost"
+									onclick={(e) => openInfo(asset, e)}
+									title="View details"
+								>
+									<svg class="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+										<path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+									</svg>
+								</button>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -501,6 +691,33 @@
 	mediaLoop={false}
 	onClose={closeMedia}
 />
+
+<!-- Selection Action Overlay (only in single select mode with onSelect callback) -->
+{#if mediaModalOpen && selectionMode === 'single' && onSelect && currentPreviewAsset}
+	<div class="fixed inset-y-0 left-64 right-0 z-[10000] flex items-end justify-center pb-12 pointer-events-none">
+		<button
+			type="button"
+			class="btn btn-primary btn-lg pointer-events-auto shadow-2xl"
+			onclick={selectPreviewAsset}
+		>
+			<svg
+				class="h-5 w-5"
+				xmlns="http://www.w3.org/2000/svg"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M5 13l4 4L19 7"
+				/>
+			</svg>
+			Select This Asset
+		</button>
+	</div>
+{/if}
 
 <!-- Info Popup Modal - Constrained to main content area -->
 {#if infoPopupOpen && currentAssetInfo}
@@ -571,6 +788,92 @@
 					<span class="font-semibold">Uploaded:</span>
 					<p class="text-base-content/70">{new Date(currentAssetInfo.uploadedAt).toLocaleString()}</p>
 				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Game Info Popup Modal - Constrained to main content area -->
+{#if gameInfoPopupOpen && currentGameInfo}
+	<div class="fixed inset-0 left-64 z-[9998] flex items-center justify-center bg-black/50" onclick={closeGameInfo}>
+		<div class="bg-base-100 rounded-lg shadow-xl max-w-lg w-full m-4" onclick={(e) => e.stopPropagation()}>
+			<!-- Header -->
+			<div class="flex items-center justify-between p-4 border-b border-base-300">
+				<div class="flex items-center gap-2">
+					<svg class="h-6 w-6 text-warning" fill="currentColor" viewBox="0 0 24 24">
+						<path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+					</svg>
+					<h3 class="text-lg font-bold">Game Information</h3>
+				</div>
+				<button type="button" class="btn btn-sm btn-circle btn-ghost" onclick={closeGameInfo}>
+					<svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+					</svg>
+				</button>
+			</div>
+
+			<!-- Content -->
+			<div class="p-4 space-y-3 text-sm">
+				<div>
+					<span class="font-semibold">Game Name:</span>
+					<p class="text-lg text-base-content/90 mt-1">{currentGameInfo.name}</p>
+				</div>
+				{#if currentGameInfo.description}
+					<div>
+						<span class="font-semibold">Description:</span>
+						<p class="text-base-content/70 mt-1">{currentGameInfo.description}</p>
+					</div>
+				{/if}
+				{#if currentGameInfo.duration}
+					<div>
+						<span class="font-semibold">Duration:</span>
+						<span class="ml-2">{currentGameInfo.duration} minutes</span>
+					</div>
+				{/if}
+				{#if currentGameInfo.difficulty}
+					<div>
+						<span class="font-semibold">Difficulty:</span>
+						<span class="ml-2 capitalize">{currentGameInfo.difficulty}</span>
+					</div>
+				{/if}
+				{#if currentGameInfo.maxPlayers}
+					<div>
+						<span class="font-semibold">Max Players:</span>
+						<span class="ml-2">{currentGameInfo.maxPlayers}</span>
+					</div>
+				{/if}
+				{#if currentGameInfo.minPlayers}
+					<div>
+						<span class="font-semibold">Min Players:</span>
+						<span class="ml-2">{currentGameInfo.minPlayers}</span>
+					</div>
+				{/if}
+				{#if currentGameInfo.basePrice !== null && currentGameInfo.basePrice !== undefined}
+					<div>
+						<span class="font-semibold">Base Price:</span>
+						<span class="ml-2">${(currentGameInfo.basePrice / 100).toFixed(2)}</span>
+					</div>
+				{/if}
+				{#if currentGameInfo.pricePerPlayer !== null && currentGameInfo.pricePerPlayer !== undefined}
+					<div>
+						<span class="font-semibold">Price Per Player:</span>
+						<span class="ml-2">${(currentGameInfo.pricePerPlayer / 100).toFixed(2)}</span>
+					</div>
+				{/if}
+				{#if currentGameInfo.slug}
+					<div>
+						<span class="font-semibold">Slug:</span>
+						<span class="ml-2 font-mono text-xs">{currentGameInfo.slug}</span>
+					</div>
+				{/if}
+				{#if currentGameInfo.isActive !== null && currentGameInfo.isActive !== undefined}
+					<div>
+						<span class="font-semibold">Status:</span>
+						<span class="badge badge-sm ml-2 {currentGameInfo.isActive ? 'badge-success' : 'badge-warning'}">
+							{currentGameInfo.isActive ? 'Active' : 'Inactive'}
+						</span>
+					</div>
+				{/if}
 			</div>
 		</div>
 	</div>
