@@ -127,6 +127,7 @@ mkdir -p "${BUILD_DIR}/opt/escapeplan/api"
 mkdir -p "${BUILD_DIR}/opt/escapeplan/web"
 mkdir -p "${BUILD_DIR}/etc/systemd/system"
 mkdir -p "${BUILD_DIR}/etc/escapeplan"
+mkdir -p "${BUILD_DIR}/etc/nginx/sites-available"
 
 # Use pnpm deploy to create production node_modules with real files (no symlinks)
 echo "Deploying production dependencies for API..."
@@ -151,11 +152,13 @@ prepare_contracts_package "${BUILD_DIR}/opt/escapeplan/web"
 echo "Adding utility scripts to package..."
 mkdir -p "${BUILD_DIR}/opt/escapeplan/scripts"
 cp scripts/pi-post-install.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
+cp scripts/postinst-orchestrator.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
 cp scripts/health-check.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
 cp scripts/validate-dependencies.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
 cp apps/escapeplan-api/scripts/backup.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
 cp apps/escapeplan-api/scripts/backup.ts "${BUILD_DIR}/opt/escapeplan/scripts/"
 chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/pi-post-install.sh"
+chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/postinst-orchestrator.sh"
 chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/health-check.sh"
 chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/validate-dependencies.sh"
 chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/backup.sh"
@@ -214,6 +217,7 @@ cat > "${BUILD_DIR}/etc/systemd/system/escapeplan-api.service" << 'EOF'
 Description=EscapePlan Fastify API
 After=network.target
 ConditionPathExists=/opt/escapeplan/api/systemd/start.sh
+ConditionPathExists=/var/lib/escapeplan/.db-initialized
 
 [Service]
 Type=simple
@@ -221,9 +225,10 @@ User=escapeplan
 Group=escapeplan
 EnvironmentFile=-/etc/escapeplan/api.env
 WorkingDirectory=/opt/escapeplan/api
+ExecStartPre=/bin/bash -c 'while [ ! -f /var/lib/escapeplan/.db-initialized ]; do sleep 1; done'
 ExecStart=/opt/escapeplan/api/systemd/start.sh
 Restart=always
-RestartSec=5s
+RestartSec=10
 StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=escapeplan-api
@@ -275,6 +280,10 @@ cp scripts/systemd/escapeplan-backup.service "${BUILD_DIR}/etc/systemd/system/"
 cp scripts/systemd/escapeplan-backup.timer "${BUILD_DIR}/etc/systemd/system/"
 cp scripts/systemd/escapeplan-backup-notify@.service "${BUILD_DIR}/etc/systemd/system/"
 
+# Copy nginx configuration
+echo "Adding nginx reverse proxy configuration to package..."
+cp scripts/nginx/escapeplan.conf "${BUILD_DIR}/etc/nginx/sites-available/"
+
 # Create control file
 cat > "${BUILD_DIR}/DEBIAN/control" << EOF
 Package: ${PKG_NAME}
@@ -291,7 +300,7 @@ Description: Offline-first escape room management system
  will be rebuilt automatically if build tools are available.
 EOF
 
-# Create postinst script
+# Create postinst script that delegates to the orchestrator
 cat > "${BUILD_DIR}/DEBIAN/postinst" << 'EOF'
 #!/bin/bash
 set -e
@@ -366,126 +375,78 @@ repair_contracts_dependencies() {
     return 0
 }
 
+log "EscapePlan package installation starting..."
+
 # Create escapeplan user if doesn't exist
 if ! id escapeplan &>/dev/null; then
+    log "Creating escapeplan system user..."
     useradd -r -s /bin/false escapeplan
+    log "✓ System user created"
+else
+    log "✓ System user already exists"
 fi
 
 # Create required data directories
+log "Creating data directories..."
 mkdir -p /var/lib/escapeplan
 mkdir -p /var/log/escapeplan
 mkdir -p /etc/escapeplan
+mkdir -p /var/backups/escapeplan
 
 # Set ownership (node_modules already bundled in package)
+log "Setting directory ownership..."
 chown -R escapeplan:escapeplan /opt/escapeplan
 chown -R escapeplan:escapeplan /var/lib/escapeplan
 chown -R escapeplan:escapeplan /var/log/escapeplan
 chown -R escapeplan:escapeplan /etc/escapeplan
+chown -R escapeplan:escapeplan /var/backups/escapeplan
 
-# Reload systemd
-systemctl daemon-reload
-
-# Enable services (but don't start - user must configure first)
-systemctl enable escapeplan-api.service
-systemctl enable escapeplan-web.service
-systemctl enable escapeplan-backup.timer
-
-# Generate secrets for first-time installation
-if [ ! -f "/etc/escapeplan/api.env" ]; then
-    echo "[postinst] Generating security secrets..."
-
-    # Generate Better Auth secret (64-char random string)
-    BETTER_AUTH_SECRET=$(openssl rand -base64 48 | tr -d '\n')
-
-    # Generate camera encryption key (32-char hex)
-    CAMERA_ENCRYPTION_KEY=$(openssl rand -hex 32 | tr -d '\n')
-
-    # Create API environment file from template
-    cat > /etc/escapeplan/api.env <<-ENVEOF
-PORT=4000
-HOST=0.0.0.0
-DATABASE_URL=/var/lib/escapeplan/escapeplan.db
-BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
-BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://escapeplan.local:3000,http://10.10.10.1:3000
-CAMERA_ENCRYPTION_KEY=${CAMERA_ENCRYPTION_KEY}
-NODE_ENV=production
-ENVEOF
-
-    chown escapeplan:escapeplan /etc/escapeplan/api.env
-    chmod 600 /etc/escapeplan/api.env
-
-    echo "[postinst] ✓ Secrets generated and saved to /etc/escapeplan/api.env"
-else
-    echo "[postinst] ✓ Existing api.env found, preserving secrets"
-fi
-
+# Repair contracts dependencies (critical for package installation)
+log "Repairing pnpm symlinks for contracts dependencies..."
 if ! repair_contracts_dependencies "/opt/escapeplan/api"; then
-    echo "[postinst] Failed to repair API contracts dependencies" >&2
+    log_error "Failed to repair API contracts dependencies"
     exit 1
 fi
 
 if ! repair_contracts_dependencies "/opt/escapeplan/web"; then
-    echo "[postinst] Failed to repair Web contracts dependencies" >&2
+    log_error "Failed to repair Web contracts dependencies"
     exit 1
 fi
 
-# Initialize database with seed data
-if [ ! -f "/var/lib/escapeplan/.db-initialized" ]; then
-    log "Initializing database with essential data..."
+log "✓ Contracts dependencies repaired successfully"
 
-    # Set environment for database initialization
-    export DATABASE_URL="/var/lib/escapeplan/escapeplan.db"
-    export NODE_ENV="production"
+# Configure nginx reverse proxy
+log "Configuring nginx reverse proxy..."
+ln -sf /etc/nginx/sites-available/escapeplan /etc/nginx/sites-enabled/escapeplan
+rm -f /etc/nginx/sites-enabled/default
+log "✓ Nginx configuration installed"
 
-    # Run seed script as escapeplan user
-    if su -s /bin/bash escapeplan -c "cd /opt/escapeplan/api && node dist/db/seed.js" 2>&1 | tee -a "${LOG_FILE:-/tmp/escapeplan-install.log}"; then
-        # Mark database as initialized
-        touch /var/lib/escapeplan/.db-initialized
-        chown escapeplan:escapeplan /var/lib/escapeplan/.db-initialized
-        log "✓ Database initialized with admin user and RBAC roles"
+log "Package installation complete. Running orchestrator for system configuration..."
+log ""
+
+# Call the orchestrator script to handle all post-installation steps
+if [ -f /opt/escapeplan/scripts/postinst-orchestrator.sh ]; then
+    if /opt/escapeplan/scripts/postinst-orchestrator.sh /opt/escapeplan; then
+        log ""
+        log "✓ EscapePlan installation and configuration complete!"
+        log ""
+        log "Services have been enabled but not started."
+        log "To start services, run:"
+        log "  systemctl start escapeplan-api escapeplan-web"
+        log ""
+        log "Check installation status with:"
+        log "  /opt/escapeplan/scripts/health-check.sh"
+        log ""
+        log "View installation log at: /tmp/escapeplan-postinst.log"
     else
-        log_error "Database initialization failed - check logs"
-        log_error "You may need to run manually: sudo -u escapeplan node /opt/escapeplan/api/dist/db/seed.js"
-        # Don't exit - allow installation to complete
+        log_error "Orchestrator script failed - installation may be incomplete"
+        log_error "Check logs at: /tmp/escapeplan-postinst.log"
+        exit 1
     fi
 else
-    log "✓ Database already initialized, skipping seed"
-fi
-
-# Rebuild native modules for ARM64 architecture
-echo "[postinst] Rebuilding native modules for ARM64..."
-if [ -f /opt/escapeplan/scripts/pi-post-install.sh ]; then
-    if /opt/escapeplan/scripts/pi-post-install.sh /opt/escapeplan; then
-        echo "[postinst] ✓ Native modules rebuilt successfully for $(uname -m)"
-    else
-        echo "[postinst] ⚠️  Native module rebuild had warnings - check /tmp/escapeplan-native-rebuild.log"
-        echo "[postinst] If on Raspberry Pi, you may need to install build tools:"
-        echo "[postinst]   sudo apt-get install -y build-essential python3"
-        echo "[postinst]   sudo /opt/escapeplan/scripts/pi-post-install.sh /opt/escapeplan"
-    fi
-else
-    echo "[postinst] WARNING: pi-post-install.sh not found - native modules may not work on ARM"
-fi
-
-echo "EscapePlan installed successfully!"
-echo ""
-
-# Run health check validation
-if [ -x /opt/escapeplan/scripts/health-check.sh ]; then
-    echo "Running post-installation health checks..."
-    echo ""
-    /opt/escapeplan/scripts/health-check.sh || {
-        echo ""
-        echo "Health checks failed. Review errors above before starting services."
-        echo ""
-        exit 0  # Don't fail package installation, just warn
-    }
-else
-    echo "Configure /etc/escapeplan/*.env then run:"
-    echo "  systemctl start escapeplan-api"
-    echo "  systemctl start escapeplan-web"
-    echo ""
-    echo "Validate installation with: /opt/escapeplan/scripts/health-check.sh"
+    log_error "Orchestrator script not found at /opt/escapeplan/scripts/postinst-orchestrator.sh"
+    log_error "Package may be corrupted or incomplete"
+    exit 1
 fi
 EOF
 
