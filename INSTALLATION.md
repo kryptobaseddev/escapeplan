@@ -9,7 +9,7 @@
 Before you begin, make sure you have:
 
 The system uses two WiFi interfaces:
-- **wlan0** (built-in WiFi) - Internal broadcast AP (SSID: "EscapePlan") - Auto-configured in Step 3
+- **wlan0** (built-in WiFi) - Internal broadcast AP (SSID: "EscapePlan" Password: "Canuescape3") - Auto-configured in Step 3
 - **wlan1** (USB WiFi dongle) - External WiFi client for internet access - Optional, managed via web UI after installation
 
 ### Hardware Requirements
@@ -63,11 +63,12 @@ If these don't match, you need to install Raspberry Pi OS 64-bit Bookworm first.
 ### Option A: Download from GitHub Releases (Recommended)
 
 ```bash
-# Download the latest release
-wget https://github.com/YOUR-ORG/escapeplan/releases/latest/download/escapeplan_0.1.0_arm64.deb
+# Download the latest release (automatically gets the newest version)
+wget https://github.com/kryptobaseddev/escapeplan-app/releases/latest/download/escapeplan_arm64.deb \
+  -O escapeplan_latest_arm64.deb
 
 # Verify the download
-ls -lh escapeplan_*.deb
+ls -lh escapeplan_latest_arm64.deb
 ```
 
 ### Option B: Copy from Another Computer
@@ -76,10 +77,10 @@ If you built the package on a development machine:
 
 ```bash
 # On your computer, copy to the Pi
-scp escapeplan_0.1.0_arm64.deb pi@raspberrypi.local:~/
+scp escapeplan_latest_arm64.deb escapeplan@escapeplan.local:~/
 
 # On the Pi, verify it arrived
-ls -lh ~/escapeplan_*.deb
+ls -lh ~/escapeplan_latest_arm64.deb
 ```
 
 ---
@@ -89,7 +90,7 @@ ls -lh ~/escapeplan_*.deb
 Run the installation command:
 
 ```bash
-sudo dpkg -i escapeplan_*.deb
+sudo dpkg -i escapeplan_latest_arm64.deb
 ```
 
 ### What Happens Automatically
@@ -199,7 +200,7 @@ EscapePlan uses a **dual-WiFi architecture**:
 - **Configuration:** Auto-configured in Step 3 above
 - **IP Address:** 10.10.10.1
 - **DHCP Range:** 10.10.10.50 - 10.10.10.150
-- **Password:** Displayed after Step 3 (also in `/etc/escapeplan/wifi-password.txt`)
+- **Password:** "Canuescape3" (also in `/etc/escapeplan/wifi-password.txt`)
 
 ### External WiFi Connection (wlan1) - Optional
 - **Interface:** USB WiFi dongle (wlan1) - if plugged in
@@ -257,7 +258,7 @@ Open your browser and navigate to one of these URLs:
 
 - **Via hostname:** `http://escapeplan.local:3000`
 - **Via IP address:** `http://10.10.10.1:3000` (if using default network config)
-- **Via Pi hostname:** `http://raspberrypi.local:3000`
+- **Via Pi hostname:** `http://escapeplan.local:3000`
 
 ### Default Login Credentials
 
@@ -299,7 +300,7 @@ sudo systemctl enable escapeplan-web
 sudo apt-get install -f
 
 # Retry the installation
-sudo dpkg -i escapeplan_*.deb
+sudo dpkg -i escapeplan_latest_arm64.deb
 ```
 
 ---
@@ -383,7 +384,7 @@ Common causes:
 2. **Verify network connectivity:**
    ```bash
    # From your computer, ping the Pi
-   ping raspberrypi.local
+   ping escapeplan.local
 
    # From the Pi, check if the port is listening
    sudo ss -tlnp | grep 3000
@@ -488,7 +489,7 @@ sudo rm -rf /etc/escapeplan
 sudo userdel -r escapeplan
 
 # Start over from Step 2
-sudo dpkg -i escapeplan_*.deb
+sudo dpkg -i escapeplan_latest_arm64.deb
 ```
 
 ---
@@ -575,14 +576,15 @@ Once you're logged in and the system is running:
 To update to a new version:
 
 ```bash
-# Download the new .deb package
-wget https://github.com/YOUR-ORG/escapeplan/releases/latest/download/escapeplan_X.X.X_arm64.deb
+# Download the latest release (automatically gets the newest version)
+wget https://github.com/kryptobaseddev/escapeplan-app/releases/latest/download/escapeplan_arm64.deb \
+  -O escapeplan_latest_arm64.deb
 
 # Stop services
 sudo systemctl stop escapeplan-api escapeplan-web
 
 # Install the update
-sudo dpkg -i escapeplan_X.X.X_arm64.deb
+sudo dpkg -i escapeplan_latest_arm64.deb
 
 # Run post-install (to rebuild modules if needed)
 sudo /opt/escapeplan/scripts/pi-post-install.sh

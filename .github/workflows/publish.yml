@@ -54,6 +54,27 @@ jobs:
           pnpm --filter escapeplan-api build
           pnpm --filter escapeplan-web build
 
+      # Extract version and sync VERSION file before packaging
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Releasing version: $VERSION"
+
+      - name: Update VERSION file
+        run: |
+          VERSION_NUMBER="${{ steps.version.outputs.version }}"
+          # Remove 'v' prefix if present
+          VERSION_NUMBER="${VERSION_NUMBER#v}"
+          echo "$VERSION_NUMBER" > VERSION
+          echo "Updated VERSION file to: $VERSION_NUMBER"
+          cat VERSION
+
       # Package
       - name: Build Debian package
         run: |
@@ -67,16 +88,12 @@ jobs:
           cat SHA256SUMS
 
       # Release
-      - name: Extract version
-        id: version
+
+      - name: Create generic latest package
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION="${GITHUB_REF#refs/tags/}"
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Releasing version: $VERSION"
+          cd dist
+          cp escapeplan_*.deb escapeplan_arm64.deb
+          ls -lh escapeplan_*
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -95,7 +112,8 @@ jobs:
 
             See [CHANGELOG.md](./CHANGELOG.md) for full details.
           files: |
-            dist/escapeplan_*.deb
+            dist/escapeplan_*_arm64.deb
+            dist/escapeplan_arm64.deb
             dist/SHA256SUMS
           generate_release_notes: true
           draft: false

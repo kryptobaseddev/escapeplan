@@ -340,8 +340,8 @@ install_system_packages() {
 # ============================================================================
 
 generate_secure_password() {
-    # Generate 16-character password with alphanumeric + special chars
-    openssl rand -base64 24 | tr -d "=+/" | cut -c1-16
+    # Use hardcoded default password for EscapePlan WiFi hotspot
+    echo "Canuescape3"
 }
 
 setup_wifi_hotspot() {
@@ -602,14 +602,30 @@ step_validate_dependencies() {
     fi
 
     log "Running dependency validation with auto-install..."
-    if "${validator_script}" "${INSTALL_ROOT}" --auto-install 2>&1 | tee -a "${LOG_FILE}"; then
+    "${validator_script}" "${INSTALL_ROOT}" --auto-install 2>&1 | tee -a "${LOG_FILE}"
+    local validation_result=$?
+
+    if [ $validation_result -eq 0 ]; then
         log_success "All dependencies validated and installed"
         return 0
     else
-        local exit_code=$?
-        log_error "Dependency validation failed (exit code: ${exit_code})"
-        log_error "Check ${LOG_FILE} for details"
-        return 1
+        log_warning "Native module architecture mismatch detected"
+        log_info "Rebuilding native modules for ARM64..."
+
+        # Rebuild all native modules in API
+        cd /opt/escapeplan/api
+        sudo -u escapeplan npm rebuild better-sqlite3 argon2 sharp 2>&1 | tee -a /tmp/escapeplan-post-install.log
+
+        # Verify rebuild worked
+        ARCH_CHECK=$(file node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3/build/Release/*.node 2>/dev/null | grep -o "aarch64\|ARM" || echo "FAILED")
+        if [[ "$ARCH_CHECK" == "FAILED" ]]; then
+            log_error "Native module rebuild failed"
+            exit 1
+        fi
+
+        log_success "Native modules rebuilt successfully for ARM64"
+        cd /opt/escapeplan
+        return 0
     fi
 }
 

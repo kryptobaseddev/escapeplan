@@ -296,6 +296,17 @@ cat > "${BUILD_DIR}/DEBIAN/postinst" << 'EOF'
 #!/bin/bash
 set -e
 
+# Logging helpers
+LOG_FILE="${LOG_FILE:-/tmp/escapeplan-install.log}"
+
+log() {
+    echo "[postinst] $1" | tee -a "${LOG_FILE}"
+}
+
+log_error() {
+    echo "[postinst] ERROR: $1" >&2 | tee -a "${LOG_FILE}"
+}
+
 resolve_pnpm_module() {
     local node_modules_root="$1"
     local module_name="$2"
@@ -379,6 +390,35 @@ systemctl enable escapeplan-api.service
 systemctl enable escapeplan-web.service
 systemctl enable escapeplan-backup.timer
 
+# Generate secrets for first-time installation
+if [ ! -f "/etc/escapeplan/api.env" ]; then
+    echo "[postinst] Generating security secrets..."
+
+    # Generate Better Auth secret (64-char random string)
+    BETTER_AUTH_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+
+    # Generate camera encryption key (32-char hex)
+    CAMERA_ENCRYPTION_KEY=$(openssl rand -hex 32 | tr -d '\n')
+
+    # Create API environment file from template
+    cat > /etc/escapeplan/api.env <<-ENVEOF
+PORT=4000
+HOST=0.0.0.0
+DATABASE_URL=/var/lib/escapeplan/escapeplan.db
+BETTER_AUTH_SECRET=${BETTER_AUTH_SECRET}
+BETTER_AUTH_TRUSTED_ORIGINS=http://localhost:3000,http://escapeplan.local:3000,http://10.10.10.1:3000
+CAMERA_ENCRYPTION_KEY=${CAMERA_ENCRYPTION_KEY}
+NODE_ENV=production
+ENVEOF
+
+    chown escapeplan:escapeplan /etc/escapeplan/api.env
+    chmod 600 /etc/escapeplan/api.env
+
+    echo "[postinst] ✓ Secrets generated and saved to /etc/escapeplan/api.env"
+else
+    echo "[postinst] ✓ Existing api.env found, preserving secrets"
+fi
+
 if ! repair_contracts_dependencies "/opt/escapeplan/api"; then
     echo "[postinst] Failed to repair API contracts dependencies" >&2
     exit 1
@@ -387,6 +427,29 @@ fi
 if ! repair_contracts_dependencies "/opt/escapeplan/web"; then
     echo "[postinst] Failed to repair Web contracts dependencies" >&2
     exit 1
+fi
+
+# Initialize database with seed data
+if [ ! -f "/var/lib/escapeplan/.db-initialized" ]; then
+    log "Initializing database with essential data..."
+
+    # Set environment for database initialization
+    export DATABASE_URL="/var/lib/escapeplan/escapeplan.db"
+    export NODE_ENV="production"
+
+    # Run seed script as escapeplan user
+    if su -s /bin/bash escapeplan -c "cd /opt/escapeplan/api && node dist/db/seed.js" 2>&1 | tee -a "${LOG_FILE:-/tmp/escapeplan-install.log}"; then
+        # Mark database as initialized
+        touch /var/lib/escapeplan/.db-initialized
+        chown escapeplan:escapeplan /var/lib/escapeplan/.db-initialized
+        log "✓ Database initialized with admin user and RBAC roles"
+    else
+        log_error "Database initialization failed - check logs"
+        log_error "You may need to run manually: sudo -u escapeplan node /opt/escapeplan/api/dist/db/seed.js"
+        # Don't exit - allow installation to complete
+    fi
+else
+    log "✓ Database already initialized, skipping seed"
 fi
 
 # Rebuild native modules for ARM64 architecture
