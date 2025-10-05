@@ -1,10 +1,11 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import type { LayoutData } from './$types';
   import { page } from '$app/stores';
 
-  let { children }: { children: () => unknown; data: LayoutData } = $props();
+  let { children, data }: { children: Snippet; data: LayoutData } = $props();
 
   const tabs = [
     { href: '/account/profile', label: 'Profile' },

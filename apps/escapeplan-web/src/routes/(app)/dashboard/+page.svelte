@@ -13,17 +13,51 @@
   import DashboardStats from '$lib/components/dashboard/DashboardStats.svelte';
   import DashboardNetwork from '$lib/components/dashboard/DashboardNetwork.svelte';
   import DashboardSessions from '$lib/components/dashboard/DashboardSessions.svelte';
-  import type { GameSessionDetails, Alert as AlertType } from '@escapeplan/contracts';
+  import type {
+    GameSessionDetails,
+    Alert as AlertType,
+    ActiveSessionSummary,
+    BookingSummary
+  } from '@escapeplan/contracts';
   import { apiFetch } from '$lib/api/client';
   import type { CommandResponse } from '$lib/api/types';
   import Alert from '$lib/components/ui/Alert.svelte';
 
   let { data }: { data: PageData } = $props();
 
+  const isSessionDetails = (
+    session: ActiveSessionSummary | GameSessionDetails
+  ): session is GameSessionDetails => 'hintLog' in session && Array.isArray(session.hintLog);
+
+  const ensureSessionDetails = (session: ActiveSessionSummary | GameSessionDetails): GameSessionDetails => {
+    if (isSessionDetails(session)) {
+      return session;
+    }
+
+    return {
+      ...session,
+      puzzles: [],
+      hintLog: [],
+      crew: {
+        primary: session.roomName,
+        support: null
+      },
+      milestones: [],
+      gameSlug:
+        'gameSlug' in session && typeof session.gameSlug === 'string' && session.gameSlug
+          ? session.gameSlug
+          : session.gameId,
+      currentRoomDisplayMedia: null
+    };
+  };
+
+  const normalizeSessions = (list: Array<ActiveSessionSummary | GameSessionDetails>): GameSessionDetails[] =>
+    list.map(ensureSessionDetails);
+
   let isLoading = $state(true);
   let dashboard = $state(data.dashboard ?? null);
-  let sessions = $state<GameSessionDetails[]>(data.dashboard?.activeSessions ?? []);
-  let bookings = $state(data.dashboard?.upcomingBookings ?? []);
+  let sessions = $state<GameSessionDetails[]>(normalizeSessions(data.dashboard?.activeSessions ?? []));
+  let bookings = $state<BookingSummary[]>(data.dashboard?.upcomingBookings ?? []);
   let games = $state(data.games ?? []);
   let quickStartOpen = $state(false);
   let toast = $state<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -58,10 +92,11 @@
   const handleQuickStartSuccess = (session: GameSessionDetails) => {
     quickStartOpen = false;
     setToast('Session started successfully.');
-    if (!sessions.some((existing: GameSessionDetails) => existing.id === session.id)) {
-      sessions = [session, ...sessions];
+    const normalized = ensureSessionDetails(session);
+    if (!sessions.some((existing) => existing.id === normalized.id)) {
+      sessions = [normalized, ...sessions];
     }
-    goto(`/games/${session.id}`);
+    goto(`/games/${normalized.id}`);
   };
 
   const buildTimerUrl = (session: GameSessionDetails) => {
@@ -153,7 +188,7 @@
     });
 
     const unsubSessions = sessionsStore.subscribe((value) => {
-      sessions = [...value]; // Create new array reference to trigger reactivity
+      sessions = normalizeSessions(value as Array<ActiveSessionSummary | GameSessionDetails>);
     });
 
     const todayKey = `${new Date().toISOString().slice(0, 10)}|all`;

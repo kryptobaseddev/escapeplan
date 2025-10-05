@@ -28,9 +28,9 @@ beforeAll(async () => {
 afterAll(async () => {
   // Clean up test operator if created
   if (testOperatorId) {
-    sqlite.prepare(`DELETE FROM operator_auth_sessions WHERE user_id = ?`).run(testOperatorId);
-    sqlite.prepare(`DELETE FROM operator_accounts WHERE user_id = ?`).run(testOperatorId);
-    sqlite.prepare(`DELETE FROM operators WHERE id = ?`).run(testOperatorId);
+    sqlite.prepare('DELETE FROM session WHERE userId = ?').run(testOperatorId);
+    sqlite.prepare('DELETE FROM account WHERE userId = ?').run(testOperatorId);
+    sqlite.prepare('DELETE FROM user WHERE id = ?').run(testOperatorId);
   }
   await server.close();
 });
@@ -44,6 +44,10 @@ describe('Security Hardening - Archive & Session Management', () => {
 
   test('multi-session invalidation on archive', async () => {
     // Create test operator
+    sqlite.prepare('DELETE FROM session WHERE userId IN (SELECT id FROM user WHERE username = ?)').run(testUsername);
+    sqlite.prepare('DELETE FROM account WHERE userId IN (SELECT id FROM user WHERE username = ?)').run(testUsername);
+    sqlite.prepare('DELETE FROM user WHERE username = ?').run(testUsername);
+
     const createResponse = await server.inject({
       method: 'POST',
       url: '/api/admin/users',
@@ -86,7 +90,7 @@ describe('Security Hardening - Archive & Session Management', () => {
 
     // Verify multiple sessions exist in database
     const sessionsBeforeArchive = sqlite
-      .prepare('SELECT COUNT(*) as count FROM operator_auth_sessions WHERE user_id = ?')
+      .prepare('SELECT COUNT(*) as count FROM session WHERE userId = ?')
       .get(testOperatorId) as { count: number };
 
     expect(sessionsBeforeArchive.count).toBeGreaterThanOrEqual(3);
@@ -103,7 +107,7 @@ describe('Security Hardening - Archive & Session Management', () => {
 
     // Verify ALL sessions were deleted
     const sessionsAfterArchive = sqlite
-      .prepare('SELECT COUNT(*) as count FROM operator_auth_sessions WHERE user_id = ?')
+      .prepare('SELECT COUNT(*) as count FROM session WHERE userId = ?')
       .get(testOperatorId) as { count: number };
 
     expect(sessionsAfterArchive.count).toBe(0);
@@ -131,7 +135,7 @@ describe('Security Hardening - Archive & Session Management', () => {
     // Operator is already archived from previous test
     // Verify archived status
     const operatorRow = sqlite
-      .prepare('SELECT archived_at FROM operators WHERE id = ?')
+      .prepare('SELECT archived_at FROM user WHERE id = ?')
       .get(testOperatorId) as { archived_at: string | null };
 
     expect(operatorRow.archived_at).not.toBeNull();
@@ -187,7 +191,7 @@ describe('Security Hardening - Archive & Session Management', () => {
 
     // Verify new session was created
     const sessionsAfterUnarchive = sqlite
-      .prepare('SELECT COUNT(*) as count FROM operator_auth_sessions WHERE user_id = ?')
+      .prepare('SELECT COUNT(*) as count FROM session WHERE userId = ?')
       .get(testOperatorId) as { count: number };
 
     expect(sessionsAfterUnarchive.count).toBe(1);
@@ -195,16 +199,20 @@ describe('Security Hardening - Archive & Session Management', () => {
 
   test('cannot archive last active admin', async () => {
     // Get current admin count
+    const adminRoleIdRow = sqlite
+      .prepare("SELECT id FROM roles WHERE name = 'admin'")
+      .get() as { id: string };
+
     const adminCountBefore = sqlite
-      .prepare('SELECT COUNT(*) as count FROM operators WHERE role = ? AND archived_at IS NULL')
-      .get('admin') as { count: number };
+      .prepare('SELECT COUNT(*) as count FROM user WHERE role_id = ? AND archived_at IS NULL')
+      .get(adminRoleIdRow.id) as { count: number };
 
     expect(adminCountBefore.count).toBeGreaterThanOrEqual(1);
 
     // Get admin user
     const adminRow = sqlite
-      .prepare('SELECT id FROM operators WHERE role = ? AND archived_at IS NULL LIMIT 1')
-      .get('admin') as { id: string };
+      .prepare('SELECT id FROM user WHERE role_id = ? AND archived_at IS NULL LIMIT 1')
+      .get(adminRoleIdRow.id) as { id: string };
 
     // If this is the only admin, archiving should fail
     if (adminCountBefore.count === 1) {
@@ -228,12 +236,12 @@ describe('Security Hardening - Archive & Session Management', () => {
 
     // Set mustResetPassword flag
     sqlite
-      .prepare('UPDATE operators SET must_reset_password = 1 WHERE id = ?')
+      .prepare('UPDATE user SET must_reset_password = 1 WHERE id = ?')
       .run(testOperatorId);
 
     // Verify flag is set
     const beforeRow = sqlite
-      .prepare('SELECT must_reset_password FROM operators WHERE id = ?')
+      .prepare('SELECT must_reset_password FROM user WHERE id = ?')
       .get(testOperatorId) as { must_reset_password: number };
 
     expect(beforeRow.must_reset_password).toBe(1);
@@ -265,7 +273,7 @@ describe('Security Hardening - Archive & Session Management', () => {
 
     // Verify must_reset_password flag is now cleared
     const afterRow = sqlite
-      .prepare('SELECT must_reset_password FROM operators WHERE id = ?')
+      .prepare('SELECT must_reset_password FROM user WHERE id = ?')
       .get(testOperatorId) as { must_reset_password: number };
 
     expect(afterRow.must_reset_password).toBe(0);

@@ -48,7 +48,7 @@
         muted
         loop
         playsinline
-      />
+      ></video>
     {:else}
       <img
         class="h-full w-full object-cover"
@@ -70,7 +70,7 @@
         muted
         loop
         playsinline
-      />
+      ></video>
     {:else}
       <img
         class="h-full w-full object-cover"

@@ -98,7 +98,7 @@ export const roomDisplayConfigSchema = z.object({
   timerTextColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#FFFFFF'),
   timerBackgroundColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).default('#000000'),
   timerOpacity: z.number().int().min(0).max(100).default(80)
-}).optional();
+});
 
 // Pricing tier schema - Enhanced with per-tier models and scheduling
 export const pricingTierSchema = z.object({
@@ -206,7 +206,7 @@ export const saveGameSchema = z.object({
 
   // Config objects
   media: mediaConfigSchema,
-  roomDisplayConfig: roomDisplayConfigSchema,
+  roomDisplayConfig: roomDisplayConfigSchema.optional(),
   pricing: pricingConfigSchema,
   bookingRules: bookingRulesSchema
 });

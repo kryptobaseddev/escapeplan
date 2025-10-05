@@ -1,0 +1,153 @@
+name: ARM64 .deb Package Test
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'scripts/build-deb.sh'
+      - 'scripts/pi-post-install.sh'
+      - 'scripts/health-check.sh'
+      - 'apps/**'
+      - 'packages/**'
+      - '.github/workflows/test-arm64.yml'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Prevent multiple concurrent ARM64 tests
+concurrency:
+  group: arm64-test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PNPM_VERSION: 10.12.4
+  NODE_VERSION: 22
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # JOB: Build and Test ARM64 .deb Package
+  # ────────────────────────────────────────────────────────────
+  test-arm64-deb:
+    name: Test ARM64 .deb Package
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup QEMU for ARM64 emulation
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: linux/arm64
+
+      - name: Verify ARM64 support
+        run: |
+          echo "Testing ARM64 emulation..."
+          docker run --rm --platform linux/arm64 alpine uname -m
+          if docker run --rm --platform linux/arm64 alpine uname -m | grep -q "aarch64"; then
+            echo "✓ ARM64 emulation working"
+          else
+            echo "✗ ARM64 emulation failed"
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: |
+          echo "Building contracts..."
+          pnpm --filter @escapeplan/contracts build
+
+          echo "Building API..."
+          pnpm --filter escapeplan-api build
+
+          echo "Building Web..."
+          pnpm --filter escapeplan-web build
+
+      - name: Build .deb package
+        run: |
+          echo "Building ARM64 .deb package..."
+          ./scripts/build-deb.sh
+
+          DEB_FILE=$(find dist -name "escapeplan_*_arm64.deb" -type f | head -n1)
+          if [ -z "$DEB_FILE" ]; then
+            echo "Error: .deb package not found"
+            exit 1
+          fi
+
+          echo "Built: $DEB_FILE ($(du -h "$DEB_FILE" | cut -f1))"
+          echo "DEB_PATH=$DEB_FILE" >> $GITHUB_ENV
+
+      - name: Run ARM64 emulated tests
+        run: |
+          chmod +x scripts/tests/test-arm64-emulated.sh
+          ./scripts/tests/test-arm64-emulated.sh \
+            --method=docker \
+            --skip-build \
+            --verbose
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arm64-test-logs
+          path: |
+            /tmp/escapeplan-*.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Upload .deb package
+        if: success() && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: escapeplan-arm64-deb
+          path: ${{ env.DEB_PATH }}
+          retention-days: 30
+
+  # ────────────────────────────────────────────────────────────
+  # JOB: Test Summary
+  # ────────────────────────────────────────────────────────────
+  test-summary:
+    name: ARM64 Test Summary
+    runs-on: ubuntu-latest
+    needs: [test-arm64-deb]
+    if: always()
+
+    steps:
+      - name: Generate summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const testResult = '${{ needs.test-arm64-deb.result }}'
+
+            let summary = '## ARM64 .deb Package Test Results\n\n'
+
+            if (testResult === 'success') {
+              summary += '✅ **All ARM64 tests passed!**\n\n'
+              summary += 'The .deb package was successfully:\n'
+              summary += '- Built for ARM64 architecture\n'
+              summary += '- Installed in emulated ARM64 environment\n'
+              summary += '- Validated with health checks\n'
+              summary += '- Tested for API endpoint functionality\n'
+            } else {
+              summary += '❌ **ARM64 tests failed**\n\n'
+              summary += 'The .deb package encountered issues during testing.\n'
+              summary += 'Check the job logs for detailed error information.\n'
+            }
+
+            summary += `\n### Test Status: ${testResult === 'success' ? '✅' : '❌'} ${testResult}\n`
+
+            core.summary.addRaw(summary).write()

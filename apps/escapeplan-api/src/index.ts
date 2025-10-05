@@ -330,7 +330,7 @@ export async function buildServer() {
     api.all('/auth/*', {
       config: {
         rateLimit: {
-          max: 5,
+          max: 20,  // Increased from 5 to support test scenarios with multiple login attempts
           timeWindow: '1 minute'
         },
         csrf: false

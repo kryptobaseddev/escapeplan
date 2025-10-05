@@ -4,7 +4,6 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import * as schema from '@escapeplan/contracts';
 import { sql } from 'drizzle-orm';
 import { isFirstRun, hasUserData } from '../src/db/first-run-detection.js';
-import { nanoid } from 'nanoid';
 
 // Mock the db client module to use in-memory database for tests
 // This avoids interfering with the actual development database
@@ -93,10 +92,10 @@ function createTables(): void {
  */
 function seedSystemRoles(): void {
   const roles = [
-    { id: nanoid(), name: 'admin', description: 'Administrator', user_type_scope: 'operator' },
-    { id: nanoid(), name: 'manager', description: 'Manager', user_type_scope: 'operator' },
-    { id: nanoid(), name: 'game_master', description: 'Game Master', user_type_scope: 'operator' },
-    { id: nanoid(), name: 'customer', description: 'Customer', user_type_scope: 'customer' }
+    { id: crypto.randomUUID(), name: 'admin', description: 'Administrator', user_type_scope: 'operator' },
+    { id: crypto.randomUUID(), name: 'manager', description: 'Manager', user_type_scope: 'operator' },
+    { id: crypto.randomUUID(), name: 'game_master', description: 'Game Master', user_type_scope: 'operator' },
+    { id: crypto.randomUUID(), name: 'customer', description: 'Customer', user_type_scope: 'customer' }
   ];
 
   for (const role of roles) {
@@ -118,7 +117,7 @@ function createTestUser(username: string, email: string, roleId: string): void {
       INSERT INTO user (id, name, email, username, user_type, role_id, password_hash)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `)
-    .run(nanoid(), username, email, username, 'operator', roleId, 'hashed_password');
+    .run(crypto.randomUUID(), username, email, username, 'operator', roleId, 'hashed_password');
 }
 
 describe('First-Run Detection - isFirstRun()', () => {
@@ -131,8 +130,8 @@ describe('First-Run Detection - isFirstRun()', () => {
   test('returns true when fewer than 4 roles exist (incomplete seed)', async () => {
     // Seed only 2 roles
     const roles = [
-      { id: nanoid(), name: 'admin', description: 'Administrator', user_type_scope: 'operator' },
-      { id: nanoid(), name: 'manager', description: 'Manager', user_type_scope: 'operator' }
+      { id: crypto.randomUUID(), name: 'admin', description: 'Administrator', user_type_scope: 'operator' },
+      { id: crypto.randomUUID(), name: 'manager', description: 'Manager', user_type_scope: 'operator' }
     ];
 
     for (const role of roles) {
@@ -166,7 +165,7 @@ describe('First-Run Detection - isFirstRun()', () => {
         INSERT INTO roles (id, name, description, user_type_scope, is_system)
         VALUES (?, ?, ?, ?, 0)
       `)
-      .run(nanoid(), 'custom_role', 'Custom Role', 'operator');
+      .run(crypto.randomUUID(), 'custom_role', 'Custom Role', 'operator');
 
     const result = await isFirstRun();
     expect(result).toBe(false);

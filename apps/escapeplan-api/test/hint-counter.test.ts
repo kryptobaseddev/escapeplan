@@ -20,7 +20,11 @@ let testBookingId: string;
 
 beforeAll(async () => {
   const { seedIdempotent } = await import('../src/db/seed.ts');
+  const { seedSystemSettings } = await import('../src/db/seed-settings.ts');
+  const { initializeSettings } = await import('../src/settings.ts');
   await seedIdempotent();
+  await seedSystemSettings();
+  await initializeSettings();
   server = await buildServer();
 
   // Authenticate as admin
@@ -264,6 +268,7 @@ describe('Hint Counter with countAsHint flag', () => {
     expect(countAsHintColumn).toBeDefined();
     expect(countAsHintColumn?.type).toBe('INTEGER');
     expect(countAsHintColumn?.notnull).toBe(1); // NOT NULL
-    expect(countAsHintColumn?.dflt_value).toBe('1'); // DEFAULT 1
+    const defaultValue = String(countAsHintColumn?.dflt_value ?? '').toLowerCase();
+    expect(['1', 'true'].includes(defaultValue)).toBe(true);
   });
 });

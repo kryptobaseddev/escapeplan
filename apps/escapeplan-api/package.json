@@ -9,6 +9,8 @@
     "build": "tsup src/index.ts --format esm --out-dir dist",
     "lint": "tsc --noEmit",
     "test": "vitest",
+    "db:migrate": "tsx src/db/migrate.ts",
+    "db:migrate:verify": "tsx src/db/migrate.ts --verify",
     "db:seed": "tsx src/db/seed.ts",
     "db:seed:fresh": "tsx src/db/seed.ts --clear",
     "db:seed:settings": "tsx src/db/seed-settings.ts",

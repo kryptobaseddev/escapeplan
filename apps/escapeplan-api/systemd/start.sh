@@ -8,4 +8,4 @@ export NODE_ENV=${NODE_ENV:-production}
 export PORT=${PORT:-4000}
 export ESCAPEPLAN_DB_PATH=${ESCAPEPLAN_DB_PATH:-/var/lib/escapeplan/escapeplan.db}
 
-exec node "${APP_DIR}/dist/index.js"
+exec node "${APP_DIR}/index.js"

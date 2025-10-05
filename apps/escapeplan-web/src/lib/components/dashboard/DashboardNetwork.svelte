@@ -4,20 +4,10 @@
   import { formatDate, formatTime } from '$lib/utils/datetime';
   import SkeletonLoader from '$lib/components/ui/SkeletonLoader.svelte';
   import EmptyState from '$lib/components/ui/EmptyState.svelte';
-
-  interface Booking {
-    id: string;
-    startTime: string;
-    gameName: string;
-    notes: string | null;
-    partySize: number;
-    roomName: string;
-    status: string;
-    isAdhoc: boolean;
-  }
+  import type { BookingSummary } from '@escapeplan/contracts';
 
   interface Props {
-    bookings: Booking[];
+    bookings: BookingSummary[];
     isLoading?: boolean;
   }
 

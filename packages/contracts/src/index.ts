@@ -281,21 +281,21 @@ export interface GameSessionDetails extends ActiveSessionSummary {
 }
 
 export interface RoomDisplayConfig {
-  showTimer?: boolean;
-  timerPosition?: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+  showTimer: boolean;
+  timerPosition: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
   backgroundType: 'asset' | 'solid' | 'gradient';
   backgroundAssetId?: string;
   backgroundColor?: string;
   gradientFrom?: string;
   gradientTo?: string;
-  gradientDirection?: 'to-b' | 'to-t' | 'to-r' | 'to-l' | 'to-br' | 'to-tl' | 'radial';
-  backgroundOpacity?: number;
-  defaultMediaScale?: number;
-  textHintTextColor?: string;
-  textHintBackgroundColor?: string;
-  timerTextColor?: string;
-  timerBackgroundColor?: string;
-  timerOpacity?: number;
+  gradientDirection: 'to-b' | 'to-t' | 'to-r' | 'to-l' | 'to-br' | 'to-tl' | 'radial';
+  backgroundOpacity: number;
+  defaultMediaScale: number;
+  textHintTextColor: string;
+  textHintBackgroundColor: string;
+  timerTextColor: string;
+  timerBackgroundColor: string;
+  timerOpacity: number;
 }
 
 // RoomDisplayMediaEvent is now exported from validation.ts as a Zod-inferred type

@@ -1,13 +1,14 @@
 <svelte:options runes={true} />
 
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import '../app.css';
   import ConfirmDialogHost from '$lib/components/ConfirmDialogHost.svelte';
   import Toast from '$lib/components/ui/Toast.svelte';
   import { pwaInfo } from 'virtual:pwa-info';
   import { pwaAssetsHead } from 'virtual:pwa-assets/head';
 
-  let { children }: { children: () => unknown } = $props();
+  let { children }: { children: Snippet } = $props();
 
   const manifestLinkTag = pwaInfo?.webManifest?.linkTag ?? '';
 </script>

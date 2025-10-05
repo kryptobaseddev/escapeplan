@@ -267,7 +267,8 @@ export async function seedEssentialData(): Promise<void> {
           bio: adminBio,
           emailVerified: true,
           passwordHash: hashedPassword,
-          image: JSON.stringify(defaultAvatarConfig)
+          image: JSON.stringify(defaultAvatarConfig),
+          avatar_config: JSON.stringify(defaultAvatarConfig)
         };
 
         const adminUser = await adapter.createUser(userPayload) as any;
@@ -297,9 +298,9 @@ export async function seedEssentialData(): Promise<void> {
         // Ensure role_id and user_type are correct
         db.prepare(`
           UPDATE user
-          SET role_id = ?, user_type = ?, bio = ?, image = ?
+          SET role_id = ?, user_type = ?, bio = ?, image = ?, avatar_config = ?
           WHERE id = ?
-        `).run(adminRoleId, 'operator', adminBio, JSON.stringify(defaultAvatarConfig), adminId);
+        `).run(adminRoleId, 'operator', adminBio, JSON.stringify(defaultAvatarConfig), JSON.stringify(defaultAvatarConfig), adminId);
 
         console.log('[Seed:Essential] Admin user updated successfully');
       }

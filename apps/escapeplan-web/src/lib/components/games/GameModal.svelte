@@ -627,24 +627,22 @@
           assetCache={assetCache}
           onCoverImageChange={(val) => { if (workingGame.media) workingGame.media.thumbnailAssetId = val; markDirty(); }}
           onRoomDisplayBackgroundChange={(val) => {
-            if (!workingGame.roomDisplayConfig) {
-              workingGame.roomDisplayConfig = {
-                backgroundType: 'asset',
-                backgroundOpacity: 40,
-                defaultMediaScale: 90,
-                showTimer: true,
-                timerPosition: 'center',
-                gradientDirection: 'to-b',
-                textHintTextColor: '#000000',
-                textHintBackgroundColor: '#FFA500'
-              };
-            }
-            workingGame.roomDisplayConfig.backgroundAssetId = val;
-            if (!val) {
-              workingGame.roomDisplayConfig.backgroundType = 'solid';
-            } else {
-              workingGame.roomDisplayConfig.backgroundType = 'asset';
-            }
+            const config = workingGame.roomDisplayConfig ??= {
+              backgroundType: 'asset',
+              backgroundOpacity: 40,
+              defaultMediaScale: 90,
+              showTimer: true,
+              timerPosition: 'center',
+              gradientDirection: 'to-b',
+              textHintTextColor: '#000000',
+              textHintBackgroundColor: '#FFA500',
+              timerTextColor: '#FFFFFF',
+              timerBackgroundColor: '#000000',
+              timerOpacity: 80
+            } satisfies RoomDisplayConfig;
+
+            config.backgroundAssetId = val;
+            config.backgroundType = val ? 'asset' : 'solid';
             markDirty();
           }}
           onGalleryImagesChange={(val) => { if (workingGame.media) workingGame.media.galleryAssetIds = val; markDirty(); }}

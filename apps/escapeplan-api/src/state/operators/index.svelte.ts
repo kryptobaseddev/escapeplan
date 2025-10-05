@@ -238,9 +238,9 @@ class OperatorsState {
       updates.email = input.email?.trim();
     }
     if (input.avatarConfig !== undefined) {
-      // Better-Auth uses 'image' field which maps to 'avatar_config' column with mode: 'json'
-      // Drizzle will automatically JSON.stringify the object, so pass it directly
-      updates.image = input.avatarConfig ?? null;
+      // Better-Auth adapter expects 'avatar_config' field name (not 'image')
+      // Pass as JSON string since the field is defined as type: 'string' in auth config
+      updates.avatar_config = input.avatarConfig ? JSON.stringify(input.avatarConfig) : null;
     }
     if (input.bio !== undefined) {
       const trimmed = input.bio?.trim();
@@ -289,7 +289,7 @@ class OperatorsState {
     }
 
     const mustReset = input.forceReset ?? true;
-    await adapter.updateUser(id, { mustResetPassword: mustReset, passwordHash: hashedPassword });
+    await adapter.updateUser(id, { must_reset_password: mustReset });
 
     const updated = getOperatorRow(id);
     if (!updated) {
@@ -317,7 +317,7 @@ class OperatorsState {
 
     const hashedPassword = await context.password.hash(payload.newPassword);
     await adapter.updatePassword(operatorId, hashedPassword);
-    await adapter.updateUser(operatorId, { mustResetPassword: false, passwordHash: hashedPassword });
+    await adapter.updateUser(operatorId, { must_reset_password: false });
   }
 
   /**
@@ -339,9 +339,9 @@ class OperatorsState {
       updates.email = payload.email?.trim();
     }
     if (payload.avatarConfig !== undefined) {
-      // Better-Auth uses 'image' field which maps to 'avatar_config' column with mode: 'json'
-      // Pass the object directly - Better Auth adapter + Drizzle will handle serialization
-      updates.image = payload.avatarConfig ?? null;
+      // Better-Auth adapter expects 'avatar_config' field name (not 'image')
+      // Pass as JSON string since the field is defined as type: 'string' in auth config
+      updates.avatar_config = payload.avatarConfig ? JSON.stringify(payload.avatarConfig) : null;
     }
     if (payload.bio !== undefined) {
       const trimmed = payload.bio?.trim();
@@ -414,10 +414,10 @@ class OperatorsState {
     const now = new Date().toISOString();
     const adapter = await getInternalAdapter();
     await adapter.updateUser(id, {
-      archivedAt: now,
-      archivedBy: actorId,
-      archivedReason: reason ?? null
-    });
+      archived_at: now,
+      archived_by: actorId,
+      archived_reason: reason ?? null
+    } as any);
 
     sqlite.prepare(`DELETE FROM session WHERE userId = ?`).run(id);
 
@@ -439,10 +439,10 @@ class OperatorsState {
 
     const adapter = await getInternalAdapter();
     await adapter.updateUser(id, {
-      archivedAt: null,
-      archivedBy: null,
-      archivedReason: null
-    });
+      archived_at: null,
+      archived_by: null,
+      archived_reason: null
+    } as any);
 
     const updated = getOperatorRow(id);
     if (!updated) {

@@ -185,8 +185,13 @@ function buildBaseOptions(): BetterAuthOptions {
           image?: unknown;
         };
 
+        // Re-fetch user from database to get fresh archived_at status
+        // (Better Auth may pass cached user data)
+        const freshUser = sqlite.prepare('SELECT archived_at FROM user WHERE id = ? LIMIT 1')
+          .get(enrichedUser.id) as { archived_at: string | null } | undefined;
+
         // Block archived users
-        if (enrichedUser.archived_at) {
+        if (freshUser?.archived_at) {
           throw new Error('Account is archived');
         }
 

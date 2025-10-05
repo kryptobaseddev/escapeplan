@@ -8,6 +8,114 @@ PKG_NAME="escapeplan"
 BUILD_DIR="build/deb"
 DIST_DIR="dist"
 
+# Ensure required pieces are present before packaging.
+if [ ! -d "packages/contracts/dist" ]; then
+    echo "Contracts dist artifacts not found. Run pnpm --filter @escapeplan/contracts build first." >&2
+    exit 1
+fi
+
+# Validate that critical runtime files exist in contracts dist/
+REQUIRED_CONTRACTS_FILES=(
+    "packages/contracts/dist/runtime.js"
+    "packages/contracts/dist/runtime.d.ts"
+    "packages/contracts/dist/validation.js"
+    "packages/contracts/dist/validation.d.ts"
+    "packages/contracts/dist/index.js"
+    "packages/contracts/dist/index.d.ts"
+    "packages/contracts/dist/paths.js"
+    "packages/contracts/dist/paths.d.ts"
+)
+
+for file in "${REQUIRED_CONTRACTS_FILES[@]}"; do
+    if [ ! -f "${file}" ]; then
+        echo "Required contracts file missing: ${file}" >&2
+        echo "Run: pnpm --filter @escapeplan/contracts build" >&2
+        exit 1
+    fi
+done
+
+echo "Contracts dist validation passed - all required files present."
+
+resolve_pnpm_module() {
+    # Locate an actual module directory inside .pnpm for a given dependency.
+    local node_modules_root="$1"
+    local module_name="$2"
+    local pnpm_root="${node_modules_root}/.pnpm"
+    if [ ! -d "${pnpm_root}" ]; then
+        echo "Unable to locate .pnpm directory in ${node_modules_root}" >&2
+        return 1
+    fi
+
+    local match
+    match=$(find "${pnpm_root}" -maxdepth 1 -type d -name "${module_name}@*" | sort | head -n1 || true)
+    if [ -z "${match}" ]; then
+        echo "Unable to resolve ${module_name} within ${pnpm_root}" >&2
+        return 1
+    fi
+
+    local module_path="${match}/node_modules/${module_name}"
+    if [ ! -d "${module_path}" ]; then
+        echo "Resolved path ${module_path} for ${module_name} is missing" >&2
+        return 1
+    fi
+
+    echo "${module_path}"
+}
+
+create_relative_symlink() {
+    # Create or refresh a symlink using a relative path to keep the .deb relocatable.
+    local target_path="$1"
+    local source_path="$2"
+
+    mkdir -p "$(dirname "${target_path}")"
+    local relative_source
+    relative_source=$(realpath --relative-to="$(dirname "${target_path}")" "${source_path}")
+    ln -sfn "${relative_source}" "${target_path}"
+}
+
+prepare_contracts_package() {
+    # Copy contracts dist output and repair dependency links for a given deployment root.
+    local deploy_root="$1"
+    local node_modules_root="${deploy_root}/node_modules"
+    local contracts_root="${node_modules_root}/@escapeplan/contracts"
+
+    rm -rf "${contracts_root}"
+    mkdir -p "${contracts_root}/dist"
+    cp -r packages/contracts/dist/. "${contracts_root}/dist/"
+    cp packages/contracts/package.json "${contracts_root}/"
+    mkdir -p "${contracts_root}/node_modules"
+
+    # Validate that all required runtime files were copied successfully
+    local required_files=(
+        "runtime.js"
+        "runtime.d.ts"
+        "validation.js"
+        "validation.d.ts"
+        "index.js"
+        "index.d.ts"
+        "paths.js"
+        "paths.d.ts"
+    )
+
+    for file in "${required_files[@]}"; do
+        if [ ! -f "${contracts_root}/dist/${file}" ]; then
+            echo "CRITICAL: Failed to copy ${file} to ${contracts_root}/dist/" >&2
+            echo "Source file exists: $([ -f "packages/contracts/dist/${file}" ] && echo "yes" || echo "no")" >&2
+            exit 1
+        fi
+    done
+
+    echo "Contracts package prepared at ${contracts_root} - all required files verified."
+
+    local dependency
+    for dependency in drizzle-zod drizzle-orm zod; do
+        local resolved_path
+        resolved_path=$(resolve_pnpm_module "${node_modules_root}" "${dependency}") || exit 1
+        create_relative_symlink "${node_modules_root}/${dependency}" "${resolved_path}"
+        create_relative_symlink "${contracts_root}/node_modules/${dependency}" "${resolved_path}"
+    done
+}
+
 echo "Building ${PKG_NAME} v${VERSION} for ${ARCH}..."
 
 # Clean previous builds
@@ -36,31 +144,96 @@ cp -r apps/escapeplan-web/.svelte-kit "${BUILD_DIR}/opt/escapeplan/web/"
 
 # Replace workspace contracts with actual built content
 echo "Replacing contracts workspace dependency with built files..."
-rm -rf "${BUILD_DIR}/opt/escapeplan/api/node_modules/@escapeplan/contracts"
-mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/@escapeplan/contracts"
-cp -r packages/contracts/dist/* "${BUILD_DIR}/opt/escapeplan/api/node_modules/@escapeplan/contracts/"
-cp packages/contracts/package.json "${BUILD_DIR}/opt/escapeplan/api/node_modules/@escapeplan/contracts/"
+prepare_contracts_package "${BUILD_DIR}/opt/escapeplan/api"
+prepare_contracts_package "${BUILD_DIR}/opt/escapeplan/web"
 
-rm -rf "${BUILD_DIR}/opt/escapeplan/web/node_modules/@escapeplan/contracts"
-mkdir -p "${BUILD_DIR}/opt/escapeplan/web/node_modules/@escapeplan/contracts"
-cp -r packages/contracts/dist/* "${BUILD_DIR}/opt/escapeplan/web/node_modules/@escapeplan/contracts/"
-cp packages/contracts/package.json "${BUILD_DIR}/opt/escapeplan/web/node_modules/@escapeplan/contracts/"
+# Copy utility scripts
+echo "Adding utility scripts to package..."
+mkdir -p "${BUILD_DIR}/opt/escapeplan/scripts"
+cp scripts/pi-post-install.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
+cp scripts/health-check.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
+cp scripts/validate-dependencies.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
+cp apps/escapeplan-api/scripts/backup.sh "${BUILD_DIR}/opt/escapeplan/scripts/"
+cp apps/escapeplan-api/scripts/backup.ts "${BUILD_DIR}/opt/escapeplan/scripts/"
+chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/pi-post-install.sh"
+chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/health-check.sh"
+chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/validate-dependencies.sh"
+chmod 755 "${BUILD_DIR}/opt/escapeplan/scripts/backup.sh"
+
+# Create environment file templates
+cat > "${BUILD_DIR}/etc/escapeplan/api.env.example" << 'EOF'
+# EscapePlan API Environment Configuration
+# Copy this file to api.env and customize as needed
+# Usage: cp /etc/escapeplan/api.env.example /etc/escapeplan/api.env
+
+# Node environment
+NODE_ENV=production
+
+# API server port
+PORT=4000
+
+# Database path
+ESCAPEPLAN_DB_PATH=/var/lib/escapeplan/escapeplan.db
+
+# Better Auth secret (CHANGE THIS!)
+# Generate with: openssl rand -base64 32
+BETTER_AUTH_SECRET=CHANGE_ME_GENERATE_RANDOM_SECRET
+
+# Better Auth URL (update for production)
+BETTER_AUTH_URL=http://localhost:4000
+
+# Logging configuration
+LOG_LEVEL=info
+LOG_DIR=/var/log/escapeplan
+
+# Backup configuration
+BACKUP_DIR=/var/backups/escapeplan
+EOF
+
+cat > "${BUILD_DIR}/etc/escapeplan/web.env.example" << 'EOF'
+# EscapePlan Web Environment Configuration
+# Copy this file to web.env and customize as needed
+# Usage: cp /etc/escapeplan/web.env.example /etc/escapeplan/web.env
+
+# Node environment
+NODE_ENV=production
+
+# Web server port
+PORT=3000
+
+# Origin URL (update for production domain)
+ORIGIN=http://localhost:3000
+
+# API server URL for server-side requests
+API_URL=http://localhost:4000
+EOF
 
 # Create systemd service files
 cat > "${BUILD_DIR}/etc/systemd/system/escapeplan-api.service" << 'EOF'
 [Unit]
 Description=EscapePlan Fastify API
 After=network.target
+ConditionPathExists=/opt/escapeplan/api/systemd/start.sh
 
 [Service]
 Type=simple
 User=escapeplan
 Group=escapeplan
+EnvironmentFile=-/etc/escapeplan/api.env
 WorkingDirectory=/opt/escapeplan/api
-ExecStart=/usr/bin/node index.js
-Restart=on-failure
+ExecStart=/opt/escapeplan/api/systemd/start.sh
+Restart=always
 RestartSec=5s
-Environment=NODE_ENV=production
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=escapeplan-api
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/escapeplan /var/log/escapeplan /tmp
 
 [Install]
 WantedBy=multi-user.target
@@ -68,22 +241,39 @@ EOF
 
 cat > "${BUILD_DIR}/etc/systemd/system/escapeplan-web.service" << 'EOF'
 [Unit]
-Description=EscapePlan SvelteKit Web
+Description=EscapePlan SvelteKit Web Frontend
 After=escapeplan-api.service
+ConditionPathExists=/opt/escapeplan/web/systemd/start.sh
 
 [Service]
 Type=simple
 User=escapeplan
 Group=escapeplan
+EnvironmentFile=-/etc/escapeplan/web.env
 WorkingDirectory=/opt/escapeplan/web
-ExecStart=/usr/bin/node .svelte-kit/output/server/index.js
-Restart=on-failure
+ExecStart=/opt/escapeplan/web/systemd/start.sh
+Restart=always
 RestartSec=5s
-Environment=NODE_ENV=production
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=escapeplan-web
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/escapeplan /var/log/escapeplan /tmp
 
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# Copy backup systemd units from scripts directory
+echo "Adding backup systemd units to package..."
+cp scripts/systemd/escapeplan-backup.service "${BUILD_DIR}/etc/systemd/system/"
+cp scripts/systemd/escapeplan-backup.timer "${BUILD_DIR}/etc/systemd/system/"
+cp scripts/systemd/escapeplan-backup-notify@.service "${BUILD_DIR}/etc/systemd/system/"
 
 # Create control file
 cat > "${BUILD_DIR}/DEBIAN/control" << EOF
@@ -93,16 +283,77 @@ Section: web
 Priority: optional
 Architecture: ${ARCH}
 Depends: nodejs (>= 20), nginx, sqlite3
+Recommends: build-essential, python3
 Maintainer: EscapePlan Team
 Description: Offline-first escape room management system
  EscapePlan is a complete escape room management solution
- designed for Raspberry Pi deployments.
+ designed for Raspberry Pi deployments. Native ARM64 modules
+ will be rebuilt automatically if build tools are available.
 EOF
 
 # Create postinst script
 cat > "${BUILD_DIR}/DEBIAN/postinst" << 'EOF'
 #!/bin/bash
 set -e
+
+resolve_pnpm_module() {
+    local node_modules_root="$1"
+    local module_name="$2"
+    local pnpm_root="${node_modules_root}/.pnpm"
+    if [ ! -d "${pnpm_root}" ]; then
+        echo "[postinst] Missing .pnpm directory at ${pnpm_root}" >&2
+        return 1
+    fi
+
+    local match
+    match=$(find "${pnpm_root}" -maxdepth 1 -type d -name "${module_name}@*" | sort | head -n1 || true)
+    if [ -z "${match}" ]; then
+        echo "[postinst] Failed to resolve ${module_name} inside ${pnpm_root}" >&2
+        return 1
+    fi
+
+    local module_path="${match}/node_modules/${module_name}"
+    if [ ! -d "${module_path}" ]; then
+        echo "[postinst] Resolved module path ${module_path} missing for ${module_name}" >&2
+        return 1
+    fi
+
+    echo "${module_path}"
+}
+
+create_relative_symlink() {
+    local target_path="$1"
+    local source_path="$2"
+
+    mkdir -p "$(dirname "${target_path}")"
+    local relative_source
+    relative_source=$(realpath --relative-to="$(dirname "${target_path}")" "${source_path}")
+    ln -sfn "${relative_source}" "${target_path}"
+}
+
+repair_contracts_dependencies() {
+    local install_root="$1"
+    local node_modules_root="${install_root}/node_modules"
+    local contracts_root="${node_modules_root}/@escapeplan/contracts"
+
+    if [ ! -d "${contracts_root}" ]; then
+        echo "[postinst] Contracts package missing at ${contracts_root}" >&2
+        return 1
+    fi
+
+    mkdir -p "${contracts_root}/node_modules"
+
+    local dependency
+    for dependency in drizzle-zod drizzle-orm zod; do
+        echo "[postinst] Ensuring ${dependency} is linked for ${install_root}"
+        local resolved_path
+        resolved_path=$(resolve_pnpm_module "${node_modules_root}" "${dependency}") || return 1
+        create_relative_symlink "${node_modules_root}/${dependency}" "${resolved_path}"
+        create_relative_symlink "${contracts_root}/node_modules/${dependency}" "${resolved_path}"
+    done
+
+    return 0
+}
 
 # Create escapeplan user if doesn't exist
 if ! id escapeplan &>/dev/null; then
@@ -126,11 +377,53 @@ systemctl daemon-reload
 # Enable services (but don't start - user must configure first)
 systemctl enable escapeplan-api.service
 systemctl enable escapeplan-web.service
+systemctl enable escapeplan-backup.timer
+
+if ! repair_contracts_dependencies "/opt/escapeplan/api"; then
+    echo "[postinst] Failed to repair API contracts dependencies" >&2
+    exit 1
+fi
+
+if ! repair_contracts_dependencies "/opt/escapeplan/web"; then
+    echo "[postinst] Failed to repair Web contracts dependencies" >&2
+    exit 1
+fi
+
+# Rebuild native modules for ARM64 architecture
+echo "[postinst] Rebuilding native modules for ARM64..."
+if [ -f /opt/escapeplan/scripts/pi-post-install.sh ]; then
+    if /opt/escapeplan/scripts/pi-post-install.sh /opt/escapeplan; then
+        echo "[postinst] ✓ Native modules rebuilt successfully for $(uname -m)"
+    else
+        echo "[postinst] ⚠️  Native module rebuild had warnings - check /tmp/escapeplan-native-rebuild.log"
+        echo "[postinst] If on Raspberry Pi, you may need to install build tools:"
+        echo "[postinst]   sudo apt-get install -y build-essential python3"
+        echo "[postinst]   sudo /opt/escapeplan/scripts/pi-post-install.sh /opt/escapeplan"
+    fi
+else
+    echo "[postinst] WARNING: pi-post-install.sh not found - native modules may not work on ARM"
+fi
 
 echo "EscapePlan installed successfully!"
-echo "Configure /etc/escapeplan/*.env then run:"
-echo "  systemctl start escapeplan-api"
-echo "  systemctl start escapeplan-web"
+echo ""
+
+# Run health check validation
+if [ -x /opt/escapeplan/scripts/health-check.sh ]; then
+    echo "Running post-installation health checks..."
+    echo ""
+    /opt/escapeplan/scripts/health-check.sh || {
+        echo ""
+        echo "Health checks failed. Review errors above before starting services."
+        echo ""
+        exit 0  # Don't fail package installation, just warn
+    }
+else
+    echo "Configure /etc/escapeplan/*.env then run:"
+    echo "  systemctl start escapeplan-api"
+    echo "  systemctl start escapeplan-web"
+    echo ""
+    echo "Validate installation with: /opt/escapeplan/scripts/health-check.sh"
+fi
 EOF
 
 chmod 755 "${BUILD_DIR}/DEBIAN/postinst"

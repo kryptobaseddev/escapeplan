@@ -12,7 +12,11 @@ function parseJsonField<T = unknown>(value: unknown): T | null {
   if (!value) return null;
   if (typeof value === 'string') {
     try {
-      return JSON.parse(value) as T;
+      const parsed = JSON.parse(value);
+      if (typeof parsed === 'string' && (parsed.startsWith('{') || parsed.startsWith('['))) {
+        return parseJsonField(parsed) as T;
+      }
+      return parsed as T;
     } catch {
       return null;
     }
@@ -40,9 +44,9 @@ beforeAll(async () => {
 afterAll(async () => {
   // Clean up test operator if created
   if (testOperatorId) {
-    sqlite.prepare(`DELETE FROM operator_auth_sessions WHERE user_id = ?`).run(testOperatorId);
-    sqlite.prepare(`DELETE FROM operator_accounts WHERE user_id = ?`).run(testOperatorId);
-    sqlite.prepare(`DELETE FROM operators WHERE id = ?`).run(testOperatorId);
+    sqlite.prepare('DELETE FROM session WHERE userId = ?').run(testOperatorId);
+    sqlite.prepare('DELETE FROM account WHERE userId = ?').run(testOperatorId);
+    sqlite.prepare('DELETE FROM user WHERE id = ?').run(testOperatorId);
   }
   await server.close();
 });
@@ -61,6 +65,10 @@ describe('Operator Management with Better-Auth', () => {
       eyes: ['happy'],
       mouth: ['smile01']
     };
+
+    sqlite.prepare('DELETE FROM session WHERE userId IN (SELECT id FROM user WHERE username = ?)').run(testUsername);
+    sqlite.prepare('DELETE FROM account WHERE userId IN (SELECT id FROM user WHERE username = ?)').run(testUsername);
+    sqlite.prepare('DELETE FROM user WHERE username = ?').run(testUsername);
 
     const response = await server.inject({
       method: 'POST',
@@ -92,11 +100,11 @@ describe('Operator Management with Better-Auth', () => {
 
     // Verify avatar_config is persisted correctly in database via Better-Auth
     const dbRow = sqlite
-      .prepare('SELECT avatar_config FROM operators WHERE id = ?')
-      .get(testOperatorId) as { avatar_config: string | null };
+      .prepare('SELECT avatar_config FROM user WHERE id = ?')
+      .get(testOperatorId) as { avatar_config: unknown };
 
-    expect(dbRow.avatar_config).toBeDefined();
-    expect(JSON.parse(dbRow.avatar_config!)).toEqual(avatarConfig);
+    const storedAvatar = parseJsonField(dbRow.avatar_config);
+    expect(storedAvatar).toEqual(avatarConfig);
   });
 
   test('updates operator avatar config via Better-Auth', async () => {
@@ -119,6 +127,9 @@ describe('Operator Management with Better-Auth', () => {
       }
     });
 
+    if (response.statusCode !== 200) {
+      console.log('Avatar update failed:', response.statusCode, response.json());
+    }
     expect(response.statusCode).toBe(200);
     const operator = response.json() as OperatorSummary;
 
@@ -127,11 +138,11 @@ describe('Operator Management with Better-Auth', () => {
 
     // Verify database persistence via Better-Auth adapter
     const dbRow = sqlite
-      .prepare('SELECT avatar_config FROM operators WHERE id = ?')
-      .get(testOperatorId) as { avatar_config: string | null };
+      .prepare('SELECT avatar_config FROM user WHERE id = ?')
+      .get(testOperatorId) as { avatar_config: unknown };
 
-    expect(dbRow.avatar_config).toBeDefined();
-    expect(JSON.parse(dbRow.avatar_config!)).toEqual(newAvatarConfig);
+    const storedAvatar = parseJsonField(dbRow.avatar_config);
+    expect(storedAvatar).toEqual(newAvatarConfig);
   });
 
   test('archives operator blocking login, then unarchives restoring access', async () => {
@@ -156,7 +167,7 @@ describe('Operator Management with Better-Auth', () => {
 
     // Verify archivedAt is persisted in database
     const dbRow = sqlite
-      .prepare('SELECT archived_at FROM operators WHERE id = ?')
+      .prepare('SELECT archived_at FROM user WHERE id = ?')
       .get(testOperatorId) as { archived_at: string | null };
 
     expect(dbRow.archived_at).toBeDefined();
@@ -187,7 +198,7 @@ describe('Operator Management with Better-Auth', () => {
 
     // Verify archived_at is cleared in database
     const unarchivedDbRow = sqlite
-      .prepare('SELECT archived_at FROM operators WHERE id = ?')
+      .prepare('SELECT archived_at FROM user WHERE id = ?')
       .get(testOperatorId) as { archived_at: string | null };
 
     expect(unarchivedDbRow.archived_at).toBeNull();
@@ -206,14 +217,29 @@ describe('Operator Management with Better-Auth', () => {
 
   test('verifies role permissions are stored via Better-Auth', async () => {
     // Check admin has correct permissions
-    const adminRow = sqlite
-      .prepare('SELECT role, permissions FROM operators WHERE username = ?')
-      .get('admin') as { role: string; permissions: string };
+    const adminRole = sqlite
+      .prepare(`
+        SELECT r.name AS role_name
+        FROM user u
+        JOIN roles r ON r.id = u.role_id
+        WHERE u.username = ?
+      `)
+      .get('admin') as { role_name: string };
 
-    expect(adminRow.role).toBe('admin');
+    expect(adminRole.role_name).toBe('admin');
 
-    const permissions = parseJsonField<string[]>(adminRow.permissions) ?? [];
-    expect(Array.isArray(permissions)).toBe(true);
+    const permissionRows = sqlite
+      .prepare(`
+        SELECT p.name
+        FROM user u
+        JOIN roles r ON r.id = u.role_id
+        JOIN role_permissions rp ON rp.role_id = r.id
+        JOIN permissions p ON p.id = rp.permission_id
+        WHERE u.username = ?
+      `)
+      .all('admin') as { name: string }[];
+
+    const permissions = permissionRows.map((row) => row.name);
     expect(permissions).toContain('manage_users');
     expect(permissions).toContain('manage_network');
     expect(permissions).toContain('manage_games');
@@ -221,7 +247,7 @@ describe('Operator Management with Better-Auth', () => {
 
   test('seeded admin has persisted avatar config via Better-Auth', async () => {
     const adminRow = sqlite
-      .prepare('SELECT avatar_config FROM operators WHERE username = ?')
+      .prepare('SELECT avatar_config FROM user WHERE username = ?')
       .get('admin') as { avatar_config: string | null };
 
     expect(adminRow.avatar_config).toBeDefined();

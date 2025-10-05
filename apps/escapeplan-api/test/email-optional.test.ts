@@ -28,9 +28,9 @@ beforeAll(async () => {
 afterAll(async () => {
   // Clean up test operator if created
   if (testOperatorId) {
-    sqlite.prepare(`DELETE FROM operator_auth_sessions WHERE user_id = ?`).run(testOperatorId);
-    sqlite.prepare(`DELETE FROM operator_accounts WHERE user_id = ?`).run(testOperatorId);
-    sqlite.prepare(`DELETE FROM operators WHERE id = ?`).run(testOperatorId);
+    sqlite.prepare('DELETE FROM session WHERE userId = ?').run(testOperatorId);
+    sqlite.prepare('DELETE FROM account WHERE userId = ?').run(testOperatorId);
+    sqlite.prepare('DELETE FROM user WHERE id = ?').run(testOperatorId);
   }
   await server.close();
 });
@@ -88,9 +88,9 @@ describe('Email Optional Validation', () => {
     expect(operator.username).toBe(usernameEmpty);
 
     // Clean up this second test operator
-    sqlite.prepare(`DELETE FROM operator_auth_sessions WHERE user_id = ?`).run(operator.id);
-    sqlite.prepare(`DELETE FROM operator_accounts WHERE user_id = ?`).run(operator.id);
-    sqlite.prepare(`DELETE FROM operators WHERE id = ?`).run(operator.id);
+    sqlite.prepare('DELETE FROM session WHERE userId = ?').run(operator.id);
+    sqlite.prepare('DELETE FROM account WHERE userId = ?').run(operator.id);
+    sqlite.prepare('DELETE FROM user WHERE id = ?').run(operator.id);
   });
 
   test('rejects invalid email format', async () => {

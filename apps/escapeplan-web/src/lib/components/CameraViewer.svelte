@@ -142,7 +142,7 @@
 			muted={isMuted}
 			playsinline
 			controls={false}
-		/>
+		></video>
 
 		{#if isLoading}
 			<div class="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg">

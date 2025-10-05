@@ -15,16 +15,10 @@
  * Safe to run in production - demo data is environment-aware.
  */
 
-import { dirname, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { db as ormDb, sqlite } from '../client.ts';
+import { sqlite } from '../client.ts';
 import { seedEssentialData } from './01-essential.ts';
 import { seedSystemDefaults } from './02-system-defaults.ts';
 import { seedDemoFixtures } from './03-demo-fixtures.ts';
-
-const rootDir = dirname(fileURLToPath(import.meta.url));
-const migrationsPath = resolve(rootDir, '../../../drizzle');
 
 const db = sqlite;
 
@@ -138,8 +132,11 @@ export function clearAll(): void {
 /**
  * Main seed orchestration function.
  *
- * Applies migrations and executes seed files in dependency order.
+ * Executes seed files in dependency order.
  * Safe to run in production - demo data is automatically skipped.
+ *
+ * NOTE: This function NO LONGER applies migrations. Migrations must be
+ * applied separately using the migrate.ts script before running seeds.
  *
  * @param options - Seeding options
  * @param options.force - Force re-execution of seeds even if not first run
@@ -152,17 +149,7 @@ export async function seedDatabase(options: { force?: boolean } = {}): Promise<v
     console.log('[Seed] Starting database seeding process...');
     console.log('[Seed] ═══════════════════════════════════════════════════════\n');
 
-    // Step 1: Apply migrations
-    console.log('[Seed] Step 1: Applying database migrations...');
-    try {
-      migrate(ormDb, { migrationsFolder: migrationsPath });
-      console.log('[Seed] ✅ Migrations applied successfully\n');
-    } catch (error) {
-      console.error('[Seed] ❌ Error applying migrations:', error);
-      throw error;
-    }
-
-    // Step 2: Check first-run status
+    // Step 1: Check first-run status
     const isFirst = options.force || isFirstRun();
 
     if (!isFirst) {
@@ -178,18 +165,18 @@ export async function seedDatabase(options: { force?: boolean } = {}): Promise<v
       console.log('[Seed] First run detected - seeding essential data\n');
     }
 
-    // Step 3: Execute seed files in dependency order
+    // Step 2: Execute seed files in dependency order
     try {
       // Seed 1: Essential data (RBAC + admin user)
-      console.log('[Seed] Step 2: Seeding essential data (RBAC + admin user)...');
+      console.log('[Seed] Step 1: Seeding essential data (RBAC + admin user)...');
       await seedEssentialData();
 
       // Seed 2: System defaults (settings + alert rules + network)
-      console.log('[Seed] Step 3: Seeding system defaults (settings + alert rules + network)...');
+      console.log('[Seed] Step 2: Seeding system defaults (settings + alert rules + network)...');
       await seedSystemDefaults();
 
       // Seed 3: Demo fixtures (Pirate game - auto-skipped in production)
-      console.log('[Seed] Step 4: Seeding demo fixtures (development only)...');
+      console.log('[Seed] Step 3: Seeding demo fixtures (development only)...');
       await seedDemoFixtures();
 
       console.log('[Seed] ═══════════════════════════════════════════════════════');
@@ -217,6 +204,9 @@ export async function seedDatabase(options: { force?: boolean } = {}): Promise<v
  *   pnpm seed              # Normal seeding (skip if already seeded)
  *   pnpm seed --force      # Force re-seeding
  *   pnpm seed --clear      # Clear all data, then seed
+ *
+ * NOTE: This script no longer runs migrations. Run migrations separately:
+ *   node src/db/migrate.ts
  */
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);

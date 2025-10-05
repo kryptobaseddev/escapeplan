@@ -1,9 +1,9 @@
 # EscapePlan Database System - Technical Specification
 
-**Version:** 2.0
-**Last Updated:** 2025-10-01
+**Version:** 2.1
+**Last Updated:** 2025-10-04
 **Status:** ✅ Production-Ready
-**Session:** 35 (Complete Drizzle Migration)
+**Session:** Current (Documentation Update - Schema Verification)
 
 ---
 
@@ -25,7 +25,7 @@
 
 ## System Overview
 
-EscapePlan uses a **single SQLite database** with **23 interconnected tables** managing:
+EscapePlan uses a **single SQLite database** with **33 interconnected tables** managing:
 - Operator authentication & authorization (Better Auth)
 - Game definitions with rooms and puzzles
 - Booking and session tracking
@@ -34,7 +34,7 @@ EscapePlan uses a **single SQLite database** with **23 interconnected tables** m
 - System logging and alerting
 
 **Database File:** `apps/escapeplan-api/data/escapeplan.db`
-**Schema Definition:** `apps/escapeplan-api/src/db/schema.ts` (Drizzle ORM)
+**Schema Definition:** `packages/contracts/src/schema.ts` (Drizzle ORM)
 **Initialization:** `apps/escapeplan-api/src/db/init.ts`
 
 ---
@@ -110,8 +110,8 @@ EscapePlan uses a **single SQLite database** with **23 interconnected tables** m
 └─────────────────────────────────────────────────────────────┘
 ```
 
-**Total Tables:** 23
-**Total Indexes:** 15 (plus SQLite auto-indexes)
+**Total Tables:** 33
+**Total Indexes:** 25+ (plus SQLite auto-indexes)
 
 ---
 
@@ -251,27 +251,50 @@ assets (id)
 
 **Fields:**
 - `id` (TEXT, PK) - UUID v4
-- `username` (TEXT, UNIQUE, NOT NULL)
-- `name` (TEXT, NOT NULL)
-- `email` (TEXT, UNIQUE)
-- `emailVerified` (BOOLEAN, NOT NULL, default false) - Better Auth camelCase
-- `image` (TEXT) - Better Auth field for avatar JSON
-- `createdAt` (TEXT, NOT NULL) - Better Auth camelCase
-- `updatedAt` (TEXT, NOT NULL) - Better Auth camelCase
-- `user_type` (TEXT, NOT NULL, default 'operator') - **'operator' | 'customer'**
-- `role_id` (TEXT, FK roles.id, NOT NULL)
-- `bio` (TEXT)
-- `avatar_config` (JSON) - DiceBear config
-- `must_reset_password` (BOOLEAN, default false)
-- `loyalty_points` (INTEGER, default 0) - Customer only
-- `preferred_difficulty` (TEXT) - Customer only
-- `marketing_opted_in` (BOOLEAN, default false) - Customer only
-- `password_hash` (TEXT)
-- `last_login_at` (TEXT)
-- `banned` (BOOLEAN, default false)
-- `ban_reason` (TEXT)
-- `ban_expires` (TEXT)
-- Soft delete: `archived_at`, `archived_by`, `archived_reason`
+- `username` (TEXT, UNIQUE, NOT NULL) - Custom field (snake_case)
+- `name` (TEXT, NOT NULL) - Better Auth field (camelCase)
+- `email` (TEXT, UNIQUE) - Better Auth field (camelCase)
+- `emailVerified` (BOOLEAN, NOT NULL, default false) - Better Auth field (camelCase)
+- `image` (TEXT) - Better Auth field for avatar URL/JSON (camelCase)
+- `createdAt` (TEXT, NOT NULL) - Better Auth field (camelCase)
+- `updatedAt` (TEXT, NOT NULL) - Better Auth field (camelCase)
+- `user_type` (TEXT, NOT NULL, default 'operator') - **'operator' | 'customer'** (custom, snake_case, IMMUTABLE)
+- `role_id` (TEXT, FK roles.id, NOT NULL) - Database-driven RBAC (custom, snake_case)
+- `bio` (TEXT) - Operator-only field (custom, snake_case)
+- `avatar_config` (JSON) - DiceBear configuration (custom, snake_case)
+- `must_reset_password` (BOOLEAN, default false) - Security field (custom, snake_case)
+- `loyalty_points` (INTEGER, default 0) - Customer-only field (custom, snake_case)
+- `preferred_difficulty` (TEXT) - Customer-only field (custom, snake_case)
+- `marketing_opted_in` (BOOLEAN, default false) - Customer-only field (custom, snake_case)
+- `password_hash` (TEXT) - Security field (custom, snake_case)
+- `last_login_at` (TEXT) - Security field (custom, snake_case)
+- `banned` (BOOLEAN, default false) - Security field (custom, snake_case)
+- `ban_reason` (TEXT) - Security field (custom, snake_case)
+- `ban_expires` (TEXT) - Security field (custom, snake_case)
+- Soft delete: `archived_at`, `archived_by`, `archived_reason` (custom, snake_case)
+
+**Dual Avatar Architecture:**
+- `image` (Better Auth field): Stores avatar URL or DiceBear seed for Better Auth compatibility
+- `avatar_config` (Custom JSON field): Stores full DiceBear configuration object for advanced customization
+
+**Naming Convention:**
+- Better Auth fields use **camelCase** (name, email, emailVerified, image, createdAt, updatedAt)
+- Custom EscapePlan fields use **snake_case** (user_type, role_id, bio, avatar_config, etc.)
+
+**User Type System:**
+The `user_type` field distinguishes between operators (staff managing escape rooms) and customers (players):
+
+- **'operator'** - Staff members who manage bookings, run sessions, configure games
+  - Can be assigned operator-scoped roles: `admin`, `manager`, `game_master`
+  - Has access to operator-specific fields: `bio`, `avatar_config`, `must_reset_password`
+  - Operator-scoped permissions control access to system management features
+
+- **'customer'** - Players who book and play escape room games
+  - Can be assigned customer-scoped roles (future feature)
+  - Has access to customer-specific fields: `loyalty_points`, `preferred_difficulty`, `marketing_opted_in`
+  - Customer-scoped permissions control access to booking and gameplay features
+
+**IMPORTANT:** The `user_type` field is **IMMUTABLE** after user creation - enforced by database trigger `prevent_user_type_change`. This prevents accidental or malicious conversion between operator and customer accounts.
 
 **Indexes:**
 - `idx_user_type` on `user_type`
@@ -279,6 +302,61 @@ assets (id)
 - `idx_user_username` on `username`
 
 **Triggers:** See Security Triggers section below.
+
+### roles (Database-driven RBAC roles)
+**Purpose:** Defines system and custom roles for operators and customers.
+
+**Fields:**
+- `id` (TEXT, PK) - UUID v4
+- `name` (TEXT, UNIQUE, NOT NULL) - Role name (e.g., 'admin', 'game_master')
+- `description` (TEXT) - Human-readable description
+- `user_type_scope` (TEXT, NOT NULL, default 'operator') - **'operator' | 'customer' | 'both'**
+- `is_system` (BOOLEAN, NOT NULL, default false) - True for built-in roles
+- `created_at` (TEXT, NOT NULL)
+- `updated_at` (TEXT, NOT NULL)
+
+**System Roles:**
+- `admin` (operator scope) - Full system access
+- `manager` (operator scope) - Manage bookings, games, users
+- `game_master` (operator scope) - Run sessions, send hints
+- `customer` (customer scope) - Default customer role
+
+### permissions (Database-driven RBAC permissions)
+**Purpose:** Defines granular permissions for system features.
+
+**Fields:**
+- `id` (TEXT, PK) - UUID v4
+- `name` (TEXT, UNIQUE, NOT NULL) - Permission name (e.g., 'manage_users')
+- `label` (TEXT, NOT NULL) - Human-readable label
+- `category` (TEXT, NOT NULL) - Feature category (dashboard, bookings, sessions, games, network, users, rbac, storage, cameras, system)
+- `user_type_scope` (TEXT, NOT NULL, default 'operator') - **'operator' | 'customer' | 'both'**
+- `description` (TEXT) - Permission description
+- `created_at` (TEXT, NOT NULL)
+
+**Permission Categories:**
+- `dashboard` - View dashboard and active sessions
+- `bookings` - Create, edit, cancel bookings
+- `sessions` - Start, pause, end sessions; send hints
+- `games` - Create, edit, archive games and puzzles
+- `network` - Configure Wi-Fi settings
+- `users` - Manage operators and customers
+- `rbac` - Manage roles and permissions
+- `storage` - Manage assets and backups
+- `cameras` - Configure and monitor cameras
+- `system` - System health, logs, settings
+
+### role_permissions (RBAC junction table)
+**Purpose:** Maps which permissions are granted to which roles.
+
+**Fields:**
+- `id` (TEXT, PK) - UUID v4
+- `role_id` (TEXT, FK roles.id, NOT NULL, CASCADE)
+- `permission_id` (TEXT, FK permissions.id, NOT NULL, CASCADE)
+- `granted_at` (TEXT, NOT NULL)
+- `granted_by` (TEXT, FK user.id) - Who granted this permission
+
+**Indexes:**
+- `idx_role_permission_unique` on (role_id, permission_id) - Prevent duplicate assignments
 
 ### session (Better Auth sessions)
 **Purpose:** Better Auth session tokens.
@@ -490,6 +568,52 @@ interface GameHintDefinition {
 
 ---
 
+### game_milestones (Game event triggers)
+
+**Purpose:** Defines milestone events (intro, escaped, failed, custom) that trigger during gameplay.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  game_id: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(), // 'intro' | 'escaped' | 'failed' | 'custom'
+  name: text('name').notNull(), // User-friendly name
+  media_type: text('media_type'), // 'text' | 'image' | 'audio' | 'video' | null
+  content: text('content'), // Text content or description
+  asset_id: text('asset_id').references(() => assets.id, { onDelete: 'set null' }),
+  volume_level: integer('volume_level').notNull().default(80), // 0-100
+  display_order: integer('display_order').notNull().default(0),
+
+  // Trigger configuration
+  trigger_type: text('trigger_type').notNull(), // 'manual' | 'timer' | 'condition'
+  trigger_config: text('trigger_config', { mode: 'json' }), // { minutes?, interval?, hintsUsed?, etc }
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+
+  // Display settings
+  display_duration_seconds: integer('display_duration_seconds'),
+  loop: integer('loop', { mode: 'boolean' }).notNull().default(false),
+  loop_count: integer('loop_count'), // null = infinite when loop=true
+  auto_dismiss: integer('auto_dismiss', { mode: 'boolean' }).notNull().default(true),
+
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at').notNull()
+}
+```
+
+**Indexes:**
+- `idx_game_milestones_game` on game_id
+- `idx_game_milestones_type` on type
+- `idx_game_milestones_enabled` on enabled
+
+**Use Cases:**
+- **Intro** - Welcome message/video when session starts
+- **Escaped** - Victory sequence when players complete the game
+- **Failed** - Game over message when timer expires
+- **Custom** - Timed hints, story beats, ambient effects
+
+---
+
 ### 5. bookings
 
 **Purpose:** Customer reservations for game sessions
@@ -517,6 +641,159 @@ interface GameHintDefinition {
   notes: text('notes')
 }
 ```
+
+---
+
+### session_milestones (Triggered milestone tracking)
+
+**Purpose:** Tracks which game milestones were triggered during a session and when.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  session_id: text('session_id').notNull().references(() => sessions.id, { onDelete: 'cascade' }),
+  milestone_id: text('milestone_id').notNull().references(() => gameMilestones.id),
+  milestone_type: text('milestone_type').notNull(), // Copy for quick lookup
+  milestone_name: text('milestone_name').notNull(), // Copy for display
+  media_type: text('media_type'), // Copy of media_type
+  content: text('content'), // Copy of content
+  asset_url: text('asset_url'), // Resolved asset URL at trigger time
+  volume_level: integer('volume_level'), // Volume level used
+  triggered_at: text('triggered_at').notNull(),
+  triggered_by: text('triggered_by').references(() => user.id) // NULL for auto-triggers
+}
+```
+
+**Indexes:**
+- `idx_session_milestones_session` on session_id
+- `idx_session_milestones_milestone` on milestone_id
+- `idx_session_milestones_triggered` on triggered_at
+- `idx_session_milestone_unique` on (session_id, milestone_id) - Prevent duplicate triggers
+
+**Relationship:**
+- Each session can trigger multiple milestones
+- Each milestone can be triggered once per session
+- Denormalized copies of milestone data for historical accuracy
+
+---
+
+### discount_codes (Promotional discounts)
+
+**Purpose:** Defines discount codes for promotional pricing.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  code: text('code').notNull().unique(), // Promo code (e.g., 'SUMMER2025')
+  description: text('description'),
+  type: text('type').notNull(), // 'percent' | 'fixed_amount'
+  percent_off: integer('percent_off'), // 0-100
+  amount_off_cents: integer('amount_off_cents'),
+  valid_from: text('valid_from'),
+  valid_until: text('valid_until'),
+  max_uses: integer('max_uses'), // NULL = unlimited
+  current_uses: integer('current_uses').notNull().default(0),
+  applies_to: text('applies_to').notNull().default('all'), // 'all' | 'selected'
+  minimum_party_size: integer('minimum_party_size'),
+  notes: text('notes'),
+  created_by: text('created_by').notNull().references(() => user.id),
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at').notNull(),
+  archived_at: text('archived_at')
+}
+```
+
+**Indexes:**
+- `idx_discount_codes_code` on code
+- `idx_discount_codes_active` on (archived_at, valid_from, valid_until)
+
+### discount_code_games (Discount game restrictions)
+
+**Purpose:** Maps discount codes to specific games when applies_to='selected'.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  discount_code_id: text('discount_code_id').notNull().references(() => discountCodes.id, { onDelete: 'cascade' }),
+  game_id: text('game_id').notNull().references(() => games.id, { onDelete: 'cascade' }),
+  created_at: text('created_at').notNull()
+}
+```
+
+**Indexes:**
+- `idx_discount_game_unique` on (discount_code_id, game_id)
+- `idx_discount_game_code` on discount_code_id
+- `idx_discount_game_game` on game_id
+
+---
+
+### cameras (RTSP camera configuration)
+
+**Purpose:** Stores IP camera connection details and streaming configuration.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  game_id: text('game_id').references(() => games.id, { onDelete: 'set null' }), // 1-to-1 relationship
+
+  // Brand & Model
+  brand: text('brand').notNull().default('generic'), // 'reolink' | 'hikvision' | 'dahua' | etc.
+  model: text('model'), // For auto-configuration
+
+  // Connection
+  protocol: text('protocol').notNull(), // 'rtsp' | 'mjpeg' | 'onvif'
+  host: text('host').notNull(),
+  port: integer('port').notNull().default(554),
+  username: text('username'),
+  password_encrypted: text('password_encrypted'), // Encrypted with libsodium
+
+  // Stream Paths (dual-stream support)
+  main_stream_path: text('main_stream_path'), // High-res for recording
+  sub_stream_path: text('sub_stream_path'), // Low-res for live viewing
+  stream_path: text('stream_path'), // DEPRECATED: Legacy single stream
+
+  // Stream Settings
+  resolution: text('resolution').default('720p'), // '480p' | '720p' | '1080p' | 'native'
+  frame_rate: integer('frame_rate').default(15),
+  transport: text('transport').default('tcp'), // 'tcp' | 'udp' | 'http'
+
+  // Capabilities
+  has_ptz: integer('has_ptz', { mode: 'boolean' }).notNull().default(false),
+  has_audio: integer('has_audio', { mode: 'boolean' }).notNull().default(false),
+  has_ir_control: integer('has_ir_control', { mode: 'boolean' }).notNull().default(false),
+
+  // Feature Settings
+  ir_mode: text('ir_mode').default('auto'), // 'auto' | 'on' | 'off'
+  audio_volume: integer('audio_volume').default(80), // 0-100
+  ptz_pan: integer('ptz_pan').default(0), // -180 to 180 degrees
+  ptz_tilt: integer('ptz_tilt').default(0), // -90 to 90 degrees
+  ptz_zoom: integer('ptz_zoom').default(0), // 0-100 (percentage)
+
+  // Status & Health
+  status: text('status').default('offline'), // 'online' | 'offline' | 'testing' | 'error'
+  last_seen: text('last_seen'),
+  error_message: text('error_message'),
+  hls_streaming: integer('hls_streaming', { mode: 'boolean' }).default(false),
+
+  created_at: text('created_at').notNull(),
+  updated_at: text('updated_at').notNull()
+}
+```
+
+**Indexes:**
+- `idx_cameras_game` on game_id
+- `idx_cameras_status` on status
+- `idx_cameras_brand` on brand
+
+**Camera-Game Relationship:**
+- Each camera can be associated with ONE game (1-to-1)
+- Each game can have MULTIPLE cameras (stored in `games.camera_ids` JSON array)
+- Cameras stream to HLS endpoints for dashboard viewing
 
 ---
 
@@ -549,6 +826,175 @@ interface GameHintDefinition {
 - `game_id` (idx_assets_game_id)
 - `asset_type` (idx_assets_type)
 - `is_reusable` (idx_assets_reusable)
+
+---
+
+### system_settings (Key-value configuration)
+
+**Purpose:** Stores system-wide configuration settings with type validation.
+
+**Schema:**
+```typescript
+{
+  key: text('key').primaryKey(), // Unique setting identifier
+  value: text('value').notNull(), // Serialized value
+  type: text('type').notNull(), // 'string' | 'number' | 'boolean' | 'json'
+  category: text('category').notNull(), // 'storage' | 'backup' | 'updates' | 'system' | 'general'
+  label: text('label').notNull(), // Human-readable label
+  description: text('description'),
+  is_editable: integer('is_editable', { mode: 'boolean' }).notNull().default(true),
+  updated_at: text('updated_at').notNull(),
+  updated_by: text('updated_by').references(() => user.id)
+}
+```
+
+**Use Cases:**
+- Storage retention policies
+- Backup schedules
+- System update preferences
+- Feature flags
+
+---
+
+### system_health (Health metrics snapshots)
+
+**Purpose:** Periodic snapshots of system resource usage and service health.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  cpu_usage_percent: integer('cpu_usage_percent').notNull(), // 0-100
+  memory_total_mb: integer('memory_total_mb').notNull(),
+  memory_used_mb: integer('memory_used_mb').notNull(),
+  disk_total_gb: integer('disk_total_gb').notNull(),
+  disk_used_gb: integer('disk_used_gb').notNull(),
+  uptime_seconds: integer('uptime_seconds').notNull(),
+  services_status: text('services_status', { mode: 'json' }).notNull(), // Array<{name, status, uptime, details}>
+  recorded_at: text('recorded_at').notNull()
+}
+```
+
+**Indexes:**
+- `idx_system_health_recorded` on recorded_at
+
+**Service Monitoring:**
+- API server status
+- Database health
+- Network connectivity
+- Camera streaming services
+- HLS transcoding workers
+
+---
+
+### backups (Backup operations tracking)
+
+**Purpose:** Tracks backup operations (database + assets) with detailed status.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  type: text('type').notNull(), // 'manual' | 'scheduled' | 'pre-update'
+  status: text('status').notNull(), // 'in_progress' | 'completed' | 'failed'
+  file_path: text('file_path'),
+  file_size_bytes: integer('file_size_bytes'),
+  includes: text('includes', { mode: 'json' }).notNull(), // { database, games, assets, logs }
+  destination: text('destination').notNull(), // 'local' | 'usb'
+  usb_device: text('usb_device'),
+  checksum_sha256: text('checksum_sha256'),
+  error_message: text('error_message'),
+  created_by: text('created_by').notNull().references(() => user.id),
+  created_at: text('created_at').notNull(),
+  completed_at: text('completed_at')
+}
+```
+
+**Indexes:**
+- `idx_backups_created` on created_at
+- `idx_backups_status` on status
+- `idx_backups_type` on type
+
+---
+
+### usb_devices (Connected USB drives)
+
+**Purpose:** Tracks USB drives detected and available for backups.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  device_path: text('device_path').notNull(), // /dev/sda1
+  mount_point: text('mount_point'), // /mnt/escapeplan-backup
+  label: text('label'),
+  total_space_gb: integer('total_space_gb'),
+  available_space_gb: integer('available_space_gb'),
+  is_mounted: integer('is_mounted', { mode: 'boolean' }).notNull().default(false),
+  last_seen: text('last_seen').notNull()
+}
+```
+
+**Indexes:**
+- `idx_usb_devices_path` on device_path
+- `idx_usb_devices_mounted` on is_mounted
+
+---
+
+### backup_history (Backup retention tracking)
+
+**Purpose:** Historical record of backups with retention policy enforcement.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  trigger: text('trigger').notNull(), // 'manual' | 'scheduled' | 'pre-update'
+  timestamp: text('timestamp').notNull(), // ISO 8601 timestamp
+  backup_path: text('backup_path').notNull(), // Full path to backup file
+  size_bytes: integer('size_bytes').notNull(),
+  checksum_sha256: text('checksum_sha256').notNull(),
+  compressed: integer('compressed', { mode: 'boolean' }).notNull().default(false),
+  verified: integer('verified', { mode: 'boolean' }).notNull().default(false),
+  app_version: text('app_version'), // App version at backup time
+  retention_days: integer('retention_days').notNull(),
+  deleted_at: text('deleted_at'), // Soft delete timestamp
+  created_at: text('created_at').notNull()
+}
+```
+
+**Indexes:**
+- `idx_backup_history_trigger` on trigger
+- `idx_backup_history_timestamp` on timestamp
+- `idx_backup_history_deleted_at` on deleted_at
+
+---
+
+### backup_metrics (Backup performance tracking)
+
+**Purpose:** Tracks performance and success/failure rates of backup operations.
+
+**Schema:**
+```typescript
+{
+  id: text('id').primaryKey(),
+  trigger: text('trigger').notNull(), // 'manual' | 'scheduled' | 'pre-update'
+  success: integer('success', { mode: 'boolean' }).notNull(),
+  duration_ms: integer('duration_ms').notNull(),
+  error_message: text('error_message'),
+  created_at: text('created_at').notNull()
+}
+```
+
+**Indexes:**
+- `idx_backup_metrics_trigger` on trigger
+- `idx_backup_metrics_created_at` on created_at
+
+**Use Cases:**
+- Monitor backup reliability
+- Track backup duration trends
+- Alert on repeated failures
+- Optimize backup schedules
 
 ---
 
@@ -625,19 +1071,20 @@ categories: text('categories', { mode: 'json' }) // string[] in TypeScript
 ### Current Architecture (Clean, No Legacy)
 
 ```
+packages/contracts/src/
+└── schema.ts       # Drizzle schema definitions (shared across API & web)
+
 apps/escapeplan-api/src/db/
-├── schema.ts       # Drizzle schema definitions (360 lines)
-├── client.ts       # Database connection (24 lines)
+├── client.ts       # Database connection
 ├── init.ts         # Schema initialization script
 └── seed.ts         # Seed data
 ```
 
-**NO Legacy Code:**
-- ❌ No raw SQL CREATE statements in client.ts
-- ❌ No migration scripts
-- ❌ No ensureColumn() helpers
-- ❌ No schema version tracking
-- ✅ Clean Drizzle-only implementation
+**Architecture Notes:**
+- Schema is defined in shared contracts package for type consistency
+- API and web both import schema from `@escapeplan/contracts`
+- Drizzle-only implementation, no raw SQL
+- Push-only workflow (NO migrations): `drizzle-kit push` syncs schema directly
 
 ### Schema Initialization
 
@@ -656,10 +1103,10 @@ pnpm tsx src/db/init.ts
 ### Schema Changes
 
 **Process:**
-1. Edit `apps/escapeplan-api/src/db/schema.ts`
-2. Edit `apps/escapeplan-api/src/db/init.ts` (keep in sync)
-3. Delete database: `rm -f data/escapeplan.db*`
-4. Reseed: `pnpm db:seed`
+1. Edit `packages/contracts/src/schema.ts`
+2. Rebuild contracts package: `pnpm --filter @escapeplan/contracts build`
+3. Run `drizzle-kit push` to sync schema to database
+4. Optional: Reseed if needed: `pnpm db:seed`
 
 **⚠️ SQLite Limitation:** No `DROP COLUMN` support. Schema changes require table recreation.
 
@@ -812,15 +1259,16 @@ const { games, rooms, gamePuzzles, user, assets } = schema;
 
 ---
 
-**Document Version:** 2.0
-**Maintained By:** Claude-DB
-**Last Audit:** Session 35 (2025-10-01)
+**Document Version:** 2.1
+**Maintained By:** Claude Code
+**Last Audit:** 2025-10-04 (Schema Verification & Documentation Update)
 **Next Review:** After any schema changes
 
 ---
 
 ## Appendix: Full Table List
 
+### Auth & RBAC (7 tables)
 1. user
 2. session
 3. account
@@ -828,24 +1276,50 @@ const { games, rooms, gamePuzzles, user, assets } = schema;
 5. roles
 6. permissions
 7. role_permissions
+
+### Games & Rooms (3 tables)
 8. games
-9. rooms
-10. game_puzzles
+9. game_puzzles
+10. game_milestones
+
+### Bookings & Sessions (6 tables)
 11. bookings
 12. sessions
 13. session_puzzles
 14. session_hints
-15. timer_slugs (internal table name; exposed publicly via /room routes)
-16. assets
-17. asset_usage
-18. storage_metrics
-19. network_profiles
-20. network_health
-21. system_logs
-22. alerts
-23. alert_rules
+15. session_milestones
+16. timer_slugs
 
-**Total:** 23 tables, 15 custom indexes, 100% Drizzle ORM coverage
+### Discount Codes (2 tables)
+17. discount_codes
+18. discount_code_games
+
+### Assets & Storage (9 tables)
+19. assets
+20. asset_usage
+21. storage_metrics
+22. system_health
+23. backups
+24. usb_devices
+25. backup_history
+26. backup_metrics
+
+### Network (2 tables)
+27. network_profiles
+28. network_health
+
+### Logging & Alerting (3 tables)
+29. system_logs
+30. alerts
+31. alert_rules
+
+### System Settings (1 table)
+32. system_settings
+
+### Cameras (1 table)
+33. cameras
+
+**Total:** 33 tables, 25+ custom indexes, 100% Drizzle ORM coverage
 
 ---
 

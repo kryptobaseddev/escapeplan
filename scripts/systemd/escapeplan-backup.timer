@@ -4,9 +4,9 @@ Documentation=https://github.com/kryptobaseddev/escapeplan-app
 Requires=escapeplan-backup.service
 
 [Timer]
-# Run daily at 03:00 AM local time
+# Run daily at 02:00 AM local time
 OnCalendar=daily
-OnCalendar=*-*-* 03:00:00
+OnCalendar=*-*-* 02:00:00
 
 # Run missed timers on boot (within 15 minutes)
 # This ensures backups aren't skipped if system was powered off
