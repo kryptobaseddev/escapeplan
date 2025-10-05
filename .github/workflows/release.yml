@@ -49,13 +49,24 @@ jobs:
 
       - name: Create Release Pull Request
         id: changesets
+        continue-on-error: true
         uses: changesets/action@v1
         with:
           version: pnpm version
           commit: "chore: version packages"
           title: "chore: version packages"
         env:
+          # NOTE: GitHub Actions default token cannot create PRs
+          # To enable automated PR creation, create a Personal Access Token with 'repo' scope
+          # and add it as a secret named 'CHANGESETS_TOKEN', then use:
+          # GITHUB_TOKEN: ${{ secrets.CHANGESETS_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Manual Release Instructions
+        if: failure() && steps.changesets.outcome == 'failure'
+        run: |
+          echo "::warning::Changesets action failed (likely due to PR permissions)"
+          echo "::notice::To create version PR manually, run: pnpm changeset version && git commit -am 'chore: version packages' && git push"
 
       - name: Validate VERSION Sync
         if: steps.changesets.outputs.hasChangesets == 'true'
