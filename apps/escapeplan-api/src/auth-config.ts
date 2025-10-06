@@ -4,7 +4,6 @@ import { customSession, username } from 'better-auth/plugins';
 import argon2 from 'argon2';
 import type { BetterAuthOptions } from 'better-auth';
 import type { OperatorPermission, OperatorRole } from '@escapeplan/contracts';
-import { runtime } from '@escapeplan/contracts/runtime';
 import { db, sqlite } from './db/client.js';
 import { user, session, account, verification } from '@escapeplan/contracts';
 

@@ -262,7 +262,7 @@ export async function testCameraConnection(
   const command = `ffprobe -v quiet -print_format json -show_streams -timeout 5000000 "${url}"`;
 
   try {
-    const { stdout, stderr } = await execAsync(command, { timeout: 6000 });
+    const { stdout } = await execAsync(command, { timeout: 6000 });
 
     if (!stdout) {
       return {

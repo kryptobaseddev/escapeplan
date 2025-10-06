@@ -12,8 +12,7 @@
  */
 
 import fs from 'node:fs/promises';
-import { createReadStream, createWriteStream } from 'node:fs';
-import { pipeline } from 'node:stream/promises';
+import { createReadStream } from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import * as tar from 'tar';
@@ -67,7 +66,7 @@ async function createManifest(includes: BackupIncludes): Promise<object> {
 
   // Count database records
   if (includes.database) {
-    const [gamesCount] = await db.select().from(games);
+    await db.select().from(games);
     manifest.contents.database = {
       file: 'escapeplan.db',
       tables: ['operators', 'games', 'bookings', 'sessions', 'cameras', 'roles', 'permissions']

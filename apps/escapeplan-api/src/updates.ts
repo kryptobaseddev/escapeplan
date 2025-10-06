@@ -1,21 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import { env } from './env.js';
 
-interface Release {
-  version: string;
-  url: string;
-  notes: string;
-  publishedAt: string;
-  assets: {
-    name: string;
-    url: string;
-    size: number;
-  }[];
-}
-
 export async function setupUpdateRoutes(server: FastifyInstance) {
   // Check for updates
-  server.get('/api/updates/check', async (request, reply) => {
+  server.get('/api/updates/check', async (_request, reply) => {
     if (!env.enableAutoUpdate) {
       return reply.code(503).send({
         error: {
@@ -78,7 +66,7 @@ export async function setupUpdateRoutes(server: FastifyInstance) {
   });
 
   // Get current version
-  server.get('/api/updates/version', async (request, reply) => {
+  server.get('/api/updates/version', async (_request, reply) => {
     return reply.send({
       version: env.version,
       buildDate: env.buildDate,

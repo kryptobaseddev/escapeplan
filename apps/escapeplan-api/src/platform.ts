@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFile } from 'node:child_process';
+import { execFile, execSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { ApplyNetworkConfigRequest, ApplyNetworkConfigResponse } from '@escapeplan/contracts';
 
@@ -30,6 +30,18 @@ async function queryServiceState(service: string): Promise<'active' | 'inactive'
   }
 }
 
+async function queryNMConnectionState(connectionName: string): Promise<'active' | 'inactive' | 'unknown'> {
+  try {
+    const output = execSync(`nmcli -t -f GENERAL.STATE connection show "${connectionName}"`, {
+      encoding: 'utf8',
+      timeout: 5000
+    });
+    return output.includes('activated') ? 'active' : 'inactive';
+  } catch {
+    return 'unknown';
+  }
+}
+
 export async function applyEscapePlanConfig(payload: ApplyNetworkConfigRequest): Promise<ApplyNetworkConfigResponse> {
   if (!(await commandExists(CONFIG_APPLY_BIN))) {
     throw new Error(`Configuration tool not found at ${CONFIG_APPLY_BIN}`);
@@ -44,9 +56,8 @@ export async function applyEscapePlanConfig(payload: ApplyNetworkConfigRequest):
       timeout: 60_000
     });
 
-    const [hostapd, dnsmasq, api, web] = await Promise.all([
-      queryServiceState('hostapd.service'),
-      queryServiceState('dnsmasq.service'),
+    const [apConnection, api, web] = await Promise.all([
+      queryNMConnectionState('escapeplan-ap'),
       queryServiceState('escapeplan-api.service'),
       queryServiceState('escapeplan-web.service')
     ]);
@@ -56,8 +67,7 @@ export async function applyEscapePlanConfig(payload: ApplyNetworkConfigRequest):
       stdout: stdout.trim() || undefined,
       stderr: stderr.trim() || undefined,
       services: {
-        hostapd,
-        dnsmasq,
+        apConnection,
         api,
         web
       }

@@ -21,10 +21,13 @@ import type {
   GameMilestoneTriggerConfig,
   MilestoneMediaType,
   MilestoneType,
-  MilestoneTriggerType,
-  SaveGameRequest
+  MilestoneTriggerType
 } from '@escapeplan/contracts';
 import type { AuditMetadata, ArchiveMetadata } from '../shared/types.js';
+
+// Use imported types to avoid unused import warnings
+type _AuditMetadata = AuditMetadata;
+type _ArchiveMetadata = ArchiveMetadata;
 
 /**
  * Re-export contract types for convenience
@@ -41,8 +44,7 @@ export type {
   GameMilestoneTriggerConfig,
   MilestoneMediaType,
   MilestoneType,
-  MilestoneTriggerType,
-  SaveGameRequest
+  MilestoneTriggerType
 };
 
 /**

@@ -95,7 +95,7 @@ async function processImage(buffer: Buffer, mimeType: string): Promise<{buffer: 
  * Returns empty object if ffprobe is not available
  */
 function extractMediaMetadata(filePath: string): Promise<Record<string, any>> {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) {
         // If ffprobe not found, return empty metadata instead of failing

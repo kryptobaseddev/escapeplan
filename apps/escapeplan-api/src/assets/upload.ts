@@ -476,7 +476,6 @@ export async function getStorageMetrics() {
       }
       // Continue with the new record
       const byType = JSON.parse(newLatest.by_type);
-      const byGame = JSON.parse(newLatest.by_game);
 
       return {
         total: systemDisk,
@@ -587,7 +586,7 @@ export async function getStorageMetrics() {
 /**
  * Delete asset and its file
  */
-export async function deleteAsset(assetId: string, userId: string, userRole: string) {
+export async function deleteAsset(assetId: string, _userId: string, _userRole: string) {
   const asset = sqlite.prepare('SELECT * FROM assets WHERE id = ?').get(assetId) as AssetRecord | undefined;
 
   if (!asset) {

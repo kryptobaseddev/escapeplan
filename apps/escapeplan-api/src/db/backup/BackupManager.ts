@@ -14,7 +14,7 @@
 import Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, readdir, stat, rm, mkdir } from 'node:fs/promises';
-import { join, dirname, basename } from 'node:path';
+import { join, dirname } from 'node:path';
 import { ulid } from 'ulid';
 import type {
   BackupMetadata,

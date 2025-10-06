@@ -12,8 +12,6 @@ import { normalizeRole, resolveRoleId, permissionsForRole } from '../../security
 import type {
   OperatorProfile,
   OperatorSummary,
-  OperatorRole,
-  OperatorPermission,
   CreateOperatorRequest,
   UpdateOperatorRequest,
   ResetOperatorPasswordRequest,
@@ -143,7 +141,7 @@ class OperatorsState {
 
     const role = normalizeRole(input.role);
     const roleId = resolveRoleId(role);
-    const permissions = permissionsForRole(role);
+    permissionsForRole(role);
     const context = await getAuthContext();
     const adapter = await getInternalAdapter();
 
@@ -221,7 +219,7 @@ class OperatorsState {
     const resolvedRole = normalizeRole(roleValue);
     const resolvedRoleId = resolveRoleId(resolvedRole);
     const permissions = permissionsForRole(resolvedRole);
-    const context = await getAuthContext();
+    await getAuthContext();
     const adapter = await getInternalAdapter();
 
     // permissions column has mode: 'json', so Drizzle will automatically stringify the array

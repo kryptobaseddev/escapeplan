@@ -18,8 +18,7 @@ import { readFile } from 'node:fs/promises';
 import type {
   BackupMetadata,
   BackupTrigger,
-  DiskSpaceInfo,
-  RETENTION_POLICIES,
+  DiskSpaceInfo
 } from './types.js';
 
 const execAsync = promisify(exec);

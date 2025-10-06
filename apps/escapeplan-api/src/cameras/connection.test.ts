@@ -3,7 +3,7 @@
  * Tests ONVIF protocol handling and stream validation
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { testCameraConnection } from './connection.js';
 import type { TestCameraConnectionRequest } from '@escapeplan/contracts';
 

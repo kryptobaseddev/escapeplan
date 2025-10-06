@@ -10,19 +10,10 @@ import { Server as SocketServer } from 'socket.io';
 import { z } from 'zod';
 import { runtime } from '@escapeplan/contracts/runtime';
 import type {
-  CommandRequest,
   OperatorPermission,
   OperatorRole,
-  SaveGameRequest,
   ApplyNetworkConfigRequest,
   ApplyNetworkConfigResponse,
-  CreateOperatorRequest,
-  UpdateOperatorRequest,
-  QuickStartSessionRequest,
-  CreateRoleRequest,
-  UpdateRoleRequest,
-  CreateCameraRequest,
-  UpdateCameraRequest,
   SettingCategory
 } from '@escapeplan/contracts';
 import {
@@ -85,9 +76,9 @@ import { auth, requireSession } from './auth.js';
 import { db, sqlite } from './db/client.js';
 import { operators, alertRules, systemLogs, cameras, games, assets } from '@escapeplan/contracts';
 import { eq, and, like, count, desc } from 'drizzle-orm';
-import { attachRealtime, emitDashboardUpdate, emitSessionUpdate } from './realtime.js';
+import { attachRealtime, emitDashboardUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
-import { handleAssetUpload, getStorageMetrics, deleteAsset, listAssets, linkReusableAsset, getAssetById } from './assets/upload.js';
+import { handleAssetUpload, getStorageMetrics, deleteAsset, listAssets, linkReusableAsset } from './assets/upload.js';
 import { logToDatabase, dismissAlert } from './logging/index.js';
 import { setupUpdateRoutes } from './updates.js';
 
@@ -279,7 +270,7 @@ export async function buildServer() {
     global: true,
     max: 100,
     timeWindow: '1 minute',
-    errorResponseBuilder: function (request, context) {
+    errorResponseBuilder: function (_request, context) {
       return {
         statusCode: 429,
         error: 'Too Many Requests',

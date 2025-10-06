@@ -10,10 +10,6 @@ import { rm, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { BackupMetadata } from './types.js';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const execAsync = promisify(exec);
 
 describe('RetentionManager', () => {
   let testDbPath: string;
@@ -255,7 +251,7 @@ describe('RetentionManager', () => {
 
   describe('ensureSufficientSpace()', () => {
     it('should return true when sufficient space exists', async () => {
-      const diskSpace = await retentionManager.checkDiskSpace(backupDir);
+      await retentionManager.checkDiskSpace(backupDir);
       const smallRequirement = 1024; // 1 KB
 
       const result = await retentionManager.ensureSufficientSpace(smallRequirement, 95);

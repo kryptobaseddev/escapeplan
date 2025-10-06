@@ -10,9 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { sqlite } from '../../db/client.js';
 import {
   emitSessionUpdate,
-  emitDashboardUpdate,
-  emitTimerUpdate,
-  emitBookingsUpdate
+  emitTimerUpdate
 } from '../../realtime.js';
 import type {
   ActiveSessionsResponse,
@@ -684,7 +682,7 @@ class SessionsState {
 
     // Copy milestones to session (only enabled ones with auto-triggers)
     const gameMilestones = milestonesByGameStmt.all(payload.gameId) as GameMilestoneRow[];
-    const enabledAutoMilestones = gameMilestones.filter(m => m.enabled && m.trigger_type !== 'manual');
+    gameMilestones.filter(m => m.enabled && m.trigger_type !== 'manual');
 
     // Note: Auto-triggered milestones will be added to session_milestones when they trigger
     // Manual milestones can be triggered via game runner UI
@@ -713,8 +711,6 @@ class SessionsState {
     // emitDashboardUpdate(getDashboard());
 
     this.broadcastTimerSessions(sessionId, sessionDetails);
-
-    const bookingDate = nowIso.slice(0, 10);
 
     // Import getBookingsByDate - we'll need to handle this circular dependency
     // For now, we'll emit bookings update from the caller
