@@ -11,15 +11,13 @@ set -euo pipefail
 #   2. Manually for troubleshooting or re-configuration
 #
 # Key Features:
-#   - Automatic system package installation (NetworkManager, nginx, etc.)
-#   - WiFi hotspot auto-configuration via NetworkManager (SSID: EscapePlan, 10.10.10.0/24)
-#   - Secure password generation and storage
+#   - WiFi Access Point verification (non-fatal check)
+#   - Pre-flight dependency validation
 #   - Native module rebuild for ARM64 architecture
-#   - Database initialization and seeding
-#   - Systemd service installation and activation
-#   - Directory/ownership setup
-#   - Secrets generation
-#   - Comprehensive health check validation
+#   - Final health check validation
+#
+# Note: System package installation is now handled by the base OS image.
+# This script expects all required system packages to already be installed.
 #
 # This script is IDEMPOTENT - safe to run multiple times.
 #
@@ -125,12 +123,6 @@ cleanup_on_error() {
     if [ $exit_code -ne 0 ]; then
         log_error "Installation failed with exit code $exit_code"
         log_error "Review ${LOG_FILE} for details"
-
-        # Rollback NetworkManager connection if it exists but failed
-        if nmcli connection show escapeplan-ap >/dev/null 2>&1; then
-            log "Rolling back NetworkManager AP connection..."
-            nmcli connection delete escapeplan-ap 2>/dev/null || true
-        fi
     fi
 }
 
@@ -270,206 +262,29 @@ rebuild_native_modules() {
 }
 
 # ============================================================================
-# SYSTEM PACKAGE MANAGEMENT
+# WIFI HOTSPOT VERIFICATION
 # ============================================================================
 
-install_system_packages() {
-    log_section "STEP: Installing System Packages"
+verify_wifi_ap() {
+    log_section "STEP: Verifying WiFi Access Point"
 
-    log_info "Updating package lists..."
-    if timeout 300 apt-get update -qq >> "${LOG_FILE}" 2>&1; then
-        log_success "Package lists updated"
-    else
-        local exit_code=$?
-        if [ ${exit_code} -eq 124 ]; then
-            log_error "apt-get update timed out after 300 seconds"
-        else
-            log_error "Failed to update package lists"
-        fi
-        return 1
-    fi
-
-    # Required packages for EscapePlan operation
-    local required_packages=(
-        # Note: hostapd and dnsmasq NOT installed - NetworkManager provides AP and embedded dnsmasq for ipv4.method=shared
-        "nginx"             # Reverse proxy and static file server
-        "nodejs"            # JavaScript runtime (will check version below)
-        "sqlite3"           # Database CLI tools
-        "openssl"           # Cryptographic operations
-        "build-essential"   # GCC, G++, make for native module compilation
-        "python3"           # Required for node-gyp
-        "net-tools"         # Network configuration utilities
-        "iproute2"          # Advanced network configuration
-        "iptables"          # Firewall and NAT rules
-        "network-manager"   # NetworkManager for AP setup
-    )
-
-    local packages_to_install=()
-    local already_installed=()
-
-    log_info "Checking required packages..."
-    for package in "${required_packages[@]}"; do
-        if dpkg -l | grep -qw "^ii.*${package}"; then
-            already_installed+=("${package}")
-        else
-            packages_to_install+=("${package}")
-        fi
-    done
-
-    if [ ${#already_installed[@]} -gt 0 ]; then
-        log_info "Already installed: ${already_installed[*]}"
-    fi
-
-    if [ ${#packages_to_install[@]} -gt 0 ]; then
-        log_info "Installing missing packages: ${packages_to_install[*]}"
-
-        # Use DEBIAN_FRONTEND=noninteractive to avoid prompts
-        # Use -qq for quiet output (errors still shown)
-        if timeout 600 env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${packages_to_install[@]}" >> "${LOG_FILE}" 2>&1; then
-            log_success "Installed packages: ${packages_to_install[*]}"
-        else
-            local exit_code=$?
-            if [ ${exit_code} -eq 124 ]; then
-                log_error "apt-get install timed out after 600 seconds"
-            else
-                log_error "Failed to install packages: ${packages_to_install[*]}"
-            fi
-            log_error "Check ${LOG_FILE} for details"
-            return 1
-        fi
-    else
-        log_success "All required packages are already installed"
-    fi
-
-    # Verify Node.js version (need v20+)
-    if command -v node &> /dev/null; then
-        local node_version
-        node_version=$(node --version | sed 's/^v//')
-        local node_major
-        node_major=$(echo "${node_version}" | cut -d. -f1)
-
-        log_info "Node.js version: ${node_version}"
-
-        if [ "${node_major}" -lt 20 ]; then
-            log_warning "Node.js version ${node_version} is older than required v20+"
-            log_warning "EscapePlan requires Node.js v20 or higher"
-            log_warning "Consider installing via NodeSource repository"
-            log_warning "  curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -"
-            log_warning "  sudo apt-get install -y nodejs"
-            return 1
-        else
-            log_success "Node.js version ${node_version} meets requirements (v20+)"
-        fi
-    else
-        log_error "Node.js installation verification failed"
-        return 1
-    fi
-
-    return 0
-}
-
-# ============================================================================
-# WIFI HOTSPOT CONFIGURATION
-# ============================================================================
-
-generate_secure_password() {
-    # Use hardcoded default password for EscapePlan WiFi hotspot
-    echo "Canuescape3"
-}
-
-setup_networkmanager_ap() {
-    log_section "STEP: Configuring NetworkManager Access Point"
-
+    # Check if wlan0 exists
     if ! ip link show wlan0 &>/dev/null; then
-        log_warning "wlan0 not found, skipping AP setup"
+        log_warning "wlan0 interface not found - WiFi AP not available"
+        log_warning "This is expected on systems without WiFi hardware"
         return 0
     fi
 
-    # Create EscapePlan config directory
-    if [ ! -d "${ESCAPEPLAN_CONFIG_DIR}" ]; then
-        mkdir -p "${ESCAPEPLAN_CONFIG_DIR}"
-        chmod 755 "${ESCAPEPLAN_CONFIG_DIR}"
-        log_info "Created ${ESCAPEPLAN_CONFIG_DIR}"
-    fi
-
-    # Remove old unmanaged configuration files that prevent NetworkManager from managing wlan0
-    log_info "Cleaning up old NetworkManager configuration..."
-    rm -f /etc/NetworkManager/conf.d/unmanaged.conf
-    rm -f /etc/NetworkManager/conf.d/unmanaged-wlan0.conf
-
-    # Restart NetworkManager to apply configuration changes
-    log_info "Restarting NetworkManager..."
-    systemctl restart NetworkManager
-    sleep 2
-
-    local wifi_password_file="/etc/escapeplan/wifi-password.txt"
-    local wifi_password="Canuescap3"
-
-    # Generate or retrieve WiFi password
-    if [ -f "${wifi_password_file}" ]; then
-        wifi_password=$(cat "${wifi_password_file}")
-        log_info "Using existing WiFi password from ${wifi_password_file}"
+    # Check if AP connection exists (managed by external configuration)
+    if ip addr show wlan0 | grep -q "10.10.10.1"; then
+        log_success "WiFi AP detected on wlan0 (10.10.10.1/24)"
+        return 0
     else
-        echo "${wifi_password}" > "${wifi_password_file}"
-        chmod 600 "${wifi_password_file}"
-        log_success "Generated new WiFi password: ${wifi_password}"
-        log_info "Password saved to ${wifi_password_file} (permissions: 600)"
+        log_warning "WiFi AP not configured on wlan0"
+        log_warning "System will work but WiFi hotspot features unavailable"
+        log_info "AP configuration should be managed by platform automation"
+        return 0
     fi
-
-    # Remove existing connection if present
-    log_info "Removing existing escapeplan-ap connection (if any)..."
-    nmcli connection delete escapeplan-ap 2>/dev/null || true
-
-    # Create NetworkManager AP connection
-    log_info "Creating NetworkManager AP connection..."
-    nmcli connection add \
-        type wifi \
-        ifname wlan0 \
-        con-name escapeplan-ap \
-        autoconnect yes \
-        ssid "EscapePlan" \
-        802-11-wireless.mode ap \
-        802-11-wireless.band bg \
-        802-11-wireless.channel 7 \
-        wifi-sec.key-mgmt wpa-psk \
-        wifi-sec.psk "${wifi_password}" \
-        ipv4.method shared \
-        ipv4.addresses 10.10.10.1/24 \
-        ipv6.method disabled
-
-    # Activate the connection with validation
-    log_info "Activating NetworkManager AP..."
-    if ! nmcli connection up escapeplan-ap; then
-        log_error "Failed to activate NetworkManager AP connection"
-        log_error "Debug with: nmcli connection show"
-        return 1
-    fi
-
-    # Wait for connection to stabilize
-    sleep 2
-
-    # Verify AP is actually active
-    if ! nmcli connection show --active | grep -q "escapeplan-ap"; then
-        log_error "AP connection activated but not showing as active"
-        log_error "Check status: nmcli connection show escapeplan-ap"
-        return 1
-    fi
-
-    log "✓ NetworkManager AP connection active and verified"
-
-    log_success "NetworkManager AP Configuration Complete"
-    log ""
-    log "============================================"
-    log "WiFi Hotspot Details:"
-    log "  SSID:     EscapePlan"
-    log "  Password: ${wifi_password}"
-    log "  IP:       10.10.10.1/24"
-    log "  Mode:     NetworkManager AP (shared)"
-    log "============================================"
-    log ""
-    log_info "Password stored in: ${wifi_password_file}"
-
-    return 0
 }
 
 # ============================================================================
@@ -615,25 +430,13 @@ main() {
     log_section "Post-Install Orchestration Flow"
     log "Note: Most installation steps are handled by DEBIAN/postinst"
     log "This script handles platform-specific tasks:"
-    log "  - System package installation (NetworkManager, nginx, etc.)"
-    log "  - WiFi hotspot auto-configuration via NetworkManager"
+    log "  - WiFi Access Point verification (non-fatal)"
     log "  - Pre-flight dependency validation (Agent 13)"
     log "  - Native module rebuild for ARM64 architecture (Agent 2)"
     log "  - Final health check validation (Agent 8)"
 
-    # Execute system package installation
-    if ! install_system_packages; then
-        log_error "System package installation failed - cannot proceed"
-        log_error "Review ${LOG_FILE} and fix package issues"
-        exit 1
-    fi
-
-    # Execute WiFi hotspot configuration
-    if ! setup_networkmanager_ap; then
-        log_error "WiFi hotspot configuration failed"
-        ((total_errors++))
-        log_warning "System will continue but WiFi hotspot may not work"
-    fi
+    # Verify WiFi Access Point (non-fatal check)
+    verify_wifi_ap
 
     # Execute dependency validation (pre-flight check)
     if ! step_validate_dependencies; then
