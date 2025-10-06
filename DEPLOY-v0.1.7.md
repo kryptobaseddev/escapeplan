@@ -3,7 +3,7 @@
 **Version:** 0.1.7
 **Release Date:** October 5, 2025
 **Status:** EMERGENCY RELEASE - Critical Boot Loop Fixes
-**Architecture:** ARM64 (Raspberry Pi)
+**Architecture:** Multi-arch (ARM64 + x86_64)
 
 ---
 
@@ -11,18 +11,19 @@
 
 1. [Executive Summary](#executive-summary)
 2. [BREAKING CHANGES](#breaking-changes)
-3. [Prerequisites](#prerequisites)
-4. [Pre-Deployment Checklist](#pre-deployment-checklist)
-5. [Installation Procedure](#installation-procedure)
-6. [First Boot Setup](#first-boot-setup)
-7. [Service Verification](#service-verification)
-8. [Post-Deployment Testing](#post-deployment-testing)
-9. [Troubleshooting](#troubleshooting)
-10. [Rollback Procedure](#rollback-procedure)
-11. [Migration from v0.1.6](#migration-from-v016-bricked-systems)
-12. [Success Criteria](#success-criteria)
-13. [Known Issues and Limitations](#known-issues-and-limitations)
-14. [Support and Logs](#support-and-logs)
+3. [Multi-Architecture Build Support](#multi-architecture-build-support)
+4. [Prerequisites](#prerequisites)
+5. [Pre-Deployment Checklist](#pre-deployment-checklist)
+6. [Installation Procedure](#installation-procedure)
+7. [First Boot Setup](#first-boot-setup)
+8. [Service Verification](#service-verification)
+9. [Post-Deployment Testing](#post-deployment-testing)
+10. [Troubleshooting](#troubleshooting)
+11. [Rollback Procedure](#rollback-procedure)
+12. [Migration from v0.1.6](#migration-from-v016-bricked-systems)
+13. [Success Criteria](#success-criteria)
+14. [Known Issues and Limitations](#known-issues-and-limitations)
+15. [Support and Logs](#support-and-logs)
 
 ---
 
@@ -75,6 +76,317 @@ v0.1.6 deployments resulted in unbootable systems requiring complete SD card ref
 
 ---
 
+## Multi-Architecture Build Support
+
+### Overview
+
+Starting with v0.1.7, the build system supports creating packages for both ARM64 (Raspberry Pi) and x86_64 (amd64) architectures. The build script automatically detects the host architecture and builds architecture-specific packages with pre-compiled native binaries.
+
+**Supported Architectures:**
+- ARM64 (aarch64) - Raspberry Pi 3/4/5, Apple Silicon (M1/M2/M3)
+- x86_64 (amd64) - Intel/AMD 64-bit processors
+
+### Architecture Auto-Detection
+
+The build script (`scripts/build-deb.sh`) automatically detects your host architecture using `uname -m`:
+
+```bash
+# Architecture detection logic
+HOST_ARCH=$(uname -m)
+case "${HOST_ARCH}" in
+    aarch64|arm64)
+        DEB_ARCH="arm64"
+        SHARP_PLATFORM="linux-arm64"
+        SQLITE_PLATFORM="linux-arm64"
+        ARCH_VERIFY_STRING="ARM aarch64"
+        ;;
+    x86_64|amd64)
+        DEB_ARCH="amd64"
+        SHARP_PLATFORM="linux-x64"
+        SQLITE_PLATFORM="linux-x64"
+        ARCH_VERIFY_STRING="x86-64"
+        ;;
+    *)
+        echo "ERROR: Unsupported architecture: ${HOST_ARCH}"
+        exit 1
+        ;;
+esac
+```
+
+**Detection Output:**
+```
+Building for architecture: arm64 (detected: aarch64)
+```
+or
+```
+Building for architecture: amd64 (detected: x86_64)
+```
+
+### Building for Different Architectures
+
+#### Building on ARM64 Host (Raspberry Pi, Apple Silicon)
+
+```bash
+# On ARM64 host
+cd /path/to/escapeplan-app
+
+# Build contracts first
+pnpm --filter @escapeplan/contracts build
+
+# Build API and Web
+pnpm --filter escapeplan-api build
+pnpm --filter escapeplan-web build
+
+# Create ARM64 .deb package
+./scripts/build-deb.sh
+
+# Result: dist/escapeplan_0.1.7_arm64.deb
+```
+
+#### Building on x86_64 Host (Intel/AMD)
+
+```bash
+# On x86_64 host
+cd /path/to/escapeplan-app
+
+# Build contracts first
+pnpm --filter @escapeplan/contracts build
+
+# Build API and Web
+pnpm --filter escapeplan-api build
+pnpm --filter escapeplan-web build
+
+# Create x86_64 .deb package
+./scripts/build-deb.sh
+
+# Result: dist/escapeplan_0.1.7_amd64.deb
+```
+
+### Native Binary Handling
+
+The build process automatically downloads and installs pre-compiled native binaries for the target architecture. These binaries are architecture-specific and cannot be reused across different platforms.
+
+#### sharp (Image Processing)
+
+**Purpose:** High-performance image processing library used for asset thumbnails and image optimization.
+
+**Architecture-Specific Binaries:**
+- ARM64: `@img/sharp-linux-arm64@0.34.4`
+- x86_64: `@img/sharp-linux-x64@0.34.4`
+
+**Download Process:**
+```bash
+# ARM64
+curl -L https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.4.tgz
+
+# x86_64
+curl -L https://registry.npmjs.org/@img/sharp-linux-x64/-/sharp-linux-x64-0.34.4.tgz
+```
+
+**Installation Location:**
+```
+/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/
+```
+
+#### better-sqlite3 (Database Driver)
+
+**Purpose:** Native SQLite3 driver for high-performance database operations.
+
+**Architecture-Specific Binaries:**
+- ARM64: `better-sqlite3-v12.4.1-node-v127-linux-arm64`
+- x86_64: `better-sqlite3-v12.4.1-node-v127-linux-x64`
+
+**Download Process:**
+```bash
+# Primary: npm package (includes prebuilds)
+curl -L https://registry.npmjs.org/better-sqlite3/-/better-sqlite3-12.4.1.tgz
+
+# Fallback: GitHub releases (if prebuilds not in npm package)
+# ARM64
+curl -L https://github.com/WiseLibs/better-sqlite3/releases/download/v12.4.1/better-sqlite3-v12.4.1-node-v127-linux-arm64.tar.gz
+
+# x86_64
+curl -L https://github.com/WiseLibs/better-sqlite3/releases/download/v12.4.1/better-sqlite3-v12.4.1-node-v127-linux-x64.tar.gz
+```
+
+**Installation Location:**
+```
+/opt/escapeplan/api/node_modules/.pnpm/better-sqlite3@12.4.1*/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+```
+
+**Node.js ABI Version Compatibility:**
+- Node.js 18-19: Uses ABI v115
+- Node.js 20+: Uses ABI v127
+- Build script automatically detects Node.js version and selects correct ABI
+
+### Architecture Verification
+
+The build script verifies that native binaries match the target architecture before packaging:
+
+#### better-sqlite3 Verification
+
+```bash
+# Verify binary architecture
+file ${BETTER_SQLITE3_BINARY_PATH}
+
+# ARM64 expected output:
+# ELF 64-bit LSB shared object, ARM aarch64, version 1 (SYSV)
+
+# x86_64 expected output:
+# ELF 64-bit LSB shared object, x86-64, version 1 (GNU/Linux)
+```
+
+**Build Output:**
+```
+Verifying binary architecture...
+✓ Binary verification PASSED: ARM aarch64
+  Full file output: /opt/escapeplan/api/node_modules/.pnpm/better-sqlite3@12.4.1/node_modules/better-sqlite3/build/Release/better_sqlite3.node: ELF 64-bit LSB shared object, ARM aarch64, version 1 (SYSV), dynamically linked, BuildID[sha1]=abc123, stripped
+```
+
+**If verification fails:**
+```
+ERROR: Binary verification FAILED
+  Expected: ARM aarch64
+  Got: ELF 64-bit LSB shared object, x86-64, version 1 (GNU/Linux)
+```
+
+The build will exit with error code 1 to prevent packaging incorrect binaries.
+
+#### sharp Verification
+
+The sharp binary is extracted and placed in the correct location. No explicit verification is performed as sharp's internal module loading will fail at runtime if the architecture is incorrect.
+
+### Package Naming Convention
+
+Built packages follow this naming convention:
+```
+escapeplan_${VERSION}_${ARCH}.deb
+```
+
+**Examples:**
+- ARM64: `escapeplan_0.1.7_arm64.deb`
+- x86_64: `escapeplan_0.1.7_amd64.deb`
+
+### Build Environment Requirements
+
+#### For ARM64 Builds
+
+**Hardware:**
+- Raspberry Pi 4/5 (4GB+ RAM recommended for build performance)
+- Apple Silicon Mac (M1/M2/M3)
+- ARM64 cloud instance (AWS Graviton, Oracle Cloud Ampere, etc.)
+
+**Software:**
+- Node.js 20.x or later (ARM64 build)
+- pnpm 8.x or later
+- Standard build tools (gcc, make, python3)
+
+#### For x86_64 Builds
+
+**Hardware:**
+- Intel/AMD 64-bit processor
+- x86_64 cloud instance (AWS, GCP, Azure)
+
+**Software:**
+- Node.js 20.x or later (x86_64 build)
+- pnpm 8.x or later
+- Standard build tools (gcc, make, python3)
+
+### Cross-Architecture Deployment
+
+**IMPORTANT:** You must install the package that matches your target system's architecture.
+
+#### Deploying ARM64 Package to Raspberry Pi
+
+```bash
+# Built on x86_64 or ARM64 host
+scp dist/escapeplan_0.1.7_arm64.deb pi@escapeplan.local:/tmp/
+
+# Install on Raspberry Pi (ARM64)
+ssh pi@escapeplan.local
+sudo dpkg -i /tmp/escapeplan_0.1.7_arm64.deb
+```
+
+#### Deploying x86_64 Package to Intel/AMD Server
+
+```bash
+# Built on x86_64 or ARM64 host
+scp dist/escapeplan_0.1.7_amd64.deb user@server:/tmp/
+
+# Install on x86_64 server
+ssh user@server
+sudo dpkg -i /tmp/escapeplan_0.1.7_amd64.deb
+```
+
+### Architecture Mismatch Detection
+
+If you attempt to install a package for the wrong architecture, dpkg will reject it:
+
+```bash
+# Attempting to install ARM64 package on x86_64
+sudo dpkg -i escapeplan_0.1.7_arm64.deb
+
+# Error output:
+dpkg: error processing archive escapeplan_0.1.7_arm64.deb:
+  package architecture (arm64) does not match system (amd64)
+Errors were encountered while processing:
+  escapeplan_0.1.7_arm64.deb
+```
+
+### Troubleshooting Multi-Arch Builds
+
+#### Build Fails with "Unsupported architecture"
+
+**Cause:** Build script does not recognize host architecture.
+
+**Solution:** Check your architecture:
+```bash
+uname -m
+```
+
+If output is not one of: `aarch64`, `arm64`, `x86_64`, `amd64`, then your architecture is not supported.
+
+#### Native Binary Downloads Fail
+
+**Cause:** Network connectivity issue or npm registry unavailable.
+
+**Solution:**
+```bash
+# Test connectivity to npm registry
+curl -I https://registry.npmjs.org/
+
+# Test connectivity to GitHub releases
+curl -I https://github.com/WiseLibs/better-sqlite3/releases/
+```
+
+#### Binary Verification Fails
+
+**Cause:** Downloaded binary does not match target architecture.
+
+**Solution:**
+```bash
+# Check downloaded binary manually
+cd /opt/escapeplan/api
+file node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3/build/Release/better_sqlite3.node
+
+# If architecture is wrong, clean and rebuild
+cd /path/to/escapeplan-app
+rm -rf build/ dist/
+./scripts/build-deb.sh
+```
+
+#### Package Size Differs Between Architectures
+
+**Expected Behavior:** ARM64 and x86_64 packages may differ slightly in size (typically within 5-10MB) due to different native binary sizes.
+
+**Typical Package Sizes:**
+- ARM64: ~500-530MB
+- x86_64: ~495-525MB
+
+If package size is significantly different (>50MB variance), verify build completed successfully and all dependencies were included.
+
+---
+
 ## Prerequisites
 
 ### Base Image Requirements
@@ -94,7 +406,7 @@ v0.1.6 deployments resulted in unbootable systems requiring complete SD card ref
   - WiFi Access Point (SSID: EscapePlan)
   - Network: 10.10.10.0/24, Gateway: 10.10.10.1
   - mDNS hostname: escapeplan.local
-  - nginx, hostapd, dnsmasq pre-installed
+  - nginx, network-manager pre-installed (note: v0.1.8 will use NetworkManager-only architecture)
 
 ### System Requirements
 
@@ -122,16 +434,26 @@ Before proceeding with installation, verify the following:
 
 ### Build Verification
 
-- [ ] Package file exists: `dist/escapeplan_0.1.7_arm64.deb`
-- [ ] Package size is reasonable (expected: ~500-530MB)
-- [ ] Package was built on x86_64 host with cross-compilation for ARM64
+- [ ] Package file exists: `dist/escapeplan_0.1.7_arm64.deb` (or `_amd64.deb`)
+- [ ] Package size is reasonable (ARM64: ~500-530MB, x86_64: ~495-525MB)
+- [ ] Package architecture matches target deployment system (arm64 for Raspberry Pi, amd64 for Intel/AMD)
+- [ ] Build logs show "Building for architecture: arm64" or "Building for architecture: amd64"
+- [ ] Build logs show "Binary verification PASSED" for better-sqlite3
 - [ ] Build logs show no errors
 
 ### Base System Verification
 
 ```bash
-# SSH into Raspberry Pi
-ssh pi@escapeplan.local
+# SSH into target system (Raspberry Pi or other)
+ssh pi@escapeplan.local  # or user@your-server
+
+# Verify system architecture
+uname -m
+# Should be: aarch64/arm64 (Raspberry Pi) or x86_64/amd64 (Intel/AMD)
+
+# Verify architecture matches package
+dpkg --print-architecture
+# Should be: arm64 (Raspberry Pi) or amd64 (Intel/AMD)
 
 # Verify Node.js version
 node --version  # Should be v20.x or later
@@ -651,8 +973,8 @@ systemctl status nginx
 # Test nginx configuration
 sudo nginx -t
 
-# Check WiFi AP status (if using hostapd)
-systemctl status hostapd
+# Check WiFi AP status (NetworkManager hotspot)
+nmcli connection show escapeplan-ap
 
 # Check network interface
 ip addr show wlan0
@@ -873,9 +1195,12 @@ Use this checklist to verify successful deployment:
 
 ### Build Phase
 
-- [ ] Package built successfully: `dist/escapeplan_0.1.7_arm64.deb`
-- [ ] Package size is ~500-530MB
-- [ ] better-sqlite3 binary is ARM64 (verified during build with `file` command)
+- [ ] Package built successfully: `dist/escapeplan_0.1.7_arm64.deb` (or `_amd64.deb`)
+- [ ] Package size is correct (ARM64: ~500-530MB, x86_64: ~495-525MB)
+- [ ] Package architecture matches target system (arm64 or amd64)
+- [ ] Build output shows: "Building for architecture: arm64" or "Building for architecture: amd64"
+- [ ] better-sqlite3 binary verification PASSED for target architecture
+- [ ] sharp binaries downloaded for target architecture (linux-arm64 or linux-x64)
 - [ ] Contracts are real directories, not symlinks
 - [ ] server.js exists in web package
 - [ ] All build verification checks passed
@@ -1037,14 +1362,18 @@ systemctl status escapeplan-backup.timer
 Print this checklist and check off each step during deployment:
 
 **Pre-Deployment:**
-- [ ] Build package on x86_64 host with ARM64 cross-compilation
-- [ ] Verify package file exists and size is correct
+- [ ] Build package on appropriate host (ARM64 or x86_64) for target system
+- [ ] Verify package architecture matches target (arm64 for Pi, amd64 for Intel/AMD)
+- [ ] Verify package file exists and size is correct (ARM64: ~500-530MB, x86_64: ~495-525MB)
+- [ ] Verify build logs show architecture detection and binary verification PASSED
 - [ ] Backup existing installation (if upgrading)
-- [ ] Verify Pi is accessible via SSH
+- [ ] Verify target system is accessible via SSH
+- [ ] Verify target system architecture: `uname -m` and `dpkg --print-architecture`
 - [ ] Verify base image requirements met
 
 **Installation:**
-- [ ] Transfer package to Pi via SCP
+- [ ] Transfer package to target system via SCP
+- [ ] Verify package architecture matches system before installation
 - [ ] Install package with dpkg -i
 - [ ] Review installation log for errors
 - [ ] Verify services NOT enabled (expected)
