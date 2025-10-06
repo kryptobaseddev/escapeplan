@@ -119,35 +119,47 @@ log "Installation root: ${INSTALL_ROOT}"
 log "Log file: ${LOG_FILE}"
 echo ""
 
-# Step 1: Install system packages (skip if dpkg is locked)
-log_step "Checking system packages"
+# Step 1: Verify base OS packages (no installation)
+log_step "Verifying base OS dependencies"
 
-if fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
-    log_warning "dpkg lock detected - skipping package installation"
-    log_warning "Packages will be installed as .deb dependencies"
-    log_success "System package check complete (deferred to package manager)"
-else
-    log "Updating package index..."
+# Required commands that must be present in base OS
+declare -A required_commands=(
+    ["gcc"]="build-essential"
+    ["g++"]="build-essential"
+    ["make"]="build-essential"
+    ["python3"]="python3"
+    ["node"]="nodejs"
+    ["npm"]="npm"
+    ["nginx"]="nginx"
+    ["sqlite3"]="sqlite3"
+    ["openssl"]="openssl"
+)
 
-    if ! retry_command "APT package index update" apt-get update -qq; then
-        log_warning "Failed to update package index after ${MAX_RETRY_COUNT} attempts"
-        log_warning "Package installation may fail - network issue or repository unavailable"
-        log_warning "Continuing anyway - packages may already be installed"
+log "Checking for required system commands..."
+
+missing_commands=()
+for cmd in "${!required_commands[@]}"; do
+    if ! command -v "$cmd" &> /dev/null; then
+        missing_commands+=("$cmd (package: ${required_commands[$cmd]})")
     fi
+done
 
-    log "Installing required packages: build-essential, python3, nodejs, npm, network-manager, nginx..."
-
-    if ! retry_command "System package installation" \
-        env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        build-essential python3 nodejs npm network-manager nginx; then
-        log_warning "Failed to install some system packages after ${MAX_RETRY_COUNT} attempts"
-        log_warning "Packages: build-essential, python3, nodejs, npm, network-manager, nginx"
-        log_warning "They may already be installed - verify with: dpkg -l | grep <package-name>"
-    fi
-
-    log_success "System packages installed successfully"
+if [ ${#missing_commands[@]} -gt 0 ]; then
+    log_error "Missing required system commands:"
+    for missing in "${missing_commands[@]}"; do
+        log_error "  - $missing"
+    done
+    log_error ""
+    log_error "These packages must be installed in your base OS before installing EscapePlan."
+    log_error "Install them with:"
+    log_error "  sudo apt-get update"
+    log_error "  sudo apt-get install -y build-essential python3 nodejs npm nginx sqlite3 openssl"
+    log_error ""
+    log_error "Then reinstall this package."
+    exit 1
 fi
 
+log_success "All required system commands are available"
 log_elapsed
 
 # Step 2: Rebuild native modules for ARM64
@@ -342,7 +354,7 @@ log_elapsed
 echo ""
 
 log "Installation Summary:"
-log "  ✓ System packages: installed (build-essential, python3, nodejs, npm, nginx)"
+log "  ✓ System dependencies: verified (all required commands available)"
 log "  ✓ Native modules: rebuilt for $(uname -m)"
 log "  ✓ Database: initialized with admin user and RBAC roles"
 log "  ✓ Secrets: generated and secured at /etc/escapeplan/api.env"
