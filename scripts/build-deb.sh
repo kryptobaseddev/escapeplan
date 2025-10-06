@@ -1047,13 +1047,32 @@ Version: ${VERSION}
 Section: web
 Priority: optional
 Architecture: ${DEB_ARCH}
-Depends: nodejs (>= 20), nginx, sqlite3
-Recommends: build-essential, python3
+Depends: escapeplan-base (>= 1.0.0) | escapeplan-platform,
+         nodejs (>= 22),
+         nginx (>= 1.18),
+         sqlite3 (>= 3.34)
+Recommends: build-essential,
+            python3
+Breaks: escapeplan-apps (<< 1.0.0~)
+Replaces: escapeplan-apps (<< 1.0.0~)
+Provides: escapeplan-apps
 Maintainer: EscapePlan Team
 Description: Offline-first escape room management system
  EscapePlan is a complete escape room management solution
- with cross-platform support (arm64/amd64). Native modules
- are pre-compiled for the target architecture.
+ designed for Raspberry Pi appliances.
+ .
+ Features include:
+  * Real-time session management with WebSocket updates
+  * Booking calendar with pricing engine
+  * Multi-room support (fixed and mobile kits)
+  * Camera streaming (RTSP to HLS transcoding)
+  * Role-based access control (RBAC)
+  * Offline-first PWA architecture
+ .
+ Native modules (better-sqlite3, sharp) are rebuilt for the target
+ architecture (arm64/amd64) during package installation.
+ .
+ This package requires escapeplan-base platform services to function.
 EOF
 
 # Create postinst script that delegates to the orchestrator
@@ -1126,10 +1145,12 @@ trap 'cleanup_on_error ${LINENO}' ERR
 # Logging helpers
 log() {
     echo "[postinst] $1"
+    logger -t escapeplan "[postinst] $1"
 }
 
 log_error() {
     echo "[postinst] ERROR: $1" >&2
+    logger -t escapeplan -p user.err "[postinst] ERROR: $1"
 }
 
 resolve_pnpm_module() {
@@ -1223,91 +1244,109 @@ repair_contracts_dependencies() {
     return 0
 }
 
-log "EscapePlan package installation starting..."
+# ============================================================================
+# MAIN INSTALLATION LOGIC - Debian Policy 6.5 Compliant Case Statement
+# ============================================================================
 
-# Verify escapeplan user exists (must be created by base OS)
-log "Verifying escapeplan system user..."
-if ! id escapeplan &>/dev/null; then
-    log_error "System user 'escapeplan' does not exist"
-    log_error "This package requires the EscapePlan base OS which provides system users"
-    log_error "Please install on a system configured with the escapeplan-base image"
-    exit 1
-fi
-log "✓ System user verified"
+case "$1" in
+    configure)
+        log "EscapePlan package installation starting (configure mode)..."
 
-# Verify required data directories exist (must be created by base OS)
-log "Verifying data directories..."
-for dir in /var/lib/escapeplan /var/log/escapeplan /etc/escapeplan /var/backups/escapeplan; do
-    if [ ! -d "$dir" ]; then
-        log_error "Required directory '$dir' does not exist"
-        log_error "This package requires the EscapePlan base OS which provides system directories"
-        log_error "Please install on a system configured with the escapeplan-base image"
+        # Verify escapeplan user exists (must be created by base OS)
+        log "Verifying escapeplan system user..."
+        if ! id escapeplan &>/dev/null; then
+            log_error "System user 'escapeplan' does not exist"
+            log_error "This package requires the EscapePlan base OS which provides system users"
+            log_error "Please install on a system configured with the escapeplan-base image"
+            exit 1
+        fi
+        log "✓ System user verified"
+
+        # Verify required data directories exist (must be created by base OS)
+        log "Verifying data directories..."
+        for dir in /var/lib/escapeplan /var/log/escapeplan /etc/escapeplan /var/backups/escapeplan; do
+            if [ ! -d "$dir" ]; then
+                log_error "Required directory '$dir' does not exist"
+                log_error "This package requires the EscapePlan base OS which provides system directories"
+                log_error "Please install on a system configured with the escapeplan-base image"
+                exit 1
+            fi
+        done
+        log "✓ All required directories verified"
+
+        # Set ownership (node_modules already bundled in package)
+        log "Setting directory ownership..."
+        chown -R escapeplan:escapeplan /opt/escapeplan
+        chown -R escapeplan:escapeplan /var/lib/escapeplan
+        chown -R escapeplan:escapeplan /var/log/escapeplan
+        chown -R escapeplan:escapeplan /etc/escapeplan
+        chown -R escapeplan:escapeplan /var/backups/escapeplan
+
+        # Repair contracts dependencies (critical for package installation)
+        log "Verifying and repairing contracts package dependencies..."
+        log "This step ensures contracts can import drizzle-orm, drizzle-zod, and zod"
+
+        if ! repair_contracts_dependencies "/opt/escapeplan/api"; then
+            log_error "Failed to repair API contracts dependencies"
+            exit 1
+        fi
+
+        if ! repair_contracts_dependencies "/opt/escapeplan/web"; then
+            log_error "Failed to repair Web contracts dependencies"
+            exit 1
+        fi
+
+        log "✓ All contracts packages verified and dependencies linked"
+
+        # Configure nginx reverse proxy
+        log "Configuring nginx reverse proxy..."
+        ln -sf /etc/nginx/sites-available/escapeplan /etc/nginx/sites-enabled/escapeplan
+        rm -f /etc/nginx/sites-enabled/default
+        log "✓ Nginx configuration installed"
+
+        log "Package installation complete. Running orchestrator for system configuration..."
+        log ""
+
+        # Call the orchestrator script to handle all post-installation steps
+        if [ -f /opt/escapeplan/scripts/postinst-orchestrator.sh ]; then
+            if /opt/escapeplan/scripts/postinst-orchestrator.sh /opt/escapeplan; then
+                log ""
+                log "✓ EscapePlan installation and configuration complete!"
+                log ""
+                log "⚠️  IMPORTANT: Services are NOT auto-enabled (prevents boot loops)"
+                log ""
+                log "To enable and start services safely:"
+                log "  Option 1 (recommended): /opt/escapeplan/scripts/first-boot-setup.sh"
+                log "  Option 2 (manual):"
+                log "    systemctl enable escapeplan-api escapeplan-web"
+                log "    systemctl start escapeplan-api escapeplan-web"
+                log ""
+                log "Check installation status with:"
+                log "  /opt/escapeplan/scripts/health-check.sh"
+                log ""
+                log "View installation log at: ${LOG_FILE}"
+            else
+                log_error "Orchestrator script failed - installation may be incomplete"
+                log_error "Check logs at: ${LOG_FILE}"
+                exit 1
+            fi
+        else
+            log_error "Orchestrator script not found at /opt/escapeplan/scripts/postinst-orchestrator.sh"
+            log_error "Package may be corrupted or incomplete"
+            exit 1
+        fi
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        log "Installation aborted: $1"
+        log "Rolling back any incomplete changes..."
+        ;;
+
+    *)
+        log_error "postinst called with unknown argument: $1"
         exit 1
-    fi
-done
-log "✓ All required directories verified"
-
-# Set ownership (node_modules already bundled in package)
-log "Setting directory ownership..."
-chown -R escapeplan:escapeplan /opt/escapeplan
-chown -R escapeplan:escapeplan /var/lib/escapeplan
-chown -R escapeplan:escapeplan /var/log/escapeplan
-chown -R escapeplan:escapeplan /etc/escapeplan
-chown -R escapeplan:escapeplan /var/backups/escapeplan
-
-# Repair contracts dependencies (critical for package installation)
-log "Verifying and repairing contracts package dependencies..."
-log "This step ensures contracts can import drizzle-orm, drizzle-zod, and zod"
-
-if ! repair_contracts_dependencies "/opt/escapeplan/api"; then
-    log_error "Failed to repair API contracts dependencies"
-    exit 1
-fi
-
-if ! repair_contracts_dependencies "/opt/escapeplan/web"; then
-    log_error "Failed to repair Web contracts dependencies"
-    exit 1
-fi
-
-log "✓ All contracts packages verified and dependencies linked"
-
-# Configure nginx reverse proxy
-log "Configuring nginx reverse proxy..."
-ln -sf /etc/nginx/sites-available/escapeplan /etc/nginx/sites-enabled/escapeplan
-rm -f /etc/nginx/sites-enabled/default
-log "✓ Nginx configuration installed"
-
-log "Package installation complete. Running orchestrator for system configuration..."
-log ""
-
-# Call the orchestrator script to handle all post-installation steps
-if [ -f /opt/escapeplan/scripts/postinst-orchestrator.sh ]; then
-    if /opt/escapeplan/scripts/postinst-orchestrator.sh /opt/escapeplan; then
-        log ""
-        log "✓ EscapePlan installation and configuration complete!"
-        log ""
-        log "⚠️  IMPORTANT: Services are NOT auto-enabled (prevents boot loops)"
-        log ""
-        log "To enable and start services safely:"
-        log "  Option 1 (recommended): /opt/escapeplan/scripts/first-boot-setup.sh"
-        log "  Option 2 (manual):"
-        log "    systemctl enable escapeplan-api escapeplan-web"
-        log "    systemctl start escapeplan-api escapeplan-web"
-        log ""
-        log "Check installation status with:"
-        log "  /opt/escapeplan/scripts/health-check.sh"
-        log ""
-        log "View installation log at: ${LOG_FILE}"
-    else
-        log_error "Orchestrator script failed - installation may be incomplete"
-        log_error "Check logs at: ${LOG_FILE}"
-        exit 1
-    fi
-else
-    log_error "Orchestrator script not found at /opt/escapeplan/scripts/postinst-orchestrator.sh"
-    log_error "Package may be corrupted or incomplete"
-    exit 1
-fi
+        ;;
+esac
 
 # ============================================================================
 # INSTALLATION SUCCESS FOOTER
@@ -1333,6 +1372,8 @@ echo ""
 echo "Installation log: ${LOG_FILE}"
 echo "========================================"
 echo ""
+
+#DEBHELPER#
 
 exit 0
 EOF
