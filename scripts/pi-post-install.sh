@@ -11,8 +11,8 @@ set -euo pipefail
 #   2. Manually for troubleshooting or re-configuration
 #
 # Key Features:
-#   - Automatic system package installation (hostapd, dnsmasq, nginx, etc.)
-#   - WiFi hotspot auto-configuration (SSID: EscapePlan, 10.10.10.0/24)
+#   - Automatic system package installation (NetworkManager, nginx, etc.)
+#   - WiFi hotspot auto-configuration via NetworkManager (SSID: EscapePlan, 10.10.10.0/24)
 #   - Secure password generation and storage
 #   - Native module rebuild for ARM64 architecture
 #   - Database initialization and seeding
@@ -118,6 +118,23 @@ log_warning() {
 log_info() {
     echo "[pi-post-install] INFO: $*" | tee -a "${LOG_FILE}"
 }
+
+# Error cleanup trap
+cleanup_on_error() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        log_error "Installation failed with exit code $exit_code"
+        log_error "Review ${LOG_FILE} for details"
+
+        # Rollback NetworkManager connection if it exists but failed
+        if nmcli connection show escapeplan-ap >/dev/null 2>&1; then
+            log "Rolling back NetworkManager AP connection..."
+            nmcli connection delete escapeplan-ap 2>/dev/null || true
+        fi
+    fi
+}
+
+trap cleanup_on_error EXIT ERR
 
 validate_native_module() {
     local module_path="$1"
@@ -274,8 +291,7 @@ install_system_packages() {
 
     # Required packages for EscapePlan operation
     local required_packages=(
-        "hostapd"           # WiFi access point
-        "dnsmasq"           # DHCP and DNS server
+        # Note: hostapd and dnsmasq NOT installed - NetworkManager provides AP and embedded dnsmasq for ipv4.method=shared
         "nginx"             # Reverse proxy and static file server
         "nodejs"            # JavaScript runtime (will check version below)
         "sqlite3"           # Database CLI tools
@@ -285,6 +301,7 @@ install_system_packages() {
         "net-tools"         # Network configuration utilities
         "iproute2"          # Advanced network configuration
         "iptables"          # Firewall and NAT rules
+        "network-manager"   # NetworkManager for AP setup
     )
 
     local packages_to_install=()
@@ -360,34 +377,13 @@ generate_secure_password() {
     echo "Canuescape3"
 }
 
-setup_wifi_hotspot() {
-    log_section "STEP: Configuring WiFi Hotspot"
+setup_networkmanager_ap() {
+    log_section "STEP: Configuring NetworkManager Access Point"
 
-    # Check if wlan0 exists
-    if ! ip link show wlan0 &> /dev/null; then
-        log_warning "wlan0 interface not found - skipping WiFi hotspot setup"
-        log_warning "This is expected on non-Pi systems or systems without WiFi"
+    if ! ip link show wlan0 &>/dev/null; then
+        log_warning "wlan0 not found, skipping AP setup"
         return 0
     fi
-
-    # Check if hotspot is already configured
-    if [ -f "/etc/hostapd/hostapd.conf" ] && [ -f "${WIFI_PASSWORD_FILE}" ]; then
-        log_info "WiFi hotspot appears to be already configured"
-        log_info "Configuration files exist:"
-        log_info "  - /etc/hostapd/hostapd.conf"
-        log_info "  - ${WIFI_PASSWORD_FILE}"
-
-        # Verify configuration is valid
-        if grep -q "ssid=EscapePlan" /etc/hostapd/hostapd.conf 2>/dev/null; then
-            log_success "WiFi hotspot configuration verified (SSID: EscapePlan)"
-            log_info "Password file: ${WIFI_PASSWORD_FILE}"
-            return 0
-        else
-            log_warning "Existing configuration appears invalid - will reconfigure"
-        fi
-    fi
-
-    log_info "Configuring WiFi access point..."
 
     # Create EscapePlan config directory
     if [ ! -d "${ESCAPEPLAN_CONFIG_DIR}" ]; then
@@ -396,200 +392,82 @@ setup_wifi_hotspot() {
         log_info "Created ${ESCAPEPLAN_CONFIG_DIR}"
     fi
 
+    # Remove old unmanaged configuration files that prevent NetworkManager from managing wlan0
+    log_info "Cleaning up old NetworkManager configuration..."
+    rm -f /etc/NetworkManager/conf.d/unmanaged.conf
+    rm -f /etc/NetworkManager/conf.d/unmanaged-wlan0.conf
+
+    # Restart NetworkManager to apply configuration changes
+    log_info "Restarting NetworkManager..."
+    systemctl restart NetworkManager
+    sleep 2
+
+    local wifi_password_file="/etc/escapeplan/wifi-password.txt"
+    local wifi_password="Canuescap3"
+
     # Generate or retrieve WiFi password
-    local wifi_password
-    if [ -f "${WIFI_PASSWORD_FILE}" ]; then
-        wifi_password=$(cat "${WIFI_PASSWORD_FILE}")
-        log_info "Using existing WiFi password from ${WIFI_PASSWORD_FILE}"
+    if [ -f "${wifi_password_file}" ]; then
+        wifi_password=$(cat "${wifi_password_file}")
+        log_info "Using existing WiFi password from ${wifi_password_file}"
     else
-        wifi_password=$(generate_secure_password)
-        echo "${wifi_password}" > "${WIFI_PASSWORD_FILE}"
-        chmod 600 "${WIFI_PASSWORD_FILE}"
+        echo "${wifi_password}" > "${wifi_password_file}"
+        chmod 600 "${wifi_password_file}"
         log_success "Generated new WiFi password: ${wifi_password}"
-        log_info "Password saved to ${WIFI_PASSWORD_FILE} (permissions: 600)"
+        log_info "Password saved to ${wifi_password_file} (permissions: 600)"
     fi
 
-    # Validate password length (WPA2 requires 8-63 characters)
-    if [ ${#wifi_password} -lt 8 ]; then
-        log_error "WiFi password too short (${#wifi_password} chars) - WPA2 requires 8-63"
+    # Remove existing connection if present
+    log_info "Removing existing escapeplan-ap connection (if any)..."
+    nmcli connection delete escapeplan-ap 2>/dev/null || true
+
+    # Create NetworkManager AP connection
+    log_info "Creating NetworkManager AP connection..."
+    nmcli connection add \
+        type wifi \
+        ifname wlan0 \
+        con-name escapeplan-ap \
+        autoconnect yes \
+        ssid "EscapePlan" \
+        802-11-wireless.mode ap \
+        802-11-wireless.band bg \
+        802-11-wireless.channel 7 \
+        wifi-sec.key-mgmt wpa-psk \
+        wifi-sec.psk "${wifi_password}" \
+        ipv4.method shared \
+        ipv4.addresses 10.10.10.1/24 \
+        ipv6.method disabled
+
+    # Activate the connection with validation
+    log_info "Activating NetworkManager AP..."
+    if ! nmcli connection up escapeplan-ap; then
+        log_error "Failed to activate NetworkManager AP connection"
+        log_error "Debug with: nmcli connection show"
         return 1
     fi
 
-    # Configure hostapd (WiFi Access Point)
-    log_info "Creating hostapd configuration..."
-    cat > /etc/hostapd/hostapd.conf << EOF
-# EscapePlan WiFi Hotspot Configuration
-interface=wlan0
-driver=nl80211
-ssid=EscapePlan
-hw_mode=g
-channel=7
-wmm_enabled=0
-macaddr_acl=0
-auth_algs=1
-ignore_broadcast_ssid=0
-wpa=2
-wpa_passphrase=${wifi_password}
-wpa_key_mgmt=WPA-PSK
-wpa_pairwise=TKIP
-rsn_pairwise=CCMP
-EOF
-
-    chmod 600 /etc/hostapd/hostapd.conf
-
-    # Validate hostapd configuration
-    if ! hostapd -t /etc/hostapd/hostapd.conf >> "${LOG_FILE}" 2>&1; then
-        log_error "hostapd configuration validation failed"
-        log_error "Check ${LOG_FILE} for details"
-        return 1
-    fi
-    log_success "hostapd configuration created and validated"
-
-    # Update hostapd defaults
-    if [ -f /etc/default/hostapd ]; then
-        if ! grep -q "DAEMON_CONF=\"/etc/hostapd/hostapd.conf\"" /etc/default/hostapd; then
-            echo 'DAEMON_CONF="/etc/hostapd/hostapd.conf"' >> /etc/default/hostapd
-            log_info "Updated /etc/default/hostapd"
-        fi
-    fi
-
-    # Configure dnsmasq (DHCP + DNS)
-    log_info "Creating dnsmasq configuration..."
-
-    # Backup original dnsmasq.conf if not already backed up
-    if [ -f /etc/dnsmasq.conf ] && [ ! -f /etc/dnsmasq.conf.backup ]; then
-        cp /etc/dnsmasq.conf /etc/dnsmasq.conf.backup
-        log_info "Backed up /etc/dnsmasq.conf to /etc/dnsmasq.conf.backup"
-    fi
-
-    mkdir -p /etc/dnsmasq.d
-    cat > /etc/dnsmasq.d/escapeplan.conf << EOF
-# EscapePlan DHCP and DNS Configuration
-interface=wlan0
-dhcp-range=10.10.10.50,10.10.10.150,255.255.255.0,24h
-dhcp-option=option:router,10.10.10.1
-dhcp-option=option:dns-server,10.10.10.1
-domain=escapeplan.local
-address=/escapeplan.local/10.10.10.1
-
-# Prevent dnsmasq from reading /etc/resolv.conf for upstream DNS
-no-resolv
-# Use Google DNS as upstream (when internet available)
-server=8.8.8.8
-server=8.8.4.4
-
-# Log DHCP transactions for debugging
-log-dhcp
-EOF
-
-    # Validate dnsmasq configuration
-    if ! dnsmasq --test --conf-file=/etc/dnsmasq.d/escapeplan.conf >> "${LOG_FILE}" 2>&1; then
-        log_error "dnsmasq configuration validation failed"
-        log_error "Check ${LOG_FILE} for details"
-        return 1
-    fi
-    log_success "dnsmasq configuration created and validated"
-
-    # Configure static IP for wlan0 via dhcpcd
-    log_info "Configuring static IP for wlan0..."
-
-    # Check if static IP already configured
-    if ! grep -q "interface wlan0" /etc/dhcpcd.conf 2>/dev/null; then
-        cat >> /etc/dhcpcd.conf << EOF
-
-# EscapePlan WiFi Hotspot Static IP
-interface wlan0
-    static ip_address=10.10.10.1/24
-    nohook wpa_supplicant
-EOF
-        log_success "Added static IP configuration to /etc/dhcpcd.conf"
-    else
-        log_info "Static IP already configured in /etc/dhcpcd.conf"
-    fi
-
-    # Prevent NetworkManager from managing wlan0 (if NetworkManager is installed)
-    if systemctl is-active --quiet NetworkManager; then
-        log_info "Configuring NetworkManager to ignore wlan0..."
-        mkdir -p /etc/NetworkManager/conf.d
-        cat > /etc/NetworkManager/conf.d/unmanaged.conf << EOF
-# Prevent NetworkManager from managing wlan0 (used by EscapePlan hotspot)
-[keyfile]
-unmanaged-devices=interface-name:wlan0
-EOF
-        log_success "NetworkManager configured to ignore wlan0"
-    fi
-
-    # Enable IP forwarding (for potential internet sharing)
-    log_info "Enabling IP forwarding..."
-    if ! grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf 2>/dev/null; then
-        echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
-        sysctl -w net.ipv4.ip_forward=1 >> "${LOG_FILE}" 2>&1
-        log_success "IP forwarding enabled"
-    else
-        log_info "IP forwarding already enabled"
-    fi
-
-    # Enable and unmask services
-    log_info "Enabling hostapd and dnsmasq services..."
-
-    systemctl unmask hostapd >> "${LOG_FILE}" 2>&1 || true
-    systemctl enable hostapd >> "${LOG_FILE}" 2>&1
-    systemctl enable dnsmasq >> "${LOG_FILE}" 2>&1
-
-    # Restart services to apply configuration
-    log_info "Restarting network services..."
-
-    # Restart dhcpcd first to apply static IP
-    if systemctl restart dhcpcd >> "${LOG_FILE}" 2>&1; then
-        log_success "dhcpcd restarted"
-    else
-        log_warning "Failed to restart dhcpcd (may not be critical)"
-    fi
-
-    # Wait a moment for interface to settle
+    # Wait for connection to stabilize
     sleep 2
 
-    # Start hostapd
-    if systemctl restart hostapd >> "${LOG_FILE}" 2>&1; then
-        log_success "hostapd started"
-    else
-        log_error "Failed to start hostapd"
-        systemctl status hostapd >> "${LOG_FILE}" 2>&1 || true
+    # Verify AP is actually active
+    if ! nmcli connection show --active | grep -q "escapeplan-ap"; then
+        log_error "AP connection activated but not showing as active"
+        log_error "Check status: nmcli connection show escapeplan-ap"
         return 1
     fi
 
-    # Start dnsmasq
-    if systemctl restart dnsmasq >> "${LOG_FILE}" 2>&1; then
-        log_success "dnsmasq started"
-    else
-        log_error "Failed to start dnsmasq"
-        systemctl status dnsmasq >> "${LOG_FILE}" 2>&1 || true
-        return 1
-    fi
+    log "✓ NetworkManager AP connection active and verified"
 
-    # Verify wlan0 has correct IP
-    sleep 2
-    local wlan0_ip
-    wlan0_ip=$(ip addr show wlan0 2>/dev/null | grep "inet " | awk '{print $2}')
-
-    if [ -n "${wlan0_ip}" ]; then
-        log_success "wlan0 configured with IP: ${wlan0_ip}"
-    else
-        log_warning "Could not verify wlan0 IP address"
-    fi
-
-    log_success "WiFi Hotspot Configuration Complete"
+    log_success "NetworkManager AP Configuration Complete"
     log ""
     log "============================================"
     log "WiFi Hotspot Details:"
     log "  SSID:     EscapePlan"
     log "  Password: ${wifi_password}"
-    log "  IP Range: 10.10.10.50 - 10.10.10.150"
-    log "  Gateway:  10.10.10.1"
-    log "  DNS:      10.10.10.1"
+    log "  IP:       10.10.10.1/24"
+    log "  Mode:     NetworkManager AP (shared)"
     log "============================================"
     log ""
-    log_info "Password stored in: ${WIFI_PASSWORD_FILE}"
+    log_info "Password stored in: ${wifi_password_file}"
 
     return 0
 }
@@ -737,8 +615,8 @@ main() {
     log_section "Post-Install Orchestration Flow"
     log "Note: Most installation steps are handled by DEBIAN/postinst"
     log "This script handles platform-specific tasks:"
-    log "  - System package installation (hostapd, dnsmasq, nginx, etc.)"
-    log "  - WiFi hotspot auto-configuration"
+    log "  - System package installation (NetworkManager, nginx, etc.)"
+    log "  - WiFi hotspot auto-configuration via NetworkManager"
     log "  - Pre-flight dependency validation (Agent 13)"
     log "  - Native module rebuild for ARM64 architecture (Agent 2)"
     log "  - Final health check validation (Agent 8)"
@@ -751,7 +629,7 @@ main() {
     fi
 
     # Execute WiFi hotspot configuration
-    if ! setup_wifi_hotspot; then
+    if ! setup_networkmanager_ap; then
         log_error "WiFi hotspot configuration failed"
         ((total_errors++))
         log_warning "System will continue but WiFi hotspot may not work"

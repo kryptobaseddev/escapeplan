@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 # ============================================================================
 # EscapePlan Post-Install Orchestrator
@@ -64,6 +64,29 @@ log_elapsed() {
     log "Elapsed time: ${minutes}m ${seconds}s"
 }
 
+# Error cleanup trap
+cleanup_on_error() {
+    local exit_code=$?
+    if [ $exit_code -ne 0 ]; then
+        log_error "Orchestration failed with exit code $exit_code"
+        log_error "Rolling back partial installation..."
+
+        # Remove .db-initialized marker if database setup failed
+        if [ -f "/var/lib/escapeplan/.db-initialized" ]; then
+            local db_file="/var/lib/escapeplan/escapeplan.db"
+            if [ ! -f "$db_file" ] || ! sqlite3 "$db_file" "SELECT COUNT(*) FROM user;" >/dev/null 2>&1; then
+                log "Removing invalid .db-initialized marker"
+                rm -f "/var/lib/escapeplan/.db-initialized"
+            fi
+        fi
+
+        # Disable services if they were enabled
+        systemctl disable escapeplan-api.service escapeplan-web.service 2>/dev/null || true
+    fi
+}
+
+trap cleanup_on_error EXIT ERR
+
 # Retry wrapper with max attempts
 retry_command() {
     local description="$1"
@@ -110,11 +133,11 @@ else
         log_warning "Failed to update package index - continuing anyway"
     fi
 
-    log "Installing required packages: build-essential, python3, nodejs, npm, dnsmasq, hostapd, nginx..."
+    log "Installing required packages: build-essential, python3, nodejs, npm, network-manager, nginx..."
 
     if ! retry_command "System package installation" \
         env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-        build-essential python3 nodejs npm dnsmasq hostapd nginx; then
+        build-essential python3 nodejs npm network-manager nginx; then
         log_warning "Failed to install some packages - they may already be installed"
     fi
 
@@ -171,6 +194,26 @@ else
 
     # Run seed script as escapeplan user with timeout
     if timeout 120 su -s /bin/bash escapeplan -c "cd '${INSTALL_ROOT}/api' && node dist/db/seed.js" 2>&1 | tee -a "$LOG_FILE"; then
+        # Validate database schema completeness
+        log "Validating database schema..."
+        if ! su -s /bin/bash escapeplan -c "cd '${INSTALL_ROOT}/api' && node -e \"
+            const Database = require('better-sqlite3');
+            const db = new Database('/var/lib/escapeplan/escapeplan.db', { readonly: true });
+            const tables = db.prepare('SELECT name FROM sqlite_master WHERE type=\\'table\\'').all();
+            const tableCount = tables.length;
+            db.close();
+
+            // Expect at least 30 tables from schema
+            if (tableCount < 30) {
+                console.error('ERROR: Only ' + tableCount + ' tables found, expected at least 30');
+                process.exit(1);
+            }
+            console.log('✓ Database has ' + tableCount + ' tables');
+        \"" 2>&1 | tee -a "$LOG_FILE"; then
+            log_error "Database schema validation failed"
+            log_error "Database may be incomplete or corrupted"
+            exit 1
+        fi
         # Mark database as initialized
         touch /var/lib/escapeplan/.db-initialized
         chown escapeplan:escapeplan /var/lib/escapeplan/.db-initialized
