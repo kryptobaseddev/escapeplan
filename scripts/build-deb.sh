@@ -3,10 +3,34 @@ set -euo pipefail
 
 # Get version from VERSION file
 VERSION=$(cat VERSION | tr -d '\n')
-ARCH="arm64"
+
+# Detect host architecture
+HOST_ARCH=$(uname -m)
+case "${HOST_ARCH}" in
+    aarch64|arm64)
+        DEB_ARCH="arm64"
+        SHARP_PLATFORM="linux-arm64"
+        SQLITE_PLATFORM="linux-arm64"
+        ARCH_VERIFY_STRING="ARM aarch64"
+        ;;
+    x86_64|amd64)
+        DEB_ARCH="amd64"
+        SHARP_PLATFORM="linux-x64"
+        SQLITE_PLATFORM="linux-x64"
+        ARCH_VERIFY_STRING="x86-64"
+        ;;
+    *)
+        echo "ERROR: Unsupported architecture: ${HOST_ARCH}"
+        echo "Supported architectures: arm64 (aarch64), x86_64 (amd64)"
+        exit 1
+        ;;
+esac
+
 PKG_NAME="escapeplan"
 BUILD_DIR="build/deb"
 DIST_DIR="dist"
+
+echo "Building for architecture: ${DEB_ARCH} (detected: ${HOST_ARCH})"
 
 # Ensure required pieces are present before packaging.
 if [ ! -d "packages/contracts/dist" ]; then
@@ -157,7 +181,7 @@ prepare_contracts_package() {
     echo "[CONTRACTS] ========================================"
 }
 
-echo "Building ${PKG_NAME} v${VERSION} for ${ARCH}..."
+echo "Building ${PKG_NAME} v${VERSION} for ${DEB_ARCH}..."
 
 # Clean previous builds
 rm -rf "${BUILD_DIR}" "${DIST_DIR}"
@@ -174,23 +198,23 @@ mkdir -p "${BUILD_DIR}/etc/nginx/sites-available"
 echo "Deploying production dependencies for API..."
 pnpm --filter escapeplan-api deploy --prod --legacy "${BUILD_DIR}/opt/escapeplan/api"
 
-echo "Installing ARM64-specific sharp binaries for API..."
+echo "Installing ${DEB_ARCH}-specific sharp binaries for API..."
 cd "${BUILD_DIR}/opt/escapeplan/api"
-pnpm add @img/sharp-linux-arm64@0.34.4 --save-optional --lockfile-only || echo "Warning: Could not update lockfile for sharp"
+pnpm add @img/sharp-${SHARP_PLATFORM}@0.34.4 --save-optional --lockfile-only || echo "Warning: Could not update lockfile for sharp"
 
-# Download and extract sharp ARM64 binary directly
-echo "Downloading sharp ARM64 prebuilt binary..."
-curl -L https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.4.tgz -o /tmp/sharp-arm64.tgz
-mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-linux-arm64/lib"
-tar -xzf /tmp/sharp-arm64.tgz -C /tmp
-cp /tmp/package/lib/sharp-linux-arm64.node "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-linux-arm64/lib/"
-cp /tmp/package/package.json "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-linux-arm64/"
-rm -f /tmp/sharp-arm64.tgz
+# Download and extract sharp binary for target architecture
+echo "Downloading sharp ${DEB_ARCH} prebuilt binary..."
+curl -L https://registry.npmjs.org/@img/sharp-${SHARP_PLATFORM}/-/sharp-${SHARP_PLATFORM}-0.34.4.tgz -o /tmp/sharp-${DEB_ARCH}.tgz
+mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/lib"
+tar -xzf /tmp/sharp-${DEB_ARCH}.tgz -C /tmp
+cp /tmp/package/lib/sharp-${SHARP_PLATFORM}.node "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/lib/"
+cp /tmp/package/package.json "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/"
+rm -f /tmp/sharp-${DEB_ARCH}.tgz
 rm -rf /tmp/package
-echo "✓ Sharp ARM64 binary installed"
+echo "✓ Sharp ${DEB_ARCH} binary installed"
 cd -
 
-echo "Installing ARM64-specific better-sqlite3 binaries for API..."
+echo "Installing ${DEB_ARCH}-specific better-sqlite3 binaries for API..."
 cd "${BUILD_DIR}/opt/escapeplan/api"
 
 # Find the better-sqlite3 pnpm module directory
@@ -216,12 +240,12 @@ echo "Target binary path: ${BETTER_SQLITE3_BINARY_PATH}"
 # Create build directory structure
 mkdir -p "${BETTER_SQLITE3_BINARY_DIR}"
 
-# Download pre-built ARM64 binary from npm
+# Download pre-built binary from npm
 # The npm package contains platform-specific prebuilds
-echo "Downloading better-sqlite3@12.4.1 ARM64 prebuilt binary..."
+echo "Downloading better-sqlite3@12.4.1 ${DEB_ARCH} prebuilt binary..."
 
 # Create temporary directory for download
-TEMP_SQLITE_DIR="/tmp/better-sqlite3-arm64-$$"
+TEMP_SQLITE_DIR="/tmp/better-sqlite3-${DEB_ARCH}-$$"
 mkdir -p "${TEMP_SQLITE_DIR}"
 
 # Download the npm package tarball
@@ -244,10 +268,10 @@ fi
 
 # Look for prebuild files in the package
 # better-sqlite3 uses prebuildify, binaries are in prebuilds/ directory
-PREBUILD_BINARY="${TEMP_SQLITE_DIR}/package/prebuilds/linux-arm64/node.napi.node"
+PREBUILD_BINARY="${TEMP_SQLITE_DIR}/package/prebuilds/${SQLITE_PLATFORM}/node.napi.node"
 
 if [ ! -f "${PREBUILD_BINARY}" ]; then
-    echo "WARNING: No prebuilt ARM64 binary found in npm package"
+    echo "WARNING: No prebuilt ${DEB_ARCH} binary found in npm package"
     echo "Expected at: ${PREBUILD_BINARY}"
     echo "Available prebuilds:"
     find "${TEMP_SQLITE_DIR}/package" -name "*.node" || echo "  None found"
@@ -269,14 +293,14 @@ if [ ! -f "${PREBUILD_BINARY}" ]; then
         exit 1
     fi
 
-    GITHUB_BINARY_URL="https://github.com/WiseLibs/better-sqlite3/releases/download/v12.4.1/better-sqlite3-v12.4.1-node-v${NODE_ABI}-linux-arm64.tar.gz"
+    GITHUB_BINARY_URL="https://github.com/WiseLibs/better-sqlite3/releases/download/v12.4.1/better-sqlite3-v12.4.1-node-v${NODE_ABI}-${SQLITE_PLATFORM}.tar.gz"
 
     echo "Downloading from: ${GITHUB_BINARY_URL}"
-    if curl -L "${GITHUB_BINARY_URL}" -o "${TEMP_SQLITE_DIR}/better-sqlite3-arm64.tar.gz"; then
+    if curl -L "${GITHUB_BINARY_URL}" -o "${TEMP_SQLITE_DIR}/better-sqlite3-${DEB_ARCH}.tar.gz"; then
         echo "✓ Downloaded prebuilt binary from GitHub"
 
         # Extract the binary
-        if tar -xzf "${TEMP_SQLITE_DIR}/better-sqlite3-arm64.tar.gz" -C "${TEMP_SQLITE_DIR}"; then
+        if tar -xzf "${TEMP_SQLITE_DIR}/better-sqlite3-${DEB_ARCH}.tar.gz" -C "${TEMP_SQLITE_DIR}"; then
             echo "✓ Extracted prebuilt binary"
             BINARY_SOURCE="${TEMP_SQLITE_DIR}/build/Release/better_sqlite3.node"
 
@@ -298,29 +322,29 @@ if [ ! -f "${PREBUILD_BINARY}" ]; then
         exit 1
     fi
 else
-    echo "✓ Found prebuilt ARM64 binary in package"
+    echo "✓ Found prebuilt ${DEB_ARCH} binary in package"
     BINARY_SOURCE="${PREBUILD_BINARY}"
 fi
 
 # Copy the binary to the target location
 if cp "${BINARY_SOURCE}" "${BETTER_SQLITE3_BINARY_PATH}"; then
-    echo "✓ Copied ARM64 binary to ${BETTER_SQLITE3_BINARY_PATH}"
+    echo "✓ Copied ${DEB_ARCH} binary to ${BETTER_SQLITE3_BINARY_PATH}"
 else
     echo "ERROR: Failed to copy binary"
     rm -rf "${TEMP_SQLITE_DIR}"
     exit 1
 fi
 
-# Verify the binary is ARM64
+# Verify the binary architecture
 echo "Verifying binary architecture..."
-ARCH_CHECK=$(file "${BETTER_SQLITE3_BINARY_PATH}" | grep -o "ARM aarch64" || echo "")
+ARCH_CHECK=$(file "${BETTER_SQLITE3_BINARY_PATH}" | grep -o "${ARCH_VERIFY_STRING}" || echo "")
 
 if [ -n "${ARCH_CHECK}" ]; then
-    echo "✓ Binary verification PASSED: ARM aarch64"
+    echo "✓ Binary verification PASSED: ${ARCH_VERIFY_STRING}"
     echo "  Full file output: $(file ${BETTER_SQLITE3_BINARY_PATH})"
 else
     echo "ERROR: Binary verification FAILED"
-    echo "  Expected: ARM aarch64"
+    echo "  Expected: ${ARCH_VERIFY_STRING}"
     echo "  Got: $(file ${BETTER_SQLITE3_BINARY_PATH})"
     rm -rf "${TEMP_SQLITE_DIR}"
     exit 1
@@ -339,7 +363,7 @@ fi
 # Clean up temporary directory
 rm -rf "${TEMP_SQLITE_DIR}"
 
-echo "✓ better-sqlite3 ARM64 binary installed and verified"
+echo "✓ better-sqlite3 ${DEB_ARCH} binary installed and verified"
 echo "  Location: ${BETTER_SQLITE3_BINARY_PATH}"
 echo "  Size: $(du -h ${BETTER_SQLITE3_BINARY_PATH} | cut -f1)"
 cd -
@@ -359,8 +383,22 @@ echo "✓ Workspace references fixed"
 echo "Copying built API files..."
 cp -r apps/escapeplan-api/dist/* "${BUILD_DIR}/opt/escapeplan/api/"
 
+echo "Copying API systemd service wrapper..."
+if [ ! -d "apps/escapeplan-api/systemd" ]; then
+    echo "ERROR: API systemd directory missing"
+    exit 1
+fi
+cp -r apps/escapeplan-api/systemd "${BUILD_DIR}/opt/escapeplan/api/"
+
 echo "Copying built Web files..."
 cp -r apps/escapeplan-web/.svelte-kit "${BUILD_DIR}/opt/escapeplan/web/"
+
+echo "Copying Web systemd service wrapper..."
+if [ ! -d "apps/escapeplan-web/systemd" ]; then
+    echo "ERROR: Web systemd directory missing"
+    exit 1
+fi
+cp -r apps/escapeplan-web/systemd "${BUILD_DIR}/opt/escapeplan/web/"
 
 # Create server.js wrapper for SvelteKit
 echo "Creating server.js wrapper for SvelteKit..."
@@ -672,6 +710,22 @@ echo "  Size: $(du -sh ${STANDALONE_CONTRACTS} | cut -f1)"
 echo "  Source files: $(find ${STANDALONE_CONTRACTS}/src -name '*.ts' | wc -l) .ts files"
 echo "  Compiled files: $(find ${STANDALONE_CONTRACTS}/dist -name '*.js' | wc -l) .js files"
 
+# Check systemd/start.sh exists for API
+echo "Verifying API systemd/start.sh..."
+if [ ! -f "${BUILD_DIR}/opt/escapeplan/api/systemd/start.sh" ]; then
+    echo "ERROR: API systemd/start.sh missing!"
+    exit 1
+fi
+
+# Check systemd/start.sh exists for Web
+echo "Verifying Web systemd/start.sh..."
+if [ ! -f "${BUILD_DIR}/opt/escapeplan/web/systemd/start.sh" ]; then
+    echo "ERROR: Web systemd/start.sh missing!"
+    exit 1
+fi
+
+echo "✓ systemd service wrappers verified"
+
 # Check server.js exists
 echo "Verifying server.js..."
 WEB_SERVER_JS="${BUILD_DIR}/opt/escapeplan/web/server.js"
@@ -976,14 +1030,14 @@ Package: ${PKG_NAME}
 Version: ${VERSION}
 Section: web
 Priority: optional
-Architecture: ${ARCH}
+Architecture: ${DEB_ARCH}
 Depends: nodejs (>= 20), nginx, sqlite3
 Recommends: build-essential, python3
 Maintainer: EscapePlan Team
 Description: Offline-first escape room management system
  EscapePlan is a complete escape room management solution
- designed for Raspberry Pi deployments. Native ARM64 modules
- will be rebuilt automatically if build tools are available.
+ with cross-platform support (arm64/amd64). Native modules
+ are pre-compiled for the target architecture.
 EOF
 
 # Create postinst script that delegates to the orchestrator
@@ -1264,8 +1318,13 @@ EOF
 chmod 755 "${BUILD_DIR}/DEBIAN/postinst"
 
 # Build .deb package
-DEB_FILE="${DIST_DIR}/${PKG_NAME}_${VERSION}_${ARCH}.deb"
+DEB_FILE="${DIST_DIR}/${PKG_NAME}_${VERSION}_${DEB_ARCH}.deb"
 dpkg-deb --build "${BUILD_DIR}" "${DEB_FILE}"
 
-echo "✅ Built: ${DEB_FILE}"
-echo "📦 $(du -h ${DEB_FILE} | cut -f1)"
+echo "=========================================="
+echo "✅ Build Complete!"
+echo "=========================================="
+echo "Package: ${DEB_FILE}"
+echo "Architecture: ${DEB_ARCH} (host: ${HOST_ARCH})"
+echo "Size: $(du -h ${DEB_FILE} | cut -f1)"
+echo "=========================================="
