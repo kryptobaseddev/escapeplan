@@ -1,5 +1,71 @@
 # @escapeplan/contracts
 
+## 1.0.0
+
+### Major Changes
+
+- Add explicit base OS dependency to application package
+
+  Declare escapeplan-base (>= 1.0.0) as required dependency to ensure correct installation order and platform services availability.
+
+  BREAKING CHANGE: Application package now requires escapeplan-base (>= 1.0.0) to be installed first. This ensures all platform services (NetworkManager, nginx, nodejs) are pre-configured before application installation.
+
+  Changes:
+
+  - Add Depends: escapeplan-base (>= 1.0.0) | escapeplan-platform
+  - Update nodejs version requirement to >= 22 (matches base OS)
+  - Update nginx version requirement to >= 1.18
+  - Update sqlite3 version requirement to >= 3.34
+  - Add Breaks/Replaces for old package name migration
+  - Add Provides: escapeplan-apps for virtual package compatibility
+  - Expand package description with feature list and platform dependency notice
+
+  Package manager will now enforce:
+
+  1. escapeplan-base must be installed first
+  2. escapeplan-base must be version 1.0.0 or newer
+  3. If escapeplan-base not found, check for escapeplan-platform (virtual package)
+
+  This prevents installation on systems without proper platform services and provides clear error messages for missing dependencies.
+
+  Refs: BASE-APP-OPTIMIZATION.md Phase 4
+
+- Remove NetworkManager AP configuration from pi-post-install script
+
+  **Phase 2 BASE-APP-OPTIMIZATION:**
+
+  Removed NetworkManager WiFi Access Point configuration logic from `scripts/pi-post-install.sh` as part of the platform/application separation effort. AP configuration is now handled exclusively by the base platform automation.
+
+  **Changes:**
+
+  - Removed `setup_networkmanager_ap()` function (94 lines)
+  - Removed `generate_secure_password()` helper function (4 lines)
+  - Removed NetworkManager rollback logic from error trap (5 lines)
+  - Removed `network-manager` package from installation dependencies
+  - Replaced AP setup with non-fatal verification check (`verify_wifi_ap()`)
+  - Updated script header documentation to remove WiFi hotspot references
+  - Updated runtime logs to reflect verification-only approach
+
+  **Impact:**
+
+  - WiFi AP must be pre-configured by platform before app installation
+  - Installation no longer fails if AP is not present (verification warning only)
+  - Reduced package dependencies and simplified installation flow
+  - No more `nmcli` commands executed by application scripts
+
+  **Total Removal:** 103 lines of NetworkManager configuration code
+
+- Remove system user and directory creation from application package
+
+  Replace useradd and mkdir -p commands with fail-fast verification checks in DEBIAN/postinst. The application package now requires the EscapePlan base OS to pre-create the escapeplan system user and required directories (/var/lib/escapeplan, /var/log/escapeplan, /etc/escapeplan, /var/backups/escapeplan). This enforces proper separation of concerns between OS provisioning and application deployment.
+
+  Changes:
+
+  - Replace useradd with user existence verification
+  - Replace mkdir -p with directory existence checks
+  - Preserve chown -R commands (required for .deb file extraction)
+  - Add clear error messages directing users to escapeplan-base image
+
 ## 0.2.0 (Unreleased)
 
 ### Patch Changes
@@ -9,11 +75,13 @@
   Replaced hostapd and dnsmasq with NetworkManager-only architecture for managing both wlan0 (AP mode) and wlan1 (client mode). This simplifies configuration, eliminates service conflicts, and enables dynamic network control via the web UI.
 
   **Breaking Changes:**
+
   - `ApplyNetworkConfigResponse.services.hostapd` removed
   - `ApplyNetworkConfigResponse.services.dnsmasq` removed
   - `ApplyNetworkConfigResponse.services.apConnection` added
 
   **Migration Notes:**
+
   - Existing Pi installations need NAT rule: `iptables -t nat -A POSTROUTING -s 10.10.10.0/24 -j MASQUERADE`
   - Old hostapd/dnsmasq configs will be ignored (safe to leave in place)
   - NetworkManager connection name: `escapeplan-ap`
