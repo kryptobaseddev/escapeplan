@@ -2,22 +2,23 @@
 set -euo pipefail
 
 # ============================================================================
-# EscapePlan Post-Install Master Orchestration Script
+# EscapePlan Native Module Rebuild Script
 # ============================================================================
 #
-# This script orchestrates the complete installation and configuration of
-# EscapePlan on Raspberry Pi. It can be run:
-#   1. Automatically by DEBIAN/postinst during .deb installation
-#   2. Manually for troubleshooting or re-configuration
+# This script handles architecture-specific post-install tasks for EscapePlan
+# on Raspberry Pi ARM64 systems. It focuses exclusively on rebuilding native
+# Node.js modules to ensure compatibility with the target ARM architecture.
 #
-# Key Features:
-#   - WiFi Access Point verification (non-fatal check)
-#   - Pre-flight dependency validation
-#   - Native module rebuild for ARM64 architecture
-#   - Final health check validation
+# Architecture-Specific Tasks:
+#   - Validates native module architecture (better-sqlite3, etc.)
+#   - Rebuilds native modules for ARM64 when x86_64 binaries detected
+#   - Performs pre-flight dependency validation (build tools, npm)
+#   - Runs final health check to verify system readiness
 #
-# Note: System package installation is now handled by the base OS image.
-# This script expects all required system packages to already be installed.
+# System Requirements:
+#   - ARM64 (aarch64) architecture
+#   - Build essentials (gcc, g++, make, python3)
+#   - Node.js and npm
 #
 # This script is IDEMPOTENT - safe to run multiple times.
 #
@@ -28,15 +29,13 @@ set -euo pipefail
 #   INSTALL_ROOT    Installation directory (default: /opt/escapeplan)
 #
 # Options:
-#   --rebuild-only      Only rebuild native modules, skip other steps
-#   --skip-db-init      Skip database initialization
-#   --skip-secrets      Skip secrets generation
+#   --rebuild-only      Only rebuild native modules, skip validation/health check
 #   --skip-health       Skip final health check
 #   --force             Force re-execution of all steps
 #
 # Exit Codes:
 #   0 - Success
-#   1 - Error during installation
+#   1 - Error during native module rebuild or validation
 #
 # ============================================================================
 
@@ -288,7 +287,7 @@ verify_wifi_ap() {
 }
 
 # ============================================================================
-# ORCHESTRATION STEPS
+# ARCHITECTURE-SPECIFIC TASKS
 # ============================================================================
 
 # Step: Dependency Validation (Agent 13)
@@ -403,7 +402,7 @@ step_health_check() {
 # ============================================================================
 
 main() {
-    log_section "EscapePlan Post-Install Master Orchestration"
+    log_section "EscapePlan Native Module Rebuild"
     log "Started at: $(date)"
     log "Install root: ${INSTALL_ROOT}"
     log "Log file: ${LOG_FILE}"
@@ -420,16 +419,14 @@ main() {
         exit 1
     fi
 
-    # Full orchestration flow
+    # Architecture-specific rebuild flow
     local total_errors=0
 
-    # The DEBIAN/postinst script already handles most steps, so this script
-    # focuses on the native module rebuild which must happen post-extraction
-    # and the final health check
+    # This script focuses exclusively on architecture-specific tasks that must
+    # happen after .deb extraction on the target ARM64 system
 
-    log_section "Post-Install Orchestration Flow"
-    log "Note: Most installation steps are handled by DEBIAN/postinst"
-    log "This script handles platform-specific tasks:"
+    log_section "Architecture-Specific Tasks"
+    log "This script handles native module compatibility for ARM64:"
     log "  - WiFi Access Point verification (non-fatal)"
     log "  - Pre-flight dependency validation (Agent 13)"
     log "  - Native module rebuild for ARM64 architecture (Agent 2)"
@@ -460,11 +457,11 @@ main() {
     fi
 
     # Summary
-    log_section "Post-Install Summary"
+    log_section "Native Module Rebuild Summary"
     log "Finished at: $(date)"
 
     if [ ${total_errors} -eq 0 ]; then
-        log_success "All post-install steps completed successfully"
+        log_success "All native modules are ARM64-compatible"
         log ""
         log "EscapePlan is ready to use!"
         log "  - Start API:  systemctl start escapeplan-api"
@@ -474,7 +471,7 @@ main() {
     else
         log_warning "${total_errors} step(s) had issues - review ${LOG_FILE}"
         log ""
-        log "System may still be functional, but some features may not work correctly"
+        log "Native module compatibility issues detected"
         log "Review errors above and take corrective action"
         return 1
     fi
