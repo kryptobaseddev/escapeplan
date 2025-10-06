@@ -132,7 +132,7 @@ pnpm --filter escapeplan-web check      # svelte-check
 - **Services:**
   - `escapeplan-api.service` (port 4000)
   - `escapeplan-ffmpeg@.service` (camera workers)
-- **Networking:** hostapd + dnsmasq (10.10.10.0/24)
+- **Networking:** NetworkManager (10.10.10.0/24)
 
 ---
 

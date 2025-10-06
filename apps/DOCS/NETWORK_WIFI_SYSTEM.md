@@ -38,11 +38,11 @@ EscapePlan uses a **dual WiFi architecture** to provide:
 │  Raspberry Pi (EscapePlan Host)                            │
 ├────────────────────────────────────────────────────────────┤
 │                                                            │
-│  Internal WiFi AP (hostapd)                                │
+│  Internal WiFi AP (NetworkManager AP mode)                 │
 │  ├─ Built-in WiFi Adapter (wlan0)                         │
 │  ├─ SSID: "EscapePlan" (configurable)                     │
 │  ├─ IP: 10.10.10.1 (gateway)                              │
-│  ├─ DHCP: 10.10.10.50 - 10.10.10.150 (dnsmasq)            │
+│  ├─ DHCP: 10.10.10.50 - 10.10.10.150 (NM embedded dnsmasq)│
 │  └─ mDNS: escapeplan.local (Avahi)                        │
 │                                                            │
 │  External WiFi Client (nmcli)                              │
@@ -104,8 +104,8 @@ Provides a **private, offline-first network** for:
 
 | Component | Technology | Purpose |
 |-----------|-----------|---------|
-| **Access Point** | hostapd | Manages WiFi AP and client authentication |
-| **DHCP/DNS** | dnsmasq | Assigns IP addresses and resolves DNS queries |
+| **Access Point** | NetworkManager | Unified WiFi management (AP + client modes) |
+| **DHCP/DNS** | NetworkManager embedded dnsmasq | Automatic DHCP/DNS when using ipv4.method=shared |
 | **mDNS** | Avahi | Broadcasts `escapeplan.local` hostname |
 | **NTP** | chrony | Time synchronization for offline operation |
 | **Reverse Proxy** | Nginx v1.29.1+ | HTTPS termination and static file serving |
@@ -492,8 +492,8 @@ export interface WiFiClientStatus {
   "appliedAt": "2025-10-02T14:35:00Z",
   "stdout": "Configuration applied successfully",
   "services": {
-    "hostapd": "active",
-    "dnsmasq": "active",
+    "NetworkManager": "active",
+    "escapeplan-ap": "connected",
     "api": "active",
     "web": "active"
   }
@@ -591,8 +591,8 @@ export interface WiFiClientStatus {
    - Save configuration
 
 2. **Network Provisioning**
-   - Full hostapd/dnsmasq configuration
-   - Apply settings with service restart
+   - Full NetworkManager AP configuration
+   - Apply settings with connection restart
 
 3. **WiFi Client Scanning & Connection**
    - Scan button triggers network scan
@@ -634,40 +634,31 @@ function getSignalIcon(signal: number): string {
 
 ## Platform Integration
 
-### System Services
+### NetworkManager Service
 
-**hostapd.service:**
-```ini
-[Unit]
-Description=Hostapd IEEE 802.11 AP
-After=network.target
+**NetworkManager manages both interfaces:**
+- **wlan0** (Internal AP): NetworkManager connection profile in AP mode with `ipv4.method=shared`
+- **wlan1** (External Client): NetworkManager client mode for WAN connectivity
 
-[Service]
-Type=forking
-PIDFile=/run/hostapd.pid
-ExecStart=/usr/sbin/hostapd -B -P /run/hostapd.pid /etc/hostapd/hostapd.conf
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
+**Embedded DHCP/DNS:**
+When a NetworkManager connection uses `ipv4.method=shared`, NetworkManager automatically spawns an embedded dnsmasq instance to provide:
+- DHCP server (IP address assignment)
+- DNS resolver (forwarding to upstream when available)
+- No custom `/etc/dnsmasq.d/` configuration files required
 
-[Install]
-WantedBy=multi-user.target
-```
+**Service Management:**
+```bash
+# Check NetworkManager status
+systemctl status NetworkManager
 
-**dnsmasq.service:**
-```ini
-[Unit]
-Description=dnsmasq - A lightweight DHCP and caching DNS server
-After=network.target
+# Restart NetworkManager (reloads all connection profiles)
+systemctl restart NetworkManager
 
-[Service]
-Type=forking
-PIDFile=/run/dnsmasq/dnsmasq.pid
-ExecStart=/usr/sbin/dnsmasq -C /etc/dnsmasq.d/escapeplan.conf
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=on-failure
+# View active connections
+nmcli connection show --active
 
-[Install]
-WantedBy=multi-user.target
+# View device status
+nmcli device status
 ```
 
 ### Configuration Apply Tool
@@ -676,9 +667,9 @@ WantedBy=multi-user.target
 **Purpose:** Privileged script that applies network configuration
 **Language:** Bash or Python
 **Responsibilities:**
-- Update `/etc/hostapd/hostapd.conf`
-- Update `/etc/dnsmasq.d/escapeplan.conf`
-- Restart hostapd/dnsmasq services
+- Update NetworkManager connection profile for wlan0 AP
+- Modify connection settings via `nmcli connection modify`
+- Restart NetworkManager connection to apply changes
 - Validate configuration before applying
 
 **Environment Variable:** `ESCAPEPLAN_CONFIG_APPLY_PATH` (defaults to above path)
@@ -700,75 +691,112 @@ The system automatically uses the correct location based on environment detectio
 
 See **[Runtime Configuration System](./RUNTIME_CONFIGURATION_SYSTEM.md#path-resolution)** for how this works.
 
-### hostapd Configuration
+### NetworkManager Connection Profile
 
-**Path:** `/etc/hostapd/hostapd.conf`
+NetworkManager stores connection profiles in `/etc/NetworkManager/system-connections/` as INI-style files. The EscapePlan AP connection is managed entirely through `nmcli` commands.
 
-```conf
-# Interface and driver
-interface=wlan0
-driver=nl80211
+**Creating the Access Point Connection:**
 
-# Network settings
-ssid=EscapePlan
-hw_mode=g              # a=5GHz, g=2.4GHz
-channel=6
-country_code=US
-
-# Security
-auth_algs=1
-wpa=2
-wpa_key_mgmt=WPA-PSK
-wpa_pairwise=TKIP CCMP
-rsn_pairwise=CCMP
-wpa_passphrase=GENERATED_ON_FIRST_BOOT
-
-# Broadcast
-ignore_broadcast_ssid=0
-
-# Logging
-logger_syslog=-1
-logger_syslog_level=2
-logger_stdout=-1
-logger_stdout_level=2
+```bash
+# Create AP connection profile for wlan0
+nmcli connection add \
+  type wifi \
+  ifname wlan0 \
+  con-name "EscapePlan-AP" \
+  autoconnect yes \
+  ssid "EscapePlan" \
+  mode ap \
+  wifi-sec.key-mgmt wpa-psk \
+  wifi-sec.psk "GENERATED_ON_FIRST_BOOT" \
+  ipv4.method shared \
+  ipv4.addresses 10.10.10.1/24
 ```
 
-### dnsmasq Configuration
+**Key Parameters:**
+- `mode ap` - Sets WiFi adapter to Access Point mode
+- `ipv4.method shared` - Enables NetworkManager's embedded dnsmasq for DHCP/DNS
+- `ipv4.addresses 10.10.10.1/24` - Static IP for the gateway
+- `autoconnect yes` - Automatically start AP on boot
 
-**Path:** `/etc/dnsmasq.d/escapeplan.conf`
+**DHCP Range Configuration:**
+By default, `ipv4.method=shared` assigns IPs in the range `10.10.10.10` - `10.10.10.254`. To customize the DHCP range to `10.10.10.50` - `10.10.10.150`, NetworkManager's embedded dnsmasq can be configured via:
 
-```conf
-# Interface
-interface=wlan0
-bind-interfaces
-
-# DHCP range
+```bash
+# Add custom dnsmasq configuration for NetworkManager's embedded instance
+# (Note: This is NetworkManager's internal dnsmasq, NOT /etc/dnsmasq.d/)
+sudo mkdir -p /etc/NetworkManager/dnsmasq-shared.d/
+sudo tee /etc/NetworkManager/dnsmasq-shared.d/escapeplan.conf <<EOF
 dhcp-range=10.10.10.50,10.10.10.150,24h
+EOF
 
-# Gateway and DNS
-dhcp-option=3,10.10.10.1    # Router
-dhcp-option=6,10.10.10.1    # DNS server
-
-# Domain
-domain=escapeplan.local
-local=/escapeplan.local/
-
-# Authoritative
-dhcp-authoritative
-
-# Logging
-log-dhcp
-log-queries
+# Restart NetworkManager to apply
+sudo systemctl restart NetworkManager
 ```
 
-### Static IP Configuration
+### nmcli Command Reference
 
-**Path:** `/etc/dhcpcd.conf` (or `/etc/network/interfaces`)
+**View All Connections:**
+```bash
+nmcli connection show
+```
 
-```conf
-interface wlan0
-static ip_address=10.10.10.1/24
-nohook wpa_supplicant
+**View Active Connections:**
+```bash
+nmcli connection show --active
+```
+
+**View Device Status:**
+```bash
+nmcli device status
+```
+
+**Show Connection Details:**
+```bash
+nmcli connection show "EscapePlan-AP"
+```
+
+**Modify Connection Settings:**
+```bash
+# Change SSID
+nmcli connection modify "EscapePlan-AP" wifi.ssid "NewSSID"
+
+# Change WiFi password
+nmcli connection modify "EscapePlan-AP" wifi-sec.psk "NewPassword123"
+
+# Change WiFi channel (2.4GHz: 1-11, 5GHz: 36-165)
+nmcli connection modify "EscapePlan-AP" wifi.channel 11
+
+# Change WiFi band (a=5GHz, bg=2.4GHz)
+nmcli connection modify "EscapePlan-AP" wifi.band bg
+```
+
+**Restart Connection to Apply Changes:**
+```bash
+# Bring connection down
+nmcli connection down "EscapePlan-AP"
+
+# Bring connection up
+nmcli connection up "EscapePlan-AP"
+```
+
+**Delete and Recreate Connection:**
+```bash
+# Delete existing connection
+nmcli connection delete "EscapePlan-AP"
+
+# Recreate with new settings (see "Creating the Access Point Connection" above)
+```
+
+**View WiFi Networks (Client Mode):**
+```bash
+# Scan available networks
+nmcli device wifi list
+
+# Connect to external WiFi
+nmcli device wifi connect "SSID" password "password"
+
+# Disconnect from WiFi
+nmcli connection down "SSID"
 ```
 
 ---
@@ -850,15 +878,15 @@ nohook wpa_supplicant
 ### 🚧 Pending Implementation
 
 **Platform Scripts:**
-- [ ] `/usr/local/sbin/escapeplan-config-apply` tool
-- [ ] hostapd/dnsmasq configuration templates
+- [ ] `/usr/local/sbin/escapeplan-config-apply` tool (NetworkManager-based)
+- [ ] NetworkManager connection profile templates
 - [ ] First-boot passphrase generation
 - [ ] Certificate generation and export
 
 **Pi Image Integration:**
-- [ ] Base image with hostapd/dnsmasq pre-installed
-- [ ] Systemd service units
-- [ ] Network interface configuration
+- [ ] Base image with NetworkManager pre-configured
+- [ ] NetworkManager AP connection pre-created for wlan0
+- [ ] NetworkManager client support for wlan1
 - [ ] USB WiFi dongle driver support
 
 **Future Enhancements:**
@@ -881,7 +909,7 @@ nohook wpa_supplicant
 - [ ] HTTPS redirects from HTTP
 - [ ] Self-signed certificate warning appears (expected)
 - [ ] Configuration changes persist after reboot
-- [ ] hostapd/dnsmasq restart successfully after config update
+- [ ] NetworkManager connection restarts successfully after config update
 
 ### WiFi Client
 
@@ -911,16 +939,19 @@ nohook wpa_supplicant
 
 ### Broadcast AP Not Starting
 
-**Check hostapd status:**
+**Check NetworkManager status:**
 ```bash
-systemctl status hostapd
-journalctl -u hostapd -f
+systemctl status NetworkManager
+nmcli connection show "EscapePlan-AP"
+nmcli device status
+journalctl -u NetworkManager -f
 ```
 
 **Common Issues:**
 - Channel conflict - try channel 1, 6, or 11 (2.4GHz)
-- Driver incompatibility - verify `driver=nl80211` in config
-- Interface in use - ensure wlan0 not used by NetworkManager
+- Device not in AP mode - verify `mode ap` in connection profile
+- Connection not autoconnect - run `nmcli connection up "EscapePlan-AP"`
+- Interface down - check `nmcli device status` shows wlan0 as available
 
 ### WiFi Client Connection Fails
 

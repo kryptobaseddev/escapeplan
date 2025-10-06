@@ -311,7 +311,7 @@ environments:
     description: "Raspberry Pi 5 with systemd services, nginx reverse proxy"
     database: "SQLite WAL mode at /var/lib/escapeplan/escapeplan.db"
     deployment: ".deb package with auto-migrations"
-    networking: "hostapd + dnsmasq (10.10.10.0/24 subnet)"
+    networking: "NetworkManager (10.10.10.0/24 subnet)"
     domain: "escapeplan.local (mDNS via avahi)"
     services:
       - escapeplan-api.service (port 4000)

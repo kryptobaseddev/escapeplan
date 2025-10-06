@@ -1,0 +1,430 @@
+{
+  "orchestration_session_id": "escapeplan-production-ready-2025-10-06",
+  "orchestrator_version": "2.0.0",
+  "started_at": "2025-10-06T02:00:00Z",
+  "protocol": "ATOMIC-SUBAGENT-PROMPT.yaml",
+  "workflow": "implement > QA > fix > QA (max 3) > complete",
+  "git_strategy": "atomic commits per logical change group",
+
+  "objective": "Transform EscapePlan to production-ready MVP with clean base OS/app separation",
+
+  "constraints": {
+    "no_new_features": true,
+    "challenge_all_implementations": true,
+    "qa_required": true,
+    "100_percent_test_pass": true,
+    "atomic_commits": true,
+    "clean_commit_messages": true
+  },
+
+  "phases": {
+    "phase_1": {
+      "name": "v0.1.7 Release",
+      "agents": "61-75 (15 agents)",
+      "objective": "Complete v0.1.7, tag, release to GitHub, monitor pipeline",
+      "estimated_time": "2-3 hours",
+      "dependencies": [],
+      "success_criteria": [
+        "v0.1.7 tagged in git",
+        "GitHub release created with artifacts",
+        "CI/CD pipeline monitored and passing",
+        "Release notes generated from changesets",
+        ".deb package uploaded to release",
+        "All tests passing (166/166)"
+      ]
+    },
+
+    "phase_2": {
+      "name": "v0.2.0 BASE OS Integration",
+      "agents": "76-95 (20 agents)",
+      "objective": "Implement BASE-APP-OPTIMIZATION, align with base OS, prepare v0.2.0",
+      "estimated_time": "4-6 hours",
+      "dependencies": ["phase_1"],
+      "success_criteria": [
+        "All system package installation removed from app",
+        "NetworkManager configuration removed from app",
+        "Base OS dependency declared in package",
+        "All tests passing (166/166)",
+        "Debian Policy compliance >95%",
+        "10 changesets created (one per BASE-APP-OPTIMIZATION phase)",
+        "Clean git history with atomic commits"
+      ],
+      "changeset_strategy": "scrap_and_create_new",
+      "rationale": "Existing changesets were for v0.1.7 emergency fixes. New architecture requires new changesets."
+    },
+
+    "phase_3": {
+      "name": "Technical Debt & Polish",
+      "agents": "96-110 (15 agents)",
+      "objective": "Add tests, reduce type: any, fix documentation inconsistencies",
+      "estimated_time": "3-4 hours",
+      "dependencies": ["phase_2"],
+      "success_criteria": [
+        "Unit tests added for orchestration scripts (>50% coverage)",
+        "type: any reduced from 48 to <30",
+        "4 documentation inconsistencies fixed",
+        "All tests passing (200+ tests expected after adding new ones)",
+        "No new TypeScript errors introduced",
+        "Documentation fully consistent"
+      ]
+    }
+  },
+
+  "critical_decisions": {
+    "decision_1": {
+      "question": "Should we scrap existing changesets for v0.2.0?",
+      "options": {
+        "A": "Scrap all existing changesets, create new ones aligned with BASE-APP-OPTIMIZATION",
+        "B": "Modify existing changesets to reflect new architecture",
+        "C": "Keep existing changesets, add new ones for base OS integration"
+      },
+      "recommendation": "A - Scrap and create new",
+      "rationale": [
+        "Existing changesets were v0.1.7 emergency fixes (already released)",
+        "New architecture represents fundamental breaking changes",
+        "BASE-APP-OPTIMIZATION defines 10 logical phases = 10 changesets",
+        "Clean slate allows proper semver communication (v0.2.0 → v1.0.0 breaking)",
+        "Avoids confusion with old emergency fix changesets"
+      ],
+      "action": "Archive old changesets to .orchestrator/old-changesets/, create fresh changesets"
+    },
+
+    "decision_2": {
+      "question": "How to handle base OS dependency in v0.2.0?",
+      "options": {
+        "A": "Require escapeplan-base (>= 1.0.0) - hard dependency",
+        "B": "Add fallback for systems without base OS",
+        "C": "Make base OS optional"
+      },
+      "recommendation": "A - Hard dependency",
+      "rationale": [
+        "BASE-APP-OPTIMIZATION requires escapeplan-base",
+        "No point supporting old architecture (technical debt)",
+        "v0.2.0 → v1.0.0 is perfect opportunity for breaking change",
+        "Clear separation of concerns benefits long-term maintainability"
+      ],
+      "action": "Add Depends: escapeplan-base (>= 1.0.0) to debian/control"
+    },
+
+    "decision_3": {
+      "question": "Should Phase 2 wait for base OS repo work?",
+      "options": {
+        "A": "Wait for escapeplan-base v1.0.0 to be built",
+        "B": "Proceed with app changes, assume base OS will be ready",
+        "C": "Work on both repos in parallel"
+      },
+      "recommendation": "B - Proceed with app changes",
+      "rationale": [
+        "App changes are self-contained (removing code, not adding)",
+        "BASE-APP-OPTIMIZATION phases are clearly defined",
+        "Can test with mocked base OS verification",
+        "Base OS work can happen in parallel by different team",
+        "App repo becomes production-ready independently"
+      ],
+      "action": "Implement BASE-APP-OPTIMIZATION phases 1-10 now"
+    }
+  },
+
+  "phase_1_details": {
+    "wave_1": {
+      "agents": "61-65",
+      "focus": "v0.1.7 finalization and git tagging",
+      "tasks": [
+        "Agent 61: Verify all Wave 1-4 changes are committed",
+        "Agent 62: Run final test suite (166 tests expected)",
+        "Agent 63: Generate v0.1.7 release notes from git history",
+        "Agent 64: Create git tag v0.1.7 with release notes",
+        "Agent 65: Push tag to remote and verify"
+      ]
+    },
+    "wave_2": {
+      "agents": "66-70",
+      "focus": "GitHub release creation and artifact upload",
+      "tasks": [
+        "Agent 66: Build .deb package for arm64",
+        "Agent 67: Build .deb package for amd64 (if supported)",
+        "Agent 68: Create GitHub release draft",
+        "Agent 69: Upload .deb artifacts to release",
+        "Agent 70: Publish release and verify availability"
+      ]
+    },
+    "wave_3": {
+      "agents": "71-75",
+      "focus": "Pipeline monitoring and validation",
+      "tasks": [
+        "Agent 71: Monitor GitHub Actions pipeline (if exists)",
+        "Agent 72: Verify release artifacts are downloadable",
+        "Agent 73: Test .deb installation on clean system (simulation)",
+        "Agent 74: Document any issues found during release",
+        "Agent 75: Create Phase 1 completion report"
+      ]
+    }
+  },
+
+  "phase_2_details": {
+    "changeset_decision": "SCRAP_EXISTING",
+    "existing_changesets_action": "Move to .orchestrator/archived-changesets-v0.1.7/",
+    "new_changesets": [
+      {
+        "filename": "remove-system-package-installation.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Remove all apt-get/apt calls from application postinst scripts",
+        "breaking": true,
+        "refs": "BASE-APP-OPTIMIZATION Phase 1"
+      },
+      {
+        "filename": "remove-networkmanager-configuration.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Remove NetworkManager AP setup from application scripts",
+        "breaking": true,
+        "refs": "BASE-APP-OPTIMIZATION Phase 2"
+      },
+      {
+        "filename": "remove-user-directory-creation.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Remove system user and directory creation from app package",
+        "breaking": true,
+        "refs": "BASE-APP-OPTIMIZATION Phase 3"
+      },
+      {
+        "filename": "add-base-os-dependency.md",
+        "type": "minor",
+        "packages": ["escapeplan"],
+        "summary": "Add explicit escapeplan-base (>= 1.0.0) dependency",
+        "breaking": true,
+        "refs": "BASE-APP-OPTIMIZATION Phase 4"
+      },
+      {
+        "filename": "production-nginx-configuration.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Add production-ready nginx config with rate limiting and security",
+        "breaking": false,
+        "refs": "BASE-APP-OPTIMIZATION Phase 5"
+      },
+      {
+        "filename": "debian-policy-compliance.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Add case statements and proper error handling to maintainer scripts",
+        "breaking": false,
+        "refs": "BASE-APP-OPTIMIZATION Phase 6"
+      },
+      {
+        "filename": "simplify-pi-post-install.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Simplify pi-post-install.sh to native module rebuilding only",
+        "breaking": false,
+        "refs": "BASE-APP-OPTIMIZATION Phase 7"
+      },
+      {
+        "filename": "lintian-compliance.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Achieve 95%+ Debian Policy compliance (lintian validation)",
+        "breaking": false,
+        "refs": "BASE-APP-OPTIMIZATION Phase 8"
+      },
+      {
+        "filename": "app-package-testing-suite.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Add comprehensive app package validation test script",
+        "breaking": false,
+        "refs": "BASE-APP-OPTIMIZATION Phase 9"
+      },
+      {
+        "filename": "base-os-dependency-documentation.md",
+        "type": "patch",
+        "packages": ["escapeplan"],
+        "summary": "Update README with base OS dependency requirements",
+        "breaking": false,
+        "refs": "BASE-APP-OPTIMIZATION Phase 10"
+      }
+    ],
+    "version_bump": "0.1.7 → 1.0.0",
+    "version_bump_rationale": "Multiple breaking changes (removal of self-contained functionality, hard base OS dependency) warrant major version bump to v1.0.0",
+
+    "wave_1": {
+      "agents": "76-80",
+      "focus": "Archive old changesets and assess current state",
+      "tasks": [
+        "Agent 76: Archive old v0.1.7 changesets to .orchestrator/archived-changesets/",
+        "Agent 77: Assess current codebase against BASE-APP-OPTIMIZATION requirements",
+        "Agent 78: Identify all system package installation locations (grep audit)",
+        "Agent 79: Identify all NetworkManager configuration locations (grep audit)",
+        "Agent 80: Create comprehensive change inventory for Phase 2"
+      ]
+    },
+    "wave_2": {
+      "agents": "81-85",
+      "focus": "Implement BASE-APP-OPTIMIZATION Phases 1-3",
+      "tasks": [
+        "Agent 81: Remove system package installation (Phase 1) + changeset",
+        "Agent 82: Remove NetworkManager configuration (Phase 2) + changeset",
+        "Agent 83: Remove user/directory creation (Phase 3) + changeset",
+        "Agent 84: Run tests after each change, verify 166/166 passing",
+        "Agent 85: Create atomic git commits for Phases 1-3"
+      ]
+    },
+    "wave_3": {
+      "agents": "86-90",
+      "focus": "Implement BASE-APP-OPTIMIZATION Phases 4-7",
+      "tasks": [
+        "Agent 86: Add base OS dependency (Phase 4) + changeset",
+        "Agent 87: Production nginx configuration (Phase 5) + changeset",
+        "Agent 88: Debian Policy compliance (Phase 6) + changeset",
+        "Agent 89: Simplify pi-post-install.sh (Phase 7) + changeset",
+        "Agent 90: Create atomic git commits for Phases 4-7"
+      ]
+    },
+    "wave_4": {
+      "agents": "91-95",
+      "focus": "Implement BASE-APP-OPTIMIZATION Phases 8-10 + validation",
+      "tasks": [
+        "Agent 91: Lintian compliance (Phase 8) + changeset",
+        "Agent 92: Testing suite (Phase 9) + changeset",
+        "Agent 93: Documentation updates (Phase 10) + changeset",
+        "Agent 94: Run pnpm changeset version (bump to v1.0.0)",
+        "Agent 95: Create Phase 2 completion report"
+      ]
+    }
+  },
+
+  "phase_3_details": {
+    "wave_1": {
+      "agents": "96-100",
+      "focus": "Add unit tests for orchestration scripts",
+      "tasks": [
+        "Agent 96: Audit existing test coverage for deployment scripts",
+        "Agent 97: Create test-postinst-orchestrator.sh",
+        "Agent 98: Create test-pi-post-install.sh",
+        "Agent 99: Create test-nginx-configure.sh",
+        "Agent 100: Run all tests, verify coverage >50%"
+      ]
+    },
+    "wave_2": {
+      "agents": "101-105",
+      "focus": "Reduce type: any usages",
+      "tasks": [
+        "Agent 101: Audit current type: any usages (48 found in Wave 3)",
+        "Agent 102: Create Settings value type union (replace 7 usages)",
+        "Agent 103: Create AlertContext interface (replace 5 usages)",
+        "Agent 104: Type ffprobe output structures (replace 4 usages)",
+        "Agent 105: Verify TypeScript strict mode still passes"
+      ]
+    },
+    "wave_3": {
+      "agents": "106-110",
+      "focus": "Fix documentation inconsistencies and final polish",
+      "tasks": [
+        "Agent 106: Fix CLAUDE.md file path references (2 issues)",
+        "Agent 107: Fix CLAUDE.md schema path (line 169)",
+        "Agent 108: Update README.md version examples",
+        "Agent 109: Run final linting, test suite, build validation",
+        "Agent 110: Create Phase 3 completion report and production readiness assessment"
+      ]
+    }
+  },
+
+  "git_commit_strategy": {
+    "format": "conventional commits",
+    "pattern": "<type>(<scope>): <subject>\n\n<body>\n\nRefs: <documentation reference>",
+    "types": {
+      "feat": "New feature or capability",
+      "fix": "Bug fix",
+      "refactor": "Code restructuring without functionality change",
+      "chore": "Maintenance tasks",
+      "docs": "Documentation only",
+      "test": "Adding or updating tests",
+      "perf": "Performance improvements"
+    },
+    "atomic_commits": true,
+    "commit_frequency": "After each logical change (changeset group or related changes)",
+    "no_monolith_commits": true
+  },
+
+  "success_metrics": {
+    "phase_1": {
+      "git_tag_created": "v0.1.7",
+      "github_release_published": true,
+      "artifacts_uploaded": true,
+      "pipeline_passing": true
+    },
+    "phase_2": {
+      "changesets_created": 10,
+      "git_commits": 10,
+      "tests_passing": "166/166 (100%)",
+      "debian_policy_compliance": ">95%",
+      "version": "1.0.0"
+    },
+    "phase_3": {
+      "test_coverage_scripts": ">50%",
+      "type_any_reduced": "<30 (from 48)",
+      "documentation_fixed": "4/4 issues",
+      "tests_passing": ">200 (166 + new test suite)",
+      "production_ready": true
+    }
+  },
+
+  "risk_assessment": {
+    "high_risk": [
+      {
+        "risk": "Breaking existing deployments with v1.0.0",
+        "likelihood": "HIGH",
+        "impact": "HIGH",
+        "mitigation": [
+          "Clear v1.0.0 changelog with breaking changes documented",
+          "Migration guide for v0.1.7 → v1.0.0",
+          "Keep v0.1.7 available as LTS branch",
+          "Test v1.0.0 on fresh system before release"
+        ]
+      }
+    ],
+    "medium_risk": [
+      {
+        "risk": "Base OS not ready when app v1.0.0 released",
+        "likelihood": "MEDIUM",
+        "impact": "HIGH",
+        "mitigation": [
+          "Document base OS requirement clearly",
+          "Provide base OS build instructions",
+          "Release app v1.0.0 beta for testing",
+          "Coordinate base OS release timeline"
+        ]
+      }
+    ],
+    "low_risk": [
+      {
+        "risk": "Test suite additions breaking existing tests",
+        "likelihood": "LOW",
+        "impact": "LOW",
+        "mitigation": [
+          "Run existing tests before adding new ones",
+          "Keep new tests isolated from existing suite",
+          "Verify 100% pass rate at each step"
+        ]
+      }
+    ]
+  },
+
+  "agent_coordination": {
+    "max_concurrent_agents": 10,
+    "agent_wave_size": 5,
+    "qa_cycles_per_agent": 3,
+    "escalation_threshold": "2 failed QA cycles",
+    "reporting_frequency": "After each wave completion"
+  },
+
+  "documentation_artifacts": {
+    "atomic_task_tracker": ".orchestrator/atomic-task-tracker-phases-1-2-3.json",
+    "phase_1_summary": ".orchestrator/phase1-v0.1.7-release-summary.md",
+    "phase_2_summary": ".orchestrator/phase2-v1.0.0-preparation-summary.md",
+    "phase_3_summary": ".orchestrator/phase3-technical-debt-summary.md",
+    "final_report": ".orchestrator/PRODUCTION-READY-v1.0.0-REPORT.md"
+  }
+}

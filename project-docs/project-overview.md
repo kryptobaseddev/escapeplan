@@ -2,7 +2,7 @@
 
 **Version:** 0.1.0 (MVP Draft)
 **Target device:** Raspberry Pi 4/5 (2–8GB RAM) running Raspberry Pi OS (Bookworm)
-**Network mode:** Offline-first local AP (hostapd + dnsmasq), optional periodic internet for updates
+**Network mode:** Offline-first local AP (NetworkManager), optional periodic internet for updates
 **Primary DB:** SQLite 3 (WAL mode)
 **Runtime:** Node.js 22 LTS (Fastify 5 API + WebSocket) + Nginx (reverse proxy/static)
 **Frontend:** SvelteKit 2 + Vite + Tailwind CSS 4 with DaisyUI 5.1.25 (PWA-first)
@@ -74,7 +74,7 @@ Escape room operators need a **self-contained** local system that can be used to
 - Printable run sheets summarizing logistics, contact info, and outstanding balances for mobile events.
 
 **Shared Platform Deliverables**
-- Raspberry Pi OS image (`escapeplan-base`) provisioning hostapd/dnsmasq AP, Avahi mDNS, nginx (HTTPS with self-signed cert), Fastify API + Socket.IO, ffmpeg workers, backups, OTA hooks.
+- Raspberry Pi OS image (`escapeplan-base`) provisioning NetworkManager AP, Avahi mDNS, nginx (HTTPS with self-signed cert), Fastify API + Socket.IO, ffmpeg workers, backups, OTA hooks.
 - SQLite schema with Drizzle migrations and seed scripts covering Users, Roles, Rooms, Games, GameSessions, Bookings, Puzzles, Hints, PricingModels, PricingTiers, Cameras, Resources, Events, HintSends, Assets, MobileKits.
 - SvelteKit PWA (`escapeplan-web`) themed via DaisyUI, responsive on tablets/phones, providing operator dashboard, admin consoles, mobile workflow, and public game slug timer pages.
 - Observability and ops tooling: local health endpoint, journald log rotation, alerting for camera downtime/session stalls, nightly backups with retention policies.
@@ -114,7 +114,7 @@ Escape room operators need a **self-contained** local system that can be used to
 * **Fastify 5 API Server**: REST + WebSocket via Socket.IO; business logic; RBAC; stream registry; events.
 * **SQLite (WAL)**: primary data store; Prisma/Drizzle ORM; migrations.
 * **ffmpeg workers**: RTSP→HLS (m3u8 + ts) or MJPEG; per camera pipeline controlled by API.
-* **hostapd + dnsmasq + avahi + chrony**: AP, DHCP/DNS, mDNS, NTP.
+* **NetworkManager + avahi + chrony**: AP with embedded dnsmasq (DHCP/DNS), mDNS, NTP.
 * **Static storage**: `/var/lib/escapeplan/assets` for images/audio/video; HLS at `/var/lib/escapeplan/hls/{cameraId}`.
 
 ### 2.2 Tech Choices
@@ -146,7 +146,7 @@ Escape room operators need a **self-contained** local system that can be used to
 ### 2.4 Network & Host Configuration
 
 * **Hostname & mDNS**: advertise `escapeplan.local` via Avahi; dashboard served at `https://escapeplan.local/` with optional alternate alias per deployment. Room display pages surface at `https://escapeplan.local/{game-slug}` and remain publicly accessible on the LAN (no auth required).
-* **Wi-Fi Access Point**: hostapd WPA2-PSK SSID `EscapePlan` (configurable) with strong randomly generated passphrase; DHCP 10.10.10.0/24 via dnsmasq. WPA3 support is deferred.
+* **Wi-Fi Access Point**: NetworkManager WPA2-PSK SSID `EscapePlan` (configurable) with strong randomly generated passphrase; DHCP 10.10.10.0/24 via NetworkManager embedded dnsmasq. WPA3 support is deferred.
 * **Certificates**: self-signed certificate pair generated on first boot, installed in nginx, and exported for operators to trust on iOS/iPadOS/macOS/Windows devices. HTTP redirects to HTTPS inside the LAN.
 * **Service discovery**: `_http._tcp` and `_escapeplan._tcp` mDNS records broadcast for dashboard and API endpoints to simplify device pairing.
 * **Remote shell**: SSH disabled by default; enabling requires physical console + key-based auth configuration.
@@ -624,7 +624,7 @@ ffmpeg -rtsp_transport tcp -i rtsp://user:pass@CAM/stream \
 
   * `escapeplan-api.deb` (installs systemd service + config skeleton)
   * `escapeplan-ui.tar.gz` (static bundle)
-  * `escapeplan-ap-setup.deb` (optional metapackage to install hostapd/dnsmasq/nginx configs)
+  * `escapeplan-ap-setup.deb` (optional metapackage to install NetworkManager profiles/nginx configs)
 
 ### 9.4 Runtime Services (systemd)
 
@@ -831,14 +831,14 @@ POST /api/sessions/55/hints { "puzzleId": 9, "hintId": 27 }
 
 ## 20) Installation & Provisioning (Recap)
 
-* Install OS, hostapd, dnsmasq, nginx, chrony as per network guide.
+* Install OS, NetworkManager, nginx, chrony as per network guide.
 * Install app `.deb`, which:
 
   * Creates `/var/lib/escapeplan` and DB.
   * Seeds roles + admin.
   * Installs Nginx site and systemd services.
   * Provides CLI: `escapeplan add-camera`, `escapeplan seed`, `escapeplan backup`, `escapeplan cert-export`.
-  * Configures hostapd/dnsmasq with SSID `EscapePlan` + WPA2 PSK and advertises `escapeplan.local` via Avahi.
+  * Configures NetworkManager hotspot with SSID `EscapePlan` + WPA2 PSK and advertises `escapeplan.local` via Avahi.
   * Generates self-signed certificate bundle and prompts operator to trust on client devices.
 
 ---

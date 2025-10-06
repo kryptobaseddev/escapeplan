@@ -216,7 +216,7 @@
       ],
       "story": "As the platform lead, I need the Pi to broadcast a reliable private network so operators can connect anywhere.",
       "acceptanceCriteria": [
-        "hostapd/dnsmasq configs generated from templates with EscapePlan SSID.",
+        "NetworkManager connection profile configured with EscapePlan SSID.",
         "Services auto-start on boot and recover after power loss.",
         "Channel plan documented for crowded events."
       ],

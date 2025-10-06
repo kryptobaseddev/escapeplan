@@ -376,7 +376,7 @@
 					<div>
 						<h2 class="card-title">Provision Appliance Network</h2>
 						<p class="text-sm text-base-content/60">
-							Configure hostapd, dnsmasq, and network services
+							Configure NetworkManager hotspot and network services
 						</p>
 					</div>
 					<button

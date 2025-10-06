@@ -154,8 +154,8 @@ pnpm db:seed
 ## Platform Deployment (Reference)
 
 Production system runs on Raspberry Pi OS with:
-- **hostapd** - WPA2 access point on SSID `EscapePlan`
-- **dnsmasq** - DHCP/DNS for 10.10.10.0/24 subnet
+- **NetworkManager** - WPA2 hotspot on SSID `EscapePlan`
+- **NetworkManager embedded dnsmasq** - DHCP/DNS for 10.10.10.0/24 subnet
 - **nginx** - Reverse proxy with self-signed TLS, serves static PWA
 - **systemd** units:
   - `escapeplan-api.service` - Fastify server on port 4000

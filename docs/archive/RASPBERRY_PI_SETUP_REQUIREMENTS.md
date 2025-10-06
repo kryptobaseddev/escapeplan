@@ -1,8 +1,24 @@
+# ⚠️ DEPRECATED - Historical Reference Only
+
+**Status:** OBSOLETE as of 2025-10-05
+**Reason:** NetworkManager migration complete (replaced hostapd/dnsmasq architecture)
+
+**Current Documentation:** See `/mnt/projects/escape-plan/escapeplan-app/apps/DOCS/NETWORK_WIFI_SYSTEM.md` for NetworkManager-based setup.
+
+This file is preserved for:
+- Historical reference
+- Migration troubleshooting
+- Understanding previous architecture decisions
+
+**DO NOT USE** these instructions for new installations.
+
+---
+
 # Raspberry Pi Setup Requirements for EscapePlan
 
 **Version:** 1.0
 **Last Updated:** 2025-10-04
-**Status:** ✅ Production Requirements
+**Status:** ⚠️ OBSOLETE (See deprecation notice above)
 
 ---
 

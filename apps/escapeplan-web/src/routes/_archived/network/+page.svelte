@@ -76,7 +76,7 @@
         <div class="alert alert-success mb-4 flex flex-col gap-2">
           <div class="font-semibold">Applied configuration at {new Date(lastApplied.appliedAt).toLocaleString()}</div>
           <div class="text-xs text-base-content/70">
-            Service states: API {lastApplied.services.api}, Web {lastApplied.services.web}, hostapd {lastApplied.services.hostapd}, dnsmasq {lastApplied.services.dnsmasq}
+            Service states: AP Connection {lastApplied.services.apConnection}, API {lastApplied.services.api}, Web {lastApplied.services.web}
           </div>
         </div>
       {/if}

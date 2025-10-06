@@ -129,7 +129,7 @@
           "createdDate": "2025-09-29",
           "dueDate": null,
           "acceptanceCriteria": [
-            "hostapd and dnsmasq templates generated with EscapePlan SSID and DHCP range.",
+            "NetworkManager connection profile configured with EscapePlan SSID and DHCP range.",
             "Services auto-start on boot and survive power cycles.",
             "Document channel selection and captive portal bypass instructions.",
             "Default WPA2-PSK generated with ability to rotate via CLI; WPA3 deferred."

@@ -530,8 +530,7 @@ export interface ApplyNetworkConfigResponse {
   stdout?: string;
   stderr?: string;
   services: {
-    hostapd: 'active' | 'inactive' | 'unknown';
-    dnsmasq: 'active' | 'inactive' | 'unknown';
+    apConnection: 'active' | 'inactive' | 'unknown';  // NetworkManager AP connection
     api: 'active' | 'inactive' | 'unknown';
     web: 'active' | 'inactive' | 'unknown';
   };

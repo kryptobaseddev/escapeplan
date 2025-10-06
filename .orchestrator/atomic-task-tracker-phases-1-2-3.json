@@ -1,0 +1,92 @@
+{
+  "session_id": "escapeplan-production-ready-2025-10-06",
+  "orchestrator_version": "2.0.0",
+  "started_at": "2025-10-06T02:00:00Z",
+  "protocol": "ATOMIC-SUBAGENT-PROMPT.yaml",
+
+  "current_phase": "phase_1",
+  "current_wave": "wave_1",
+
+  "phase_1_agents": {
+    "wave_1": {
+      "agent_61": {"task": "Verify all Wave 1-4 changes committed", "status": "pending"},
+      "agent_62": {"task": "Run final test suite (166 tests)", "status": "pending"},
+      "agent_63": {"task": "Generate v0.1.7 release notes", "status": "pending"},
+      "agent_64": {"task": "Create git tag v0.1.7", "status": "pending"},
+      "agent_65": {"task": "Push tag and verify", "status": "pending"}
+    },
+    "wave_2": {
+      "agent_66": {"task": "Build .deb for arm64", "status": "pending"},
+      "agent_67": {"task": "Build .deb for amd64", "status": "pending"},
+      "agent_68": {"task": "Create GitHub release draft", "status": "pending"},
+      "agent_69": {"task": "Upload .deb artifacts", "status": "pending"},
+      "agent_70": {"task": "Publish release", "status": "pending"}
+    },
+    "wave_3": {
+      "agent_71": {"task": "Monitor GitHub Actions", "status": "pending"},
+      "agent_72": {"task": "Verify artifacts downloadable", "status": "pending"},
+      "agent_73": {"task": "Test .deb installation", "status": "pending"},
+      "agent_74": {"task": "Document release issues", "status": "pending"},
+      "agent_75": {"task": "Phase 1 completion report", "status": "pending"}
+    }
+  },
+
+  "phase_2_agents": {
+    "wave_1": {
+      "agent_76": {"task": "Archive old changesets", "status": "pending"},
+      "agent_77": {"task": "Assess BASE-APP-OPTIMIZATION requirements", "status": "pending"},
+      "agent_78": {"task": "Audit system package installations", "status": "pending"},
+      "agent_79": {"task": "Audit NetworkManager configurations", "status": "pending"},
+      "agent_80": {"task": "Create change inventory", "status": "pending"}
+    },
+    "wave_2": {
+      "agent_81": {"task": "Remove system package installation + changeset", "status": "pending"},
+      "agent_82": {"task": "Remove NetworkManager config + changeset", "status": "pending"},
+      "agent_83": {"task": "Remove user/dir creation + changeset", "status": "pending"},
+      "agent_84": {"task": "Run tests after changes", "status": "pending"},
+      "agent_85": {"task": "Create atomic git commits (Phases 1-3)", "status": "pending"}
+    },
+    "wave_3": {
+      "agent_86": {"task": "Add base OS dependency + changeset", "status": "pending"},
+      "agent_87": {"task": "Production nginx config + changeset", "status": "pending"},
+      "agent_88": {"task": "Debian Policy compliance + changeset", "status": "pending"},
+      "agent_89": {"task": "Simplify pi-post-install + changeset", "status": "pending"},
+      "agent_90": {"task": "Create atomic git commits (Phases 4-7)", "status": "pending"}
+    },
+    "wave_4": {
+      "agent_91": {"task": "Lintian compliance + changeset", "status": "pending"},
+      "agent_92": {"task": "Testing suite + changeset", "status": "pending"},
+      "agent_93": {"task": "Documentation updates + changeset", "status": "pending"},
+      "agent_94": {"task": "Run pnpm changeset version (v1.0.0)", "status": "pending"},
+      "agent_95": {"task": "Phase 2 completion report", "status": "pending"}
+    }
+  },
+
+  "phase_3_agents": {
+    "wave_1": {
+      "agent_96": {"task": "Audit test coverage", "status": "pending"},
+      "agent_97": {"task": "Create test-postinst-orchestrator.sh", "status": "pending"},
+      "agent_98": {"task": "Create test-pi-post-install.sh", "status": "pending"},
+      "agent_99": {"task": "Create test-nginx-configure.sh", "status": "pending"},
+      "agent_100": {"task": "Verify coverage >50%", "status": "pending"}
+    },
+    "wave_2": {
+      "agent_101": {"task": "Audit type: any usages", "status": "pending"},
+      "agent_102": {"task": "Create Settings value type union", "status": "pending"},
+      "agent_103": {"task": "Create AlertContext interface", "status": "pending"},
+      "agent_104": {"task": "Type ffprobe output structures", "status": "pending"},
+      "agent_105": {"task": "Verify TypeScript strict mode", "status": "pending"}
+    },
+    "wave_3": {
+      "agent_106": {"task": "Fix CLAUDE.md file paths", "status": "pending"},
+      "agent_107": {"task": "Fix CLAUDE.md schema path", "status": "pending"},
+      "agent_108": {"task": "Update README.md versions", "status": "pending"},
+      "agent_109": {"task": "Final validation", "status": "pending"},
+      "agent_110": {"task": "Phase 3 completion + production readiness", "status": "pending"}
+    }
+  },
+
+  "completed_agents": [],
+  "failed_agents": [],
+  "escalated_agents": []
+}
