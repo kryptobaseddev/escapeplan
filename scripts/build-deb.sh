@@ -27,8 +27,11 @@ case "${HOST_ARCH}" in
 esac
 
 PKG_NAME="escapeplan"
-BUILD_DIR="build/deb"
-DIST_DIR="dist"
+# Use absolute paths to avoid issues when cd'ing during the build
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+BUILD_DIR="${PROJECT_ROOT}/build/deb"
+DIST_DIR="${PROJECT_ROOT}/dist"
 
 echo "Building for architecture: ${DEB_ARCH} (detected: ${HOST_ARCH})"
 
@@ -183,8 +186,21 @@ prepare_contracts_package() {
 
 echo "Building ${PKG_NAME} v${VERSION} for ${DEB_ARCH}..."
 
-# Clean previous builds
-rm -rf "${BUILD_DIR}" "${DIST_DIR}"
+# Clean previous builds (with force for locked files)
+# Use find to forcefully remove all subdirectories
+if [ -d "${BUILD_DIR}" ]; then
+    find "${BUILD_DIR}" -mindepth 1 -delete 2>/dev/null || true
+    rm -rf "${BUILD_DIR}" 2>/dev/null || true
+fi
+
+# Handle dist directory that may have locked FUSE files
+if [ -d "${DIST_DIR}" ]; then
+    # Remove all visible files first
+    find "${DIST_DIR}" -type f ! -name '.fuse_hidden*' -delete 2>/dev/null || true
+    # Try to remove directory, ignore if FUSE files remain
+    rm -rf "${DIST_DIR}" 2>/dev/null || true
+fi
+
 mkdir -p "${BUILD_DIR}/DEBIAN" "${DIST_DIR}"
 
 # Create package structure
@@ -1209,21 +1225,27 @@ repair_contracts_dependencies() {
 
 log "EscapePlan package installation starting..."
 
-# Create escapeplan user if doesn't exist
+# Verify escapeplan user exists (must be created by base OS)
+log "Verifying escapeplan system user..."
 if ! id escapeplan &>/dev/null; then
-    log "Creating escapeplan system user..."
-    useradd -r -s /bin/false escapeplan
-    log "✓ System user created"
-else
-    log "✓ System user already exists"
+    log_error "System user 'escapeplan' does not exist"
+    log_error "This package requires the EscapePlan base OS which provides system users"
+    log_error "Please install on a system configured with the escapeplan-base image"
+    exit 1
 fi
+log "✓ System user verified"
 
-# Create required data directories
-log "Creating data directories..."
-mkdir -p /var/lib/escapeplan
-mkdir -p /var/log/escapeplan
-mkdir -p /etc/escapeplan
-mkdir -p /var/backups/escapeplan
+# Verify required data directories exist (must be created by base OS)
+log "Verifying data directories..."
+for dir in /var/lib/escapeplan /var/log/escapeplan /etc/escapeplan /var/backups/escapeplan; do
+    if [ ! -d "$dir" ]; then
+        log_error "Required directory '$dir' does not exist"
+        log_error "This package requires the EscapePlan base OS which provides system directories"
+        log_error "Please install on a system configured with the escapeplan-base image"
+        exit 1
+    fi
+done
+log "✓ All required directories verified"
 
 # Set ownership (node_modules already bundled in package)
 log "Setting directory ownership..."
