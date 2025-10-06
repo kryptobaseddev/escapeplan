@@ -295,27 +295,25 @@ log_elapsed
 # Step 5: Configure nginx
 log_step "Configuring nginx reverse proxy"
 
-if [ ! -f "/etc/nginx/sites-available/escapeplan" ]; then
-    log_warning "Nginx configuration file not found at /etc/nginx/sites-available/escapeplan"
-    log_warning "Skipping nginx configuration"
+if [ ! -f "${INSTALL_ROOT}/scripts/nginx-configure.sh" ]; then
+    log_error "nginx-configure.sh not found at ${INSTALL_ROOT}/scripts/"
+    log_error "Package installation incomplete - critical script missing"
+    log_error "Expected file: ${INSTALL_ROOT}/scripts/nginx-configure.sh"
+    exit 1
+fi
+
+log "Running nginx-configure.sh for safe deployment..."
+
+# Run nginx configuration script with output logging
+if "${INSTALL_ROOT}/scripts/nginx-configure.sh" 2>&1 | tee -a "$LOG_FILE"; then
+    log_success "Nginx configured successfully with production settings"
+    log_success "Configuration includes: rate limiting, WebSocket support, security headers"
 else
-    log "Enabling escapeplan site..."
-    ln -sf /etc/nginx/sites-available/escapeplan /etc/nginx/sites-enabled/escapeplan
-
-    log "Removing default site..."
-    rm -f /etc/nginx/sites-enabled/default
-
-    log "Testing nginx configuration..."
-    if nginx -t 2>&1 | tee -a "$LOG_FILE"; then
-        log "Restarting nginx..."
-        if systemctl restart nginx 2>&1 | tee -a "$LOG_FILE"; then
-            log_success "Nginx configured and restarted successfully"
-        else
-            log_warning "Failed to restart nginx - check configuration"
-        fi
-    else
-        log_warning "Nginx configuration test failed - skipping restart"
-    fi
+    nginx_exit_code=$?
+    log_error "Nginx configuration failed (exit code: ${nginx_exit_code})"
+    log_error "Check logs at ${LOG_FILE}"
+    log_error "Automatic rollback should have restored previous configuration"
+    log_warning "Continuing with installation, but nginx may not be properly configured"
 fi
 
 log_elapsed
