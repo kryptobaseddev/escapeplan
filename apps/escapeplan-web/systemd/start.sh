@@ -8,4 +8,4 @@ export NODE_ENV=${NODE_ENV:-production}
 export PORT=${PORT:-3000}
 export ORIGIN=${ORIGIN:-http://localhost:${PORT}}
 
-exec node "${APP_DIR}/.svelte-kit/output/server/index.js"
+exec node "${APP_DIR}/server.js"

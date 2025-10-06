@@ -970,6 +970,56 @@ export async function buildServer() {
     });
 
     // =========================================================================
+    // System Power Management Routes
+    // =========================================================================
+
+    // Shutdown system
+    api.post('/admin/system/shutdown', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_system_health')) return;
+
+      try {
+        // Respond immediately before shutdown
+        reply.send({ success: true, message: 'System shutdown initiated' });
+
+        // Wait briefly to ensure response is sent
+        setTimeout(() => {
+          request.log.info(`System shutdown initiated by ${session.user.username || session.user.email}`);
+          // Use spawn to execute shutdown command asynchronously
+          const { spawn } = require('node:child_process');
+          spawn('sudo', ['shutdown', '-h', 'now'], { detached: true, stdio: 'ignore' }).unref();
+        }, 500);
+      } catch (error) {
+        request.log.error({ err: error }, 'System shutdown failed');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // Restart system
+    api.post('/admin/system/restart', async (request, reply) => {
+      const session = await ensureAuth(request, reply);
+      if (!session) return;
+      if (!ensurePermission(reply, session.user.role, session.user.permissions, 'manage_system_health')) return;
+
+      try {
+        // Respond immediately before restart
+        reply.send({ success: true, message: 'System restart initiated' });
+
+        // Wait briefly to ensure response is sent
+        setTimeout(() => {
+          request.log.info(`System restart initiated by ${session.user.username || session.user.email}`);
+          // Use spawn to execute reboot command asynchronously
+          const { spawn } = require('node:child_process');
+          spawn('sudo', ['reboot'], { detached: true, stdio: 'ignore' }).unref();
+        }, 500);
+      } catch (error) {
+        request.log.error({ err: error }, 'System restart failed');
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    // =========================================================================
     // Settings Routes
     // =========================================================================
 

@@ -92,6 +92,44 @@
 				return 'badge-ghost';
 		}
 	}
+
+	// Power management
+	let powerAction = $state<'shutdown' | 'restart' | null>(null);
+	let powerLoading = $state(false);
+	let powerMessage = $state<{ type: 'success' | 'error'; text: string } | null>(null);
+
+	async function handlePowerAction(action: 'shutdown' | 'restart') {
+		if (!confirm(`Are you sure you want to ${action} the system? This will disconnect all users.`)) {
+			return;
+		}
+
+		try {
+			powerLoading = true;
+			powerMessage = null;
+
+			const response = await fetch(`/api/admin/system/${action}`, {
+				method: 'POST',
+				credentials: 'include'
+			});
+
+			if (!response.ok) {
+				throw new Error(`Failed to ${action} system`);
+			}
+
+			const data = await response.json();
+			powerMessage = {
+				type: 'success',
+				text: `System ${action} initiated. ${action === 'shutdown' ? 'You can unplug the device in 15 seconds.' : 'System will restart in a few seconds.'}`
+			};
+		} catch (err) {
+			powerMessage = {
+				type: 'error',
+				text: err instanceof Error ? err.message : `Failed to ${action} system`
+			};
+		} finally {
+			powerLoading = false;
+		}
+	}
 </script>
 
 <div class="space-y-6">
@@ -184,6 +222,46 @@
 			</div>
 		</div>
 	{/if}
+
+	<!-- Power Management -->
+	<div class="card bg-base-200">
+		<div class="card-body">
+			<h3 class="card-title">Power Management</h3>
+			<p class="text-sm text-base-content/60">Safely shutdown or restart the system</p>
+
+			{#if powerMessage}
+				<div class={`alert mt-4 ${powerMessage.type === 'error' ? 'alert-error' : 'alert-success'}`}>
+					<span>{powerMessage.text}</span>
+				</div>
+			{/if}
+
+			<div class="mt-4 flex flex-wrap gap-2">
+				<button
+					class="btn btn-warning btn-sm"
+					onclick={() => handlePowerAction('restart')}
+					disabled={powerLoading}
+				>
+					{#if powerLoading}
+						<span class="loading loading-spinner loading-sm"></span>
+					{/if}
+					🔄 Restart System
+				</button>
+				<button
+					class="btn btn-error btn-sm"
+					onclick={() => handlePowerAction('shutdown')}
+					disabled={powerLoading}
+				>
+					{#if powerLoading}
+						<span class="loading loading-spinner loading-sm"></span>
+					{/if}
+					⏻ Shutdown System
+				</button>
+			</div>
+			<p class="mt-2 text-xs text-base-content/40">
+				⚠️ Shutdown: Wait 15 seconds for LED to stop blinking before unplugging
+			</p>
+		</div>
+	</div>
 
 	<!-- Diagnostics -->
 	<div class="card bg-base-200">

@@ -28,7 +28,7 @@
     <p class="text-[8px] font-semibold uppercase tracking-[0.4em] text-base-content/40 md:text-[10px]">Network</p>
     <div class="mt-1 space-y-0.5 md:mt-2 md:space-y-1">
       <div class="flex items-center justify-between">
-        <p class="text-sm font-semibold text-base-content md:text-base">{stats.network.ssid ?? 'escapeplan_net'}</p>
+        <p class="text-sm font-semibold text-base-content md:text-base">{stats.network.ssid ?? 'Unknown'}</p>
         <span
           class={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-wider md:gap-1.5 md:px-2 md:text-[10px] ${stats.network.status === 'online' ? 'bg-success/15 text-success' : stats.network.status === 'degraded' ? 'bg-warning/15 text-warning' : 'bg-error/15 text-error'}`}
         >

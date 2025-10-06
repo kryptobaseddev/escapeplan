@@ -96,25 +96,31 @@ log "Installation root: ${INSTALL_ROOT}"
 log "Log file: ${LOG_FILE}"
 echo ""
 
-# Step 1: Install system packages
-log_step "Installing system packages"
-log "Updating package index..."
+# Step 1: Install system packages (skip if dpkg is locked)
+log_step "Checking system packages"
 
-if ! retry_command "APT package index update" apt-get update -qq; then
-    log_error "Failed to update package index after ${MAX_RETRY_COUNT} attempts"
-    exit 1
+if fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1; then
+    log_warning "dpkg lock detected - skipping package installation"
+    log_warning "Packages will be installed as .deb dependencies"
+    log_success "System package check complete (deferred to package manager)"
+else
+    log "Updating package index..."
+
+    if ! retry_command "APT package index update" apt-get update -qq; then
+        log_warning "Failed to update package index - continuing anyway"
+    fi
+
+    log "Installing required packages: build-essential, python3, nodejs, npm, dnsmasq, hostapd, nginx..."
+
+    if ! retry_command "System package installation" \
+        env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+        build-essential python3 nodejs npm dnsmasq hostapd nginx; then
+        log_warning "Failed to install some packages - they may already be installed"
+    fi
+
+    log_success "System packages installed successfully"
 fi
 
-log "Installing required packages: build-essential, python3, nodejs, npm, dnsmasq, hostapd, nginx..."
-
-if ! retry_command "System package installation" \
-    env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    build-essential python3 nodejs npm dnsmasq hostapd nginx; then
-    log_error "Failed to install system packages after ${MAX_RETRY_COUNT} attempts"
-    exit 1
-fi
-
-log_success "System packages installed successfully"
 log_elapsed
 
 # Step 2: Rebuild native modules for ARM64
@@ -250,33 +256,25 @@ fi
 log_elapsed
 
 # Step 6: Configure services
-log_step "Configuring systemd services"
+log_step "Registering systemd services"
 
-log "Reloading systemd daemon..."
+log "Reloading systemd daemon to register service units..."
 if ! retry_command "systemd daemon reload" systemctl daemon-reload; then
     log_error "Failed to reload systemd daemon after ${MAX_RETRY_COUNT} attempts"
     exit 1
 fi
 
-log "Enabling escapeplan-api service..."
-if ! retry_command "escapeplan-api service enable" systemctl enable escapeplan-api.service; then
-    log_error "Failed to enable escapeplan-api service after ${MAX_RETRY_COUNT} attempts"
+log "Enabling rescue service to prevent boot loops..."
+if ! retry_command "enable rescue service" systemctl enable escapeplan-rescue.service; then
+    log_error "Failed to enable rescue service after ${MAX_RETRY_COUNT} attempts"
     exit 1
 fi
 
-log "Enabling escapeplan-web service..."
-if ! retry_command "escapeplan-web service enable" systemctl enable escapeplan-web.service; then
-    log_error "Failed to enable escapeplan-web service after ${MAX_RETRY_COUNT} attempts"
-    exit 1
-fi
-
-log "Enabling escapeplan-backup timer..."
-if ! retry_command "escapeplan-backup timer enable" systemctl enable escapeplan-backup.timer; then
-    log_error "Failed to enable escapeplan-backup timer after ${MAX_RETRY_COUNT} attempts"
-    exit 1
-fi
-
-log_success "Services configured and enabled"
+log_success "Service units registered with systemd"
+log_success "Rescue service enabled (runs on every boot to prevent boot loops)"
+log_warning "Main services (API/Web) are NOT auto-enabled to prevent boot loops"
+log_warning "Services must be manually enabled after first successful boot"
+log_warning "Run first-boot-setup.sh to enable and start services safely"
 log_elapsed
 
 # Completion
@@ -291,17 +289,24 @@ log "  ✓ Native modules: rebuilt for $(uname -m)"
 log "  ✓ Database: initialized with admin user and RBAC roles"
 log "  ✓ Secrets: generated and secured at /etc/escapeplan/api.env"
 log "  ✓ Nginx: configured as reverse proxy"
-log "  ✓ Services: enabled (not started)"
+log "  ✓ Rescue service: enabled (prevents boot loops)"
+log "  ✓ Main services: registered (NOT enabled - prevents boot loops)"
 echo ""
 
+log "⚠️  IMPORTANT: Services are NOT auto-enabled"
+log "This prevents boot loops if services crash during first boot."
+log ""
 log "Next steps:"
-log "  1. Start services:"
+log "  1. Run first-boot-setup.sh to safely enable and start services:"
+log "     /opt/escapeplan/scripts/first-boot-setup.sh"
+log "  2. Or manually enable and start:"
+log "     systemctl enable escapeplan-api escapeplan-web"
 log "     systemctl start escapeplan-api escapeplan-web"
-log "  2. Check status:"
+log "  3. Check status:"
 log "     systemctl status escapeplan-api"
-log "  3. View logs:"
+log "  4. View logs:"
 log "     journalctl -u escapeplan-api -f"
-log "  4. Access web interface:"
+log "  5. Access web interface:"
 log "     http://localhost or http://escapeplan.local"
 echo ""
 

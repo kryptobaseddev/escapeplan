@@ -216,15 +216,36 @@ export async function createBackup(options: BackupOptions): Promise<BackupRespon
       await exportLogs(tempDir);
     }
 
-    // Create tar.gz archive
-    await tar.create(
-      {
-        gzip: true,
-        file: backupFilePath,
-        cwd: tempDir
-      },
-      ['.'] // Include all files in temp directory
-    );
+    // Create tar.gz archive with retry logic for transient EROFS errors
+    const createArchiveWithRetry = async (retries = 3): Promise<void> => {
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          await tar.create(
+            {
+              gzip: true,
+              file: backupFilePath,
+              cwd: tempDir
+            },
+            ['.'] // Include all files in temp directory
+          );
+          return; // Success - exit retry loop
+        } catch (error: any) {
+          const isEROFS = error?.code === 'EROFS' || error?.message?.includes('read-only file system');
+          const isLastAttempt = attempt === retries;
+
+          if (isEROFS && !isLastAttempt) {
+            console.warn(`[Backup] EROFS error on attempt ${attempt}/${retries}, retrying in ${attempt * 1000}ms...`);
+            await new Promise(resolve => setTimeout(resolve, attempt * 1000)); // Exponential backoff
+            continue;
+          }
+
+          // Either not an EROFS error, or we've exhausted retries
+          throw error;
+        }
+      }
+    };
+
+    await createArchiveWithRetry();
 
     // Calculate checksum
     const checksum = await calculateChecksum(backupFilePath);

@@ -221,10 +221,16 @@ rebuild_native_modules() {
     log "Running: npm rebuild better-sqlite3"
     log "This may take 2-3 minutes on Raspberry Pi..."
 
-    if npm rebuild better-sqlite3 >> "${LOG_FILE}" 2>&1; then
+    if timeout 300 npm rebuild better-sqlite3 >> "${LOG_FILE}" 2>&1; then
         log "✓ npm rebuild successful"
     else
-        log "ERROR: npm rebuild failed. Check ${LOG_FILE} for details"
+        local exit_code=$?
+        if [ ${exit_code} -eq 124 ]; then
+            log "ERROR: npm rebuild timed out after 300 seconds"
+            log "This may indicate insufficient system resources or a stalled build"
+        else
+            log "ERROR: npm rebuild failed with exit code ${exit_code}. Check ${LOG_FILE} for details"
+        fi
         return 1
     fi
 
@@ -254,10 +260,15 @@ install_system_packages() {
     log_section "STEP: Installing System Packages"
 
     log_info "Updating package lists..."
-    if apt-get update -qq >> "${LOG_FILE}" 2>&1; then
+    if timeout 300 apt-get update -qq >> "${LOG_FILE}" 2>&1; then
         log_success "Package lists updated"
     else
-        log_error "Failed to update package lists"
+        local exit_code=$?
+        if [ ${exit_code} -eq 124 ]; then
+            log_error "apt-get update timed out after 300 seconds"
+        else
+            log_error "Failed to update package lists"
+        fi
         return 1
     fi
 
@@ -297,10 +308,15 @@ install_system_packages() {
 
         # Use DEBIAN_FRONTEND=noninteractive to avoid prompts
         # Use -qq for quiet output (errors still shown)
-        if DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${packages_to_install[@]}" >> "${LOG_FILE}" 2>&1; then
+        if timeout 600 env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${packages_to_install[@]}" >> "${LOG_FILE}" 2>&1; then
             log_success "Installed packages: ${packages_to_install[*]}"
         else
-            log_error "Failed to install packages: ${packages_to_install[*]}"
+            local exit_code=$?
+            if [ ${exit_code} -eq 124 ]; then
+                log_error "apt-get install timed out after 600 seconds"
+            else
+                log_error "Failed to install packages: ${packages_to_install[*]}"
+            fi
             log_error "Check ${LOG_FILE} for details"
             return 1
         fi
@@ -612,19 +628,13 @@ step_validate_dependencies() {
         log_warning "Native module architecture mismatch detected"
         log_info "Rebuilding native modules for ARM64..."
 
-        # Rebuild all native modules in API
-        cd /opt/escapeplan/api
-        sudo -u escapeplan npm rebuild better-sqlite3 argon2 sharp 2>&1 | tee -a /tmp/escapeplan-post-install.log
-
-        # Verify rebuild worked
-        ARCH_CHECK=$(file node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3/build/Release/*.node 2>/dev/null | grep -o "aarch64\|ARM" || echo "FAILED")
-        if [[ "$ARCH_CHECK" == "FAILED" ]]; then
+        # Use centralized rebuild function instead of hardcoded inline rebuild
+        if ! rebuild_native_modules "/opt/escapeplan/api" "API"; then
             log_error "Native module rebuild failed"
-            exit 1
+            return 1
         fi
 
         log_success "Native modules rebuilt successfully for ARM64"
-        cd /opt/escapeplan
         return 0
     fi
 }
@@ -681,11 +691,16 @@ step_health_check() {
     fi
 
     log "Executing health check validation..."
-    if "${health_check_script}" 2>&1 | tee -a "${LOG_FILE}"; then
+    if timeout 30 "${health_check_script}" 2>&1 | tee -a "${LOG_FILE}"; then
         log_success "Health check passed"
         return 0
     else
-        log_warning "Health check reported issues - review output above"
+        local exit_code=$?
+        if [ ${exit_code} -eq 124 ]; then
+            log_warning "Health check timed out after 30 seconds"
+        else
+            log_warning "Health check reported issues - review output above"
+        fi
         return 1
     fi
 }

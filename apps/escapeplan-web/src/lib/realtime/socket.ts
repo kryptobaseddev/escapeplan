@@ -12,8 +12,15 @@ function resolveBaseUrl(): string {
     return 'http://localhost:4000';
   }
 
-  // In production, strip /api from apiBase to get the base URL
+  // In production, handle relative paths
   const base = apiBase.replace(/\/$/, '');
+
+  // If apiBase is just '/api' (relative path), socket connects to root
+  if (base === '/api') {
+    return browser ? window.location.origin : '/';
+  }
+
+  // Otherwise strip /api from absolute URLs
   if (base.endsWith('/api')) {
     return base.slice(0, -4);
   }

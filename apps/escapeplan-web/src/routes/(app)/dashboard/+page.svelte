@@ -222,12 +222,6 @@
       </p>
     </div>
     <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-      {#if dashboard}
-        <div class="badge-pill">
-          <span class="inline-flex size-2 rounded-full {dashboard.network.status === 'online' ? 'bg-success' : dashboard.network.status === 'degraded' ? 'bg-warning' : 'bg-error'}"></span>
-          <span>Network {dashboard.network.status} · refreshed {formatTime(dashboard.generatedAt)}</span>
-        </div>
-      {/if}
       {#if canManageSessions && games.length}
         <button class="btn btn-secondary w-full sm:w-auto" onclick={() => (quickStartOpen = true)}>
           + Quick start session

@@ -161,7 +161,8 @@ function buildBaseOptions(): BetterAuthOptions {
       }
     },
     advanced: {
-      useSecureCookies: runtime.isProduction
+      // HTTP-only (no TLS) for local network deployment - cookies work without HTTPS
+      useSecureCookies: false
     },
     session: {
       cookieCache: {

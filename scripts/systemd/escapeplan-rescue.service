@@ -1,0 +1,28 @@
+[Unit]
+Description=EscapePlan Boot Rescue Service
+Documentation=https://github.com/kryptobaseddev/escapeplan-app
+Before=escapeplan-api.service escapeplan-web.service
+DefaultDependencies=no
+After=local-fs.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=root
+WorkingDirectory=/opt/escapeplan
+
+# Execute boot rescue script
+ExecStart=/opt/escapeplan/scripts/boot-rescue.sh
+
+# Logging to systemd journal
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=escapeplan-rescue
+
+# Timeout settings
+TimeoutStartSec=30
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

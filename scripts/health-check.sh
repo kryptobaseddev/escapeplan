@@ -364,6 +364,123 @@ check_node_installation() {
     return 0
 }
 
+check_better_sqlite3_module() {
+    check_start "better-sqlite3 module loads correctly"
+
+    # Test in API directory where the module is installed
+    cd /opt/escapeplan/api || {
+        check_fail "Cannot access /opt/escapeplan/api directory"
+        return 1
+    }
+
+    if node -e "require('better-sqlite3')" 2>/dev/null; then
+        check_pass "better-sqlite3 module loads successfully"
+        return 0
+    else
+        check_fail "better-sqlite3 module failed to load (may need ARM64 rebuild)"
+        [ "$VERBOSE" -eq 1 ] && log_info "Run rebuild: cd /opt/escapeplan/api && npm rebuild better-sqlite3"
+        return 1
+    fi
+}
+
+check_api_can_start() {
+    check_start "API service can start (pre-flight test)"
+
+    # Skip if service is already running
+    if systemctl is-active escapeplan-api.service >/dev/null 2>&1; then
+        check_pass "API service already running (skipping start test)"
+        return 0
+    fi
+
+    # Check if database is initialized
+    if [ ! -f /var/lib/escapeplan/.db-initialized ]; then
+        log_warning "Database not initialized yet (expected during fresh install)"
+        return 0
+    fi
+
+    # Attempt to start API in background with timeout
+    cd /opt/escapeplan/api || {
+        check_fail "Cannot access /opt/escapeplan/api directory"
+        return 1
+    }
+
+    local api_pid
+    # Start API in background, capture PID
+    timeout 10s node dist/index.js >/tmp/api-preflight.log 2>&1 &
+    api_pid=$!
+
+    # Wait briefly to see if it crashes immediately
+    sleep 2
+
+    if kill -0 "$api_pid" 2>/dev/null; then
+        # Process still running after 2s - success
+        kill "$api_pid" 2>/dev/null || true
+        wait "$api_pid" 2>/dev/null || true
+        check_pass "API can start successfully (tested and killed)"
+        return 0
+    else
+        check_fail "API failed to start"
+        [ "$VERBOSE" -eq 1 ] && log_info "Check logs: /tmp/api-preflight.log"
+        return 1
+    fi
+}
+
+check_web_can_start() {
+    check_start "Web service can start (pre-flight test)"
+
+    # Skip if service is already running
+    if systemctl is-active escapeplan-web.service >/dev/null 2>&1; then
+        check_pass "Web service already running (skipping start test)"
+        return 0
+    fi
+
+    # Attempt to start Web server in background with timeout
+    cd /opt/escapeplan/web || {
+        check_fail "Cannot access /opt/escapeplan/web directory"
+        return 1
+    }
+
+    local web_pid
+    # Start Web in background, capture PID
+    timeout 10s node server.js >/tmp/web-preflight.log 2>&1 &
+    web_pid=$!
+
+    # Wait briefly to see if it crashes immediately
+    sleep 2
+
+    if kill -0 "$web_pid" 2>/dev/null; then
+        # Process still running after 2s - success
+        kill "$web_pid" 2>/dev/null || true
+        wait "$web_pid" 2>/dev/null || true
+        check_pass "Web can start successfully (tested and killed)"
+        return 0
+    else
+        check_fail "Web failed to start"
+        [ "$VERBOSE" -eq 1 ] && log_info "Check logs: /tmp/web-preflight.log"
+        return 1
+    fi
+}
+
+check_network_configuration() {
+    check_start "Network configuration (wlan0 has 10.10.10.1)"
+
+    # Check if wlan0 interface exists
+    if ! ip addr show wlan0 >/dev/null 2>&1; then
+        log_warning "wlan0 interface not found (expected on production Pi only)"
+        return 0
+    fi
+
+    # Check if 10.10.10.1 is assigned to wlan0
+    if ip addr show wlan0 | grep -q "inet 10.10.10.1/"; then
+        check_pass "wlan0 has correct IP address (10.10.10.1)"
+        return 0
+    else
+        log_warning "wlan0 exists but does not have 10.10.10.1 configured"
+        [ "$VERBOSE" -eq 1 ] && log_info "This is expected on development machines"
+        return 0
+    fi
+}
+
 # Main Execution
 # =============
 
@@ -376,6 +493,7 @@ main() {
     # Pre-flight checks
     check_escapeplan_user || true
     check_node_installation || true
+    check_better_sqlite3_module || true
 
     # Directory structure checks
     check_required_directories || true
@@ -396,6 +514,13 @@ main() {
     check_database_file || true
     check_api_http_health || true
     check_web_http_response || true
+
+    # Pre-flight service start tests
+    check_api_can_start || true
+    check_web_can_start || true
+
+    # Network configuration (warning only)
+    check_network_configuration || true
 
     # Summary
     echo ""
