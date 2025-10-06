@@ -1,0 +1,176 @@
+{
+  "session_id": "v0.1.7-bulletproof-cleanup-2025-10-05",
+  "objective": "Ensure v0.1.7 is production-ready with zero deployment issues",
+  "scope": "NO new features - only fixes, optimization, cleanup",
+  "quality_gates": {
+    "tests_pass": "100%",
+    "builds_arm64": true,
+    "builds_x86_64": true,
+    "no_broken_changesets": true,
+    "clean_git_commits": true,
+    "deployment_verified": true
+  },
+
+  "critical_issues": [
+    {
+      "id": "ISSUE-001",
+      "title": "Invalid changeset references escapeplan-deployment",
+      "file": ".changeset/fix-nginx-api-prefix-stripping-v0-1-7.md",
+      "problem": "References non-existent package 'escapeplan-deployment'",
+      "solution": "Either remove changeset (already deployed) or change to reference correct package",
+      "priority": "CRITICAL",
+      "agents": ["21"]
+    },
+    {
+      "id": "ISSUE-002",
+      "title": "tmp-api-deploy directory purpose unclear",
+      "location": "apps/tmp-api-deploy/",
+      "problem": "Unknown if needed, purpose unclear, may be outdated deployment artifact",
+      "solution": "Investigate purpose, determine if should be kept/archived/deleted",
+      "priority": "HIGH",
+      "agents": ["22", "23", "24", "25", "26"]
+    },
+    {
+      "id": "ISSUE-003",
+      "title": "Multi-architecture build support",
+      "problem": "build-deb.sh only handles arm64, need x86_64 support",
+      "solution": "Update build script to support both architectures",
+      "priority": "HIGH",
+      "agents": ["27", "28"]
+    },
+    {
+      "id": "ISSUE-004",
+      "title": "Version sync across files",
+      "files": ["VERSION", "package.json", "changesets"],
+      "problem": "Ensure version consistency before v0.1.7 release",
+      "solution": "Verify and sync all version references",
+      "priority": "HIGH",
+      "agents": ["29"]
+    }
+  ],
+
+  "optimization_areas": [
+    {
+      "area": "Changeset Organization",
+      "tasks": [
+        "Process all valid changesets",
+        "Move deployment notes to docs/",
+        "Ensure CLI changesets have valid YAML",
+        "Verify package references exist"
+      ],
+      "agents": ["30", "31", "32"]
+    },
+    {
+      "area": "Build System",
+      "tasks": [
+        "Audit build-deb.sh for arm64 completeness",
+        "Add x86_64 build support",
+        "Verify all native modules (sharp, better-sqlite3)",
+        "Test build on both architectures"
+      ],
+      "agents": ["33", "34", "35"]
+    },
+    {
+      "area": "Deployment Scripts",
+      "tasks": [
+        "Verify pi-post-install.sh NetworkManager setup",
+        "Ensure postinst-orchestrator.sh error handling",
+        "Test first-boot-setup.sh flow",
+        "Validate nginx config template"
+      ],
+      "agents": ["36", "37", "38", "39"]
+    },
+    {
+      "area": "Documentation",
+      "tasks": [
+        "Update DEPLOY.md for v0.1.7",
+        "Add multi-arch build instructions",
+        "Document tmp-api-deploy purpose (if kept)",
+        "Update changelog from changesets"
+      ],
+      "agents": ["40", "41"]
+    },
+    {
+      "area": "Code Quality",
+      "tasks": [
+        "Run linter on all modified files",
+        "Verify TypeScript strict mode compliance",
+        "Check for unused imports/variables",
+        "Ensure test coverage ≥80%"
+      ],
+      "agents": ["42", "43"]
+    }
+  ],
+
+  "git_commit_strategy": {
+    "approach": "Small, atomic commits per logical change group",
+    "groups": [
+      {
+        "name": "fix-invalid-changeset",
+        "files": [".changeset/fix-nginx-api-prefix-stripping-v0-1-7.md"],
+        "message": "fix: remove invalid changeset referencing non-existent escapeplan-deployment package"
+      },
+      {
+        "name": "tmp-api-deploy-cleanup",
+        "files": ["apps/tmp-api-deploy/"],
+        "message": "chore: archive/remove tmp-api-deploy directory [based on investigation]"
+      },
+      {
+        "name": "multi-arch-build",
+        "files": ["scripts/build-deb.sh"],
+        "message": "feat: add x86_64 build support to build-deb.sh"
+      },
+      {
+        "name": "version-sync",
+        "files": ["VERSION", "package.json"],
+        "message": "chore: sync version across all files for v0.1.7"
+      },
+      {
+        "name": "changeset-cleanup",
+        "files": [".changeset/", "docs/"],
+        "message": "chore: organize changesets and documentation"
+      },
+      {
+        "name": "deployment-hardening",
+        "files": ["scripts/"],
+        "message": "fix: harden deployment scripts for production reliability"
+      }
+    ]
+  },
+
+  "agent_waves": {
+    "wave_1": {
+      "agents": ["21-30"],
+      "focus": "Critical issues + investigation",
+      "estimated_time": "30-45min"
+    },
+    "wave_2": {
+      "agents": ["31-40"],
+      "focus": "Build system + deployment scripts",
+      "estimated_time": "45-60min"
+    },
+    "wave_3": {
+      "agents": ["41-50"],
+      "focus": "Documentation + code quality",
+      "estimated_time": "30-45min"
+    },
+    "wave_4": {
+      "agents": ["51-60"],
+      "focus": "Final validation + testing",
+      "estimated_time": "30-45min"
+    }
+  },
+
+  "success_criteria": [
+    "All tests pass (100%)",
+    "Build succeeds for arm64",
+    "Build succeeds for x86_64",
+    "All changesets valid or documented",
+    "Version synced across all files",
+    "Deployment scripts tested",
+    "Git history clean with atomic commits",
+    "No lint errors",
+    "Documentation updated",
+    "Production deployment verified"
+  ]
+}
