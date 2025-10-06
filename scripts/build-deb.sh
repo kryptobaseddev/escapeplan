@@ -130,7 +130,7 @@ prepare_contracts_package() {
     # Copy dist directory
     echo "[CONTRACTS] Copying dist directory..."
     cp -r "${contracts_source}/dist" "${contracts_dest}/"
-    echo "[CONTRACTS] ✓ dist directory copied ($(du -sh ${contracts_dest}/dist | cut -f1))"
+    echo "[CONTRACTS] ✓ dist directory copied ($(du -sh "${contracts_dest}/dist" | cut -f1))"
 
     # Copy package.json
     echo "[CONTRACTS] Copying package.json..."
@@ -224,7 +224,7 @@ if [ -z "${BETTER_SQLITE3_PNPM_DIR}" ]; then
     echo "ERROR: better-sqlite3@12.4.1 pnpm directory not found"
     echo "Expected pattern: node_modules/.pnpm/better-sqlite3@12.4.1*"
     echo "Available directories:"
-    ls -la "node_modules/.pnpm" | grep better-sqlite3 || echo "  None found"
+    find "node_modules/.pnpm" -maxdepth 1 -name "better-sqlite3@*" -type d 2>/dev/null || echo "  None found"
     exit 1
 fi
 
@@ -341,11 +341,11 @@ ARCH_CHECK=$(file "${BETTER_SQLITE3_BINARY_PATH}" | grep -o "${ARCH_VERIFY_STRIN
 
 if [ -n "${ARCH_CHECK}" ]; then
     echo "✓ Binary verification PASSED: ${ARCH_VERIFY_STRING}"
-    echo "  Full file output: $(file ${BETTER_SQLITE3_BINARY_PATH})"
+    echo "  Full file output: $(file "${BETTER_SQLITE3_BINARY_PATH}")"
 else
     echo "ERROR: Binary verification FAILED"
     echo "  Expected: ${ARCH_VERIFY_STRING}"
-    echo "  Got: $(file ${BETTER_SQLITE3_BINARY_PATH})"
+    echo "  Got: $(file "${BETTER_SQLITE3_BINARY_PATH}")"
     rm -rf "${TEMP_SQLITE_DIR}"
     exit 1
 fi
@@ -365,7 +365,7 @@ rm -rf "${TEMP_SQLITE_DIR}"
 
 echo "✓ better-sqlite3 ${DEB_ARCH} binary installed and verified"
 echo "  Location: ${BETTER_SQLITE3_BINARY_PATH}"
-echo "  Size: $(du -h ${BETTER_SQLITE3_BINARY_PATH} | cut -f1)"
+echo "  Size: $(du -h "${BETTER_SQLITE3_BINARY_PATH}" | cut -f1)"
 cd -
 
 echo "Deploying production dependencies for Web..."
@@ -1326,5 +1326,5 @@ echo "✅ Build Complete!"
 echo "=========================================="
 echo "Package: ${DEB_FILE}"
 echo "Architecture: ${DEB_ARCH} (host: ${HOST_ARCH})"
-echo "Size: $(du -h ${DEB_FILE} | cut -f1)"
+echo "Size: $(du -h "${DEB_FILE}" | cut -f1)"
 echo "=========================================="

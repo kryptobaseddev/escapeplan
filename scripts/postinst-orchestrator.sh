@@ -67,7 +67,7 @@ log_elapsed() {
 # Error cleanup trap
 cleanup_on_error() {
     local exit_code=$?
-    if [ $exit_code -ne 0 ]; then
+    if [ "$exit_code" -ne 0 ]; then
         log_error "Orchestration failed with exit code $exit_code"
         log_error "Rolling back partial installation..."
 
@@ -130,7 +130,9 @@ else
     log "Updating package index..."
 
     if ! retry_command "APT package index update" apt-get update -qq; then
-        log_warning "Failed to update package index - continuing anyway"
+        log_warning "Failed to update package index after ${MAX_RETRY_COUNT} attempts"
+        log_warning "Package installation may fail - network issue or repository unavailable"
+        log_warning "Continuing anyway - packages may already be installed"
     fi
 
     log "Installing required packages: build-essential, python3, nodejs, npm, network-manager, nginx..."
@@ -138,7 +140,9 @@ else
     if ! retry_command "System package installation" \
         env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
         build-essential python3 nodejs npm network-manager nginx; then
-        log_warning "Failed to install some packages - they may already be installed"
+        log_warning "Failed to install some system packages after ${MAX_RETRY_COUNT} attempts"
+        log_warning "Packages: build-essential, python3, nodejs, npm, network-manager, nginx"
+        log_warning "They may already be installed - verify with: dpkg -l | grep <package-name>"
     fi
 
     log_success "System packages installed successfully"
@@ -151,6 +155,9 @@ log_step "Rebuilding native modules for $(uname -m)"
 
 if [ ! -f "${INSTALL_ROOT}/scripts/pi-post-install.sh" ]; then
     log_error "pi-post-install.sh not found at ${INSTALL_ROOT}/scripts/"
+    log_error "Package installation incomplete - critical script missing"
+    log_error "Expected file: ${INSTALL_ROOT}/scripts/pi-post-install.sh"
+    log_error "Reinstall package: sudo dpkg -i --force-all escapeplan_*.deb"
     exit 1
 fi
 
@@ -160,13 +167,13 @@ log "Running pi-post-install.sh to rebuild native modules..."
 if timeout 600 "${INSTALL_ROOT}/scripts/pi-post-install.sh" "$INSTALL_ROOT" 2>&1 | tee -a "$LOG_FILE"; then
     log_success "Native modules rebuilt successfully"
 else
-    local exit_code=$?
-    if [ ${exit_code} -eq 124 ]; then
+    rebuild_exit_code=$?
+    if [ ${rebuild_exit_code} -eq 124 ]; then
         log_error "Native module rebuild timed out after 10 minutes"
         log_error "This may indicate an infinite loop - check ${LOG_FILE}"
         exit 1
     else
-        log_warning "Native module rebuild had warnings (exit code: ${exit_code})"
+        log_warning "Native module rebuild had warnings (exit code: ${rebuild_exit_code})"
         log_warning "Check ${LOG_FILE} for details"
         log "Continuing with installation..."
     fi
@@ -179,6 +186,9 @@ log_step "Initializing database"
 
 if [ ! -f "${INSTALL_ROOT}/api/dist/db/seed.js" ]; then
     log_error "Database seed script not found at ${INSTALL_ROOT}/api/dist/db/seed.js"
+    log_error "API dist files missing - build may have failed during packaging"
+    log_error "Expected: ${INSTALL_ROOT}/api/dist/db/seed.js"
+    log_error "This is a package build issue - contact support or rebuild package"
     exit 1
 fi
 
@@ -219,13 +229,13 @@ else
         chown escapeplan:escapeplan /var/lib/escapeplan/.db-initialized
         log_success "Database initialized with admin user and RBAC roles"
     else
-        local exit_code=$?
-        if [ ${exit_code} -eq 124 ]; then
+        db_init_exit_code=$?
+        if [ ${db_init_exit_code} -eq 124 ]; then
             log_error "Database initialization timed out after 2 minutes"
             log_error "This may indicate an infinite loop - check ${LOG_FILE}"
             exit 1
         else
-            log_error "Database initialization failed (exit code: ${exit_code})"
+            log_error "Database initialization failed (exit code: ${db_init_exit_code})"
             log_error "Check logs at ${LOG_FILE}"
             log_error "You may need to run manually: sudo -u escapeplan node ${INSTALL_ROOT}/api/dist/db/seed.js"
             exit 1
@@ -304,12 +314,17 @@ log_step "Registering systemd services"
 log "Reloading systemd daemon to register service units..."
 if ! retry_command "systemd daemon reload" systemctl daemon-reload; then
     log_error "Failed to reload systemd daemon after ${MAX_RETRY_COUNT} attempts"
+    log_error "Cannot register new service units without daemon reload"
+    log_error "This should rarely fail - check systemd: systemctl status"
     exit 1
 fi
 
 log "Enabling rescue service to prevent boot loops..."
 if ! retry_command "enable rescue service" systemctl enable escapeplan-rescue.service; then
     log_error "Failed to enable rescue service after ${MAX_RETRY_COUNT} attempts"
+    log_error "Rescue service critical for boot loop prevention"
+    log_error "Service file: /etc/systemd/system/escapeplan-rescue.service"
+    log_error "Check if file exists and is valid"
     exit 1
 fi
 
