@@ -248,50 +248,72 @@ fi
 if [ -f "/var/lib/escapeplan/.db-initialized" ]; then
     log_success "Database already initialized, skipping"
 else
-    log "Running database seed script..."
+    log "Running database seed script with retry logic..."
 
     # Set environment variables for database initialization
     export DATABASE_URL="/var/lib/escapeplan/escapeplan.db"
     export NODE_ENV="production"
 
-    # Run seed script as escapeplan user with timeout
-    if timeout 120 su -s /bin/bash escapeplan -c "cd '${INSTALL_ROOT}/api' && node dist/db/seed.js" 2>&1 | tee -a "$LOG_FILE"; then
-        # Validate database schema completeness
-        log "Validating database schema..."
-        if ! su -s /bin/bash escapeplan -c "cd '${INSTALL_ROOT}/api' && node -e \"
-            const Database = require('better-sqlite3');
-            const db = new Database('/var/lib/escapeplan/escapeplan.db', { readonly: true });
-            const tables = db.prepare('SELECT name FROM sqlite_master WHERE type=\\'table\\'').all();
-            const tableCount = tables.length;
-            db.close();
+    # Retry logic with exponential backoff
+    DB_INIT_RETRIES=3
+    DB_INIT_ATTEMPT=0
+    DB_INIT_SUCCESS=0
 
-            // Expect at least 30 tables from schema
-            if (tableCount < 30) {
-                console.error('ERROR: Only ' + tableCount + ' tables found, expected at least 30');
-                process.exit(1);
-            }
-            console.log('✓ Database has ' + tableCount + ' tables');
-        \"" 2>&1 | tee -a "$LOG_FILE"; then
-            log_error "Database schema validation failed"
-            log_error "Database may be incomplete or corrupted"
-            exit 1
-        fi
-        # Mark database as initialized
-        touch /var/lib/escapeplan/.db-initialized
-        chown escapeplan:escapeplan /var/lib/escapeplan/.db-initialized
-        log_success "Database initialized with admin user and RBAC roles"
-    else
-        db_init_exit_code=$?
-        if [ ${db_init_exit_code} -eq 124 ]; then
-            log_error "Database initialization timed out after 2 minutes"
-            log_error "This may indicate an infinite loop - check ${LOG_FILE}"
-            exit 1
+    while [ ${DB_INIT_ATTEMPT} -lt ${DB_INIT_RETRIES} ]; do
+        DB_INIT_ATTEMPT=$((DB_INIT_ATTEMPT + 1))
+        log "Database initialization attempt ${DB_INIT_ATTEMPT}/${DB_INIT_RETRIES}"
+
+        # Run seed script as escapeplan user with timeout
+        if timeout 120 su -s /bin/bash escapeplan -c "cd '${INSTALL_ROOT}/api' && node dist/db/seed.js" 2>&1 | tee -a "$LOG_FILE"; then
+            # Validate database schema completeness
+            log "Validating database schema..."
+            if su -s /bin/bash escapeplan -c "cd '${INSTALL_ROOT}/api' && node -e \"
+                const Database = require('better-sqlite3');
+                const db = new Database('/var/lib/escapeplan/escapeplan.db', { readonly: true });
+                const tables = db.prepare('SELECT name FROM sqlite_master WHERE type=\\'table\\'').all();
+                const tableCount = tables.length;
+                db.close();
+
+                // Expect at least 30 tables from schema
+                if (tableCount < 30) {
+                    console.error('ERROR: Only ' + tableCount + ' tables found, expected at least 30');
+                    process.exit(1);
+                }
+                console.log('✓ Database has ' + tableCount + ' tables');
+            \"" 2>&1 | tee -a "$LOG_FILE"; then
+                # Mark database as initialized
+                touch /var/lib/escapeplan/.db-initialized
+                chown escapeplan:escapeplan /var/lib/escapeplan/.db-initialized
+                log_success "Database initialized with admin user and RBAC roles"
+                DB_INIT_SUCCESS=1
+                break
+            else
+                log_warning "Database validation failed on attempt ${DB_INIT_ATTEMPT}"
+            fi
         else
-            log_error "Database initialization failed (exit code: ${db_init_exit_code})"
-            log_error "Check logs at ${LOG_FILE}"
-            log_error "You may need to run manually: sudo -u escapeplan node ${INSTALL_ROOT}/api/dist/db/seed.js"
-            exit 1
+            db_init_exit_code=$?
+            if [ ${db_init_exit_code} -eq 124 ]; then
+                log_warning "Database initialization timed out after 2 minutes (attempt ${DB_INIT_ATTEMPT})"
+            else
+                log_warning "Database initialization failed with exit code ${db_init_exit_code} (attempt ${DB_INIT_ATTEMPT})"
+            fi
         fi
+
+        # Calculate exponential backoff delay if retrying
+        if [ ${DB_INIT_ATTEMPT} -lt ${DB_INIT_RETRIES} ]; then
+            # Exponential backoff: 5s, 10s, 20s
+            BACKOFF_DELAY=$((5 * (2 ** (DB_INIT_ATTEMPT - 1))))
+            log "Retrying in ${BACKOFF_DELAY} seconds..."
+            sleep ${BACKOFF_DELAY}
+        fi
+    done
+
+    # Check if initialization succeeded
+    if [ ${DB_INIT_SUCCESS} -eq 0 ]; then
+        log_error "Database initialization failed after ${DB_INIT_RETRIES} attempts"
+        log_error "Check logs at ${LOG_FILE}"
+        log_error "You may need to run manually: sudo -u escapeplan node ${INSTALL_ROOT}/api/dist/db/seed.js"
+        exit 1
     fi
 fi
 

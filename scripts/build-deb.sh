@@ -1382,6 +1382,193 @@ EOF
 
 chmod 755 "${BUILD_DIR}/DEBIAN/postinst"
 
+# Create prerm script
+cat > "${BUILD_DIR}/DEBIAN/prerm" << 'EOF'
+#!/bin/bash
+set -e
+
+# ============================================================================
+# EscapePlan Package Pre-Removal Script
+# ============================================================================
+# Handles service shutdown before package removal or upgrade.
+#
+# Called by dpkg with arguments:
+#   remove             - Package is being removed
+#   upgrade <new-ver>  - Package is being upgraded
+#   deconfigure        - Package conflicts resolved by removal
+#   failed-upgrade     - Upgrade failed, rolling back
+# ============================================================================
+
+log() {
+    echo "[prerm] $1"
+    logger -t escapeplan-prerm -p daemon.info "$1" 2>/dev/null || true
+}
+
+log_error() {
+    echo "[prerm] ERROR: $1" >&2
+    logger -t escapeplan-prerm -p daemon.err "$1" 2>/dev/null || true
+}
+
+case "$1" in
+    remove|deconfigure)
+        log "Package removal initiated - stopping services..."
+
+        # Stop all EscapePlan services
+        for service in escapeplan-api.service escapeplan-web.service escapeplan-backup.timer; do
+            if systemctl is-active "$service" >/dev/null 2>&1; then
+                log "Stopping $service..."
+                systemctl stop "$service" 2>/dev/null || true
+            fi
+        done
+
+        # Stop all ffmpeg camera workers
+        if systemctl list-units 'escapeplan-ffmpeg@*.service' --all | grep -q 'escapeplan-ffmpeg'; then
+            log "Stopping camera stream workers..."
+            systemctl stop 'escapeplan-ffmpeg@*.service' 2>/dev/null || true
+        fi
+
+        # Disable services on removal (not upgrade)
+        if [ "$1" = "remove" ]; then
+            log "Disabling services..."
+            for service in escapeplan-api.service escapeplan-web.service escapeplan-backup.timer escapeplan-rescue.service; do
+                if systemctl is-enabled "$service" >/dev/null 2>&1; then
+                    systemctl disable "$service" 2>/dev/null || true
+                fi
+            done
+        fi
+
+        log "Services stopped successfully"
+        ;;
+
+    upgrade|failed-upgrade)
+        log "Package upgrade in progress - keeping services running"
+        log "Services will be restarted by postinst after upgrade completes"
+        # Do NOT stop services during upgrade to minimize downtime
+        ;;
+
+    *)
+        log_error "prerm called with unknown argument: $1"
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
+EOF
+
+chmod 755 "${BUILD_DIR}/DEBIAN/prerm"
+
+# Create postrm script
+cat > "${BUILD_DIR}/DEBIAN/postrm" << 'EOF'
+#!/bin/bash
+set -e
+
+# ============================================================================
+# EscapePlan Package Post-Removal Script
+# ============================================================================
+# Handles cleanup after package removal or purge.
+#
+# Called by dpkg with arguments:
+#   purge              - Remove all configuration and data
+#   remove             - Package removed, config preserved
+#   upgrade            - Package upgraded successfully
+#   failed-upgrade     - Upgrade failed, old version restored
+#   abort-install      - Installation aborted
+#   abort-upgrade      - Upgrade aborted
+#   disappear          - Package overwritten by another
+# ============================================================================
+
+log() {
+    echo "[postrm] $1"
+    logger -t escapeplan-postrm -p daemon.info "$1" 2>/dev/null || true
+}
+
+log_error() {
+    echo "[postrm] ERROR: $1" >&2
+    logger -t escapeplan-postrm -p daemon.err "$1" 2>/dev/null || true
+}
+
+case "$1" in
+    purge)
+        log "Purging all EscapePlan configuration and data..."
+
+        # Remove all configuration directories
+        log "Removing configuration files..."
+        rm -rf /etc/escapeplan
+
+        # Remove all data directories
+        log "Removing database and application data..."
+        rm -rf /var/lib/escapeplan
+
+        # Remove all log files
+        log "Removing log files..."
+        rm -rf /var/log/escapeplan
+
+        # Remove all backup files
+        log "Removing backup files..."
+        rm -rf /var/backups/escapeplan
+
+        # Remove nginx configuration
+        log "Removing nginx configuration..."
+        rm -f /etc/nginx/sites-enabled/escapeplan
+        rm -f /etc/nginx/sites-available/escapeplan
+
+        # Reload nginx if running
+        if systemctl is-active nginx >/dev/null 2>&1; then
+            log "Reloading nginx..."
+            systemctl reload nginx 2>/dev/null || true
+        fi
+
+        # Remove system user and group
+        log "Removing system user and group..."
+        if id escapeplan >/dev/null 2>&1; then
+            userdel escapeplan 2>/dev/null || true
+        fi
+        if getent group escapeplan >/dev/null 2>&1; then
+            groupdel escapeplan 2>/dev/null || true
+        fi
+
+        # Remove temporary files
+        log "Removing temporary files..."
+        rm -f /tmp/escapeplan-*.log
+        rm -f /var/log/escapeplan-install.log
+
+        # Reload systemd daemon to clean up unit cache
+        systemctl daemon-reload 2>/dev/null || true
+
+        log "Purge complete - all EscapePlan data removed"
+        ;;
+
+    remove)
+        log "Package removed - preserving configuration and data"
+
+        # Clean up temporary files only
+        rm -f /tmp/escapeplan-*.log
+
+        # Reload systemd daemon
+        systemctl daemon-reload 2>/dev/null || true
+
+        log "Cleanup complete - configuration and data preserved"
+        ;;
+
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        log "Package operation: $1 - no cleanup required"
+        ;;
+
+    *)
+        log_error "postrm called with unknown argument: $1"
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0
+EOF
+
+chmod 755 "${BUILD_DIR}/DEBIAN/postrm"
+
 # Build .deb package
 DEB_FILE="${DIST_DIR}/${PKG_NAME}_${VERSION}_${DEB_ARCH}.deb"
 dpkg-deb --build "${BUILD_DIR}" "${DEB_FILE}"
