@@ -107,7 +107,22 @@
       milestones: (game.milestones ?? []) as EditableMilestone[],
       media: game.media ?? { galleryAssetIds: [] },
       roomDisplayConfig: game.roomDisplayConfig,
-      pricing: game.pricing ?? {
+      pricing: game.pricing ? {
+        tiers: game.pricing.tiers?.map(tier => ({
+          ...tier,
+          priceCents: tier.priceCents / 100,
+          basePriceCents: tier.basePriceCents != null ? tier.basePriceCents / 100 : undefined,
+          additionalHourCents: tier.additionalHourCents != null ? tier.additionalHourCents / 100 : undefined
+        })) ?? [],
+        deposit: game.pricing.deposit ? {
+          ...game.pricing.deposit,
+          amountCents: game.pricing.deposit.amountCents != null ? game.pricing.deposit.amountCents / 100 : null
+        } : { required: false },
+        discounts: game.pricing.discounts?.map(discount => ({
+          ...discount,
+          amountOffCents: discount.amountOffCents != null ? discount.amountOffCents / 100 : null
+        })) ?? []
+      } : {
         tiers: [],
         deposit: { required: false },
         discounts: []

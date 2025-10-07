@@ -53,6 +53,7 @@ export {
   archiveOperatorAccount,
   unarchiveOperatorAccount,
   findOperatorById,
+  findOperatorByUsername,
   listOperatorSummaries,
   updateOperatorLoginTimestamp,
   getUserPermissions,

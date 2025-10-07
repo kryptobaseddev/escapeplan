@@ -459,6 +459,15 @@ class OperatorsState {
   }
 
   /**
+   * Find an operator by username
+   */
+  findOperatorByUsername(username: string): OperatorProfile | undefined {
+    const stmt = sqlite.prepare(`SELECT * FROM user WHERE username = ? AND user_type = 'operator' LIMIT 1`);
+    const row = stmt.get(username) as OperatorRow | undefined;
+    return mapOperator(row);
+  }
+
+  /**
    * List operator summaries with filters
    */
   listOperatorSummaries(filters: OperatorListFilters = {}): OperatorSummary[] {
@@ -575,6 +584,9 @@ export const unarchiveOperatorAccount = (id: string) =>
 
 export const findOperatorById = (id: string) =>
   operatorsState.findOperatorById(id);
+
+export const findOperatorByUsername = (username: string) =>
+  operatorsState.findOperatorByUsername(username);
 
 export const listOperatorSummaries = (filters?: OperatorListFilters) =>
   operatorsState.listOperatorSummaries(filters);

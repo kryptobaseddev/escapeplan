@@ -9,7 +9,7 @@ class ToastStore {
   toasts = $state<Toast[]>([]);
 
   add(toast: Omit<Toast, 'id'>) {
-    const id = crypto.randomUUID();
+    const id = crypto?.randomUUID?.() || Math.random().toString(36).slice(2,10);
     const newToast: Toast = { id, ...toast };
     this.toasts.push(newToast);
 

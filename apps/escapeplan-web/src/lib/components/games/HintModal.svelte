@@ -53,8 +53,9 @@
   let uploadError = $state<string | null>(null);
 
   function createEmptyHint(): EditableHint {
+    const uuid = hint?.uuid ?? `hint-${crypto?.randomUUID?.() || Math.random().toString(36).slice(2,10)}`;
     return {
-      uuid: hint?.uuid ?? `hint-${crypto.randomUUID()}`,
+      uuid,
       type: 'text',
       content: '',
       assetUrl: '',

@@ -22,10 +22,8 @@
   let searchTerm = $state('');
 
   const uid = (prefix: string) => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return `${prefix}-${crypto.randomUUID()}`;
-    }
-    return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+    const uuid = crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 10);
+    return `${prefix}-${uuid}`;
   };
 
   const handleFeedback = (message: string, type: 'success' | 'error' = 'success') => {

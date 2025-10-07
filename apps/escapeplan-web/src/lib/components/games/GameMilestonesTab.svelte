@@ -24,10 +24,8 @@
 
   // Helper function to generate unique IDs
   function uid(prefix: string) {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return `${prefix}-${crypto.randomUUID()}`;
-    }
-    return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const uuid = crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    return `${prefix}-${uuid}`;
   }
 
   // Helper function to move array items
