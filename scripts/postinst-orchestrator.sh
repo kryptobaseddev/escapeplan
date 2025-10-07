@@ -119,7 +119,8 @@ log "Installation root: ${INSTALL_ROOT}"
 log "Log file: ${LOG_FILE}"
 echo ""
 
-# Step 1: Verify base OS packages (no installation)
+# Step 1: Verify base OS dependencies
+# System packages and NetworkManager provided by base OS
 log_step "Verifying base OS dependencies"
 
 # Required commands that must be present in base OS
@@ -150,16 +151,14 @@ if [ ${#missing_commands[@]} -gt 0 ]; then
         log_error "  - $missing"
     done
     log_error ""
-    log_error "These packages must be installed in your base OS before installing EscapePlan."
-    log_error "Install them with:"
-    log_error "  sudo apt-get update"
-    log_error "  sudo apt-get install -y build-essential python3 nodejs npm nginx sqlite3 openssl"
+    log_error "ERROR: Base OS must provide all system packages before package installation."
+    log_error "This package does NOT install system packages (violates Debian policy)."
     log_error ""
-    log_error "Then reinstall this package."
+    log_error "Required packages should be installed by base OS or declared in debian/control Depends."
     exit 1
 fi
 
-log_success "All required system commands are available"
+log_success "All required system commands are available (provided by base OS)"
 log_elapsed
 
 # Step 2: Rebuild native modules for ARM64

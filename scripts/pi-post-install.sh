@@ -213,7 +213,7 @@ rebuild_native_modules() {
 
     if [ ${#missing_deps[@]} -gt 0 ]; then
         log "ERROR: Missing build dependencies: ${missing_deps[*]}"
-        log "Install with: sudo apt-get install -y build-essential python3"
+        log "These packages should be provided by base OS (build-essential, python3)"
         return 1
     fi
 
