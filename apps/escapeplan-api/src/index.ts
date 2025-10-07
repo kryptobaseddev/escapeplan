@@ -745,6 +745,36 @@ export async function buildServer() {
       return { sessions: listSessions() };
     });
 
+    api.get('/admin/network/client', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_network', request.log, auth.user.id)) return;
+      // TODO: Implement WiFi client status
+      return {
+        status: 'disconnected',
+        ssid: null,
+        signalStrength: null,
+        ipAddress: null
+      };
+    });
+
+    api.get('/assets/list', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_assets', request.log, auth.user.id)) return;
+      // TODO: Implement asset management
+      return { assets: [], totalSize: 0, count: 0 };
+    });
+
+    api.get('/admin/backups', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_storage', request.log, auth.user.id)) return;
+      const { destination = 'local' } = request.query as { destination?: 'local' | 'external' };
+      // TODO: Implement backup management
+      return { backups: [], destination };
+    });
+
     api.get('/bookings', async (request, reply) => {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
@@ -818,17 +848,39 @@ export async function buildServer() {
 
   attachRealtime(io);
 
-  io.use((socket, next) => {
-    const token = (socket.handshake.auth?.token ?? socket.handshake.query?.token) as string | undefined;
-    if (!token) {
-      return next(new Error('Unauthorized'));
+  io.use(async (socket, next) => {
+    try {
+      // First try Better Auth session from cookies
+      const cookies = socket.handshake.headers.cookie;
+      if (cookies) {
+        const session = await auth.api.getSession({
+          headers: { cookie: cookies } as any
+        });
+        if (session?.user) {
+          socket.data.user = {
+            id: session.user.id,
+            username: (session.user as any).username,
+            role: (session.user as any).role,
+            permissions: (session.user as any).permissions || []
+          };
+          return next();
+        }
+      }
+
+      // Fallback to Bearer token
+      const token = (socket.handshake.auth?.token ?? socket.handshake.query?.token) as string | undefined;
+      if (!token) {
+        return next(new Error('Unauthorized'));
+      }
+      const user = validateToken(token);
+      if (!user) {
+        return next(new Error('Unauthorized'));
+      }
+      socket.data.user = user;
+      next();
+    } catch (error) {
+      next(new Error('Unauthorized'));
     }
-    const user = validateToken(token);
-    if (!user) {
-      return next(new Error('Unauthorized'));
-    }
-    socket.data.user = user;
-    next();
   });
 
   io.on('connection', (socket) => {
