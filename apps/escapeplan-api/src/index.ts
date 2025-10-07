@@ -29,7 +29,7 @@ import {
   updateOperatorLoginTimestamp,
   resetOperatorPassword
 } from './state/index.js';
-import { describeSession, issueToken, validateToken } from './auth.js';
+import { auth, describeSession, issueToken, validateToken } from './auth.js';
 import { runMigrations } from './db/client.js';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate, emitTimerUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
@@ -200,6 +200,52 @@ export async function buildServer() {
   });
 
   await app.register(cors, { origin: true });
+
+  // Register Better Auth handler for all /api/auth/* routes
+  app.route({
+    method: ['GET', 'POST'],
+    url: '/api/auth/*',
+    async handler(request, reply) {
+      try {
+        // Construct request URL
+        const url = new URL(request.url, `http://${request.headers.host}`);
+
+        // Convert Fastify headers to standard Headers object
+        const headers = new Headers();
+        Object.entries(request.headers).forEach(([key, value]) => {
+          if (value) {
+            headers.append(key, Array.isArray(value) ? value.join(', ') : String(value));
+          }
+        });
+
+        // Create Fetch API-compatible request
+        const webRequest = new Request(url.toString(), {
+          method: request.method,
+          headers,
+          body: request.body ? JSON.stringify(request.body) : undefined,
+        });
+
+        // Process authentication request with Better Auth
+        const response = await auth.handler(webRequest);
+
+        // Forward response to client
+        reply.status(response.status);
+        response.headers.forEach((value, key) => {
+          reply.header(key, value);
+        });
+
+        const body = await response.text();
+        reply.send(body || null);
+
+      } catch (error) {
+        request.log.error('Better Auth Error:', error);
+        reply.status(500).send({
+          error: 'Internal authentication error',
+          code: 'AUTH_FAILURE'
+        });
+      }
+    }
+  });
 
   app.get('/health', async () => ({ status: 'ok' }));
 

@@ -1,7 +1,13 @@
 import { env } from '$env/dynamic/public';
 
-// Use relative path in production (goes through nginx), localhost in dev
-const DEFAULT_API_BASE = typeof window !== 'undefined' ? '/api' : 'http://localhost:4000/api';
+// Use relative path in browser, and in production SSR (nginx proxies both)
+// In dev SSR, use localhost:4000 directly
+const isDev = import.meta.env.DEV;
+const DEFAULT_API_BASE = typeof window !== 'undefined'
+  ? '/api'
+  : isDev
+    ? 'http://localhost:4000/api'
+    : '/api';
 
 const apiBase = (env.PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE).replace(/\/$/, '');
 
