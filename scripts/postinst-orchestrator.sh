@@ -192,8 +192,49 @@ fi
 
 log_elapsed
 
-# Step 3: Initialize database
-log_step "Initializing database"
+# Step 3: Apply database migrations
+log_step "Applying database schema migrations"
+
+if [ ! -f "${INSTALL_ROOT}/api/dist/db/migrate.js" ]; then
+    log_error "Database migration script not found at ${INSTALL_ROOT}/api/dist/db/migrate.js"
+    log_error "API dist files missing - build may have failed during packaging"
+    log_error "Expected: ${INSTALL_ROOT}/api/dist/db/migrate.js"
+    log_error "This is a package build issue - contact support or rebuild package"
+    exit 1
+fi
+
+# Skip if already initialized (migrations already applied)
+if [ -f "/var/lib/escapeplan/.db-initialized" ]; then
+    log_success "Database already initialized, skipping migrations"
+else
+    log "Running database migration script to create schema..."
+
+    # Set environment variables for migration
+    export DATABASE_URL="/var/lib/escapeplan/escapeplan.db"
+    export NODE_ENV="production"
+
+    # Run migration script as escapeplan user with timeout (5 minutes)
+    if timeout 300 su -s /bin/bash escapeplan -c "cd '${INSTALL_ROOT}/api' && node dist/db/migrate.js" 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "Database schema migrations applied successfully"
+    else
+        migrate_exit_code=$?
+        if [ ${migrate_exit_code} -eq 124 ]; then
+            log_error "Migration timed out after 5 minutes"
+            log_error "This may indicate an infinite loop - check ${LOG_FILE}"
+            exit 1
+        else
+            log_error "Migration failed (exit code: ${migrate_exit_code})"
+            log_error "Check logs at ${LOG_FILE}"
+            log_error "Schema must be applied before seeding"
+            exit 1
+        fi
+    fi
+fi
+
+log_elapsed
+
+# Step 4: Initialize database
+log_step "Seeding database with initial data"
 
 if [ ! -f "${INSTALL_ROOT}/api/dist/db/seed.js" ]; then
     log_error "Database seed script not found at ${INSTALL_ROOT}/api/dist/db/seed.js"
@@ -256,7 +297,7 @@ fi
 
 log_elapsed
 
-# Step 4: Generate secrets
+# Step 5: Generate secrets
 log_step "Generating security secrets"
 
 if [ -f "/etc/escapeplan/api.env" ]; then
@@ -291,7 +332,7 @@ fi
 
 log_elapsed
 
-# Step 5: Configure nginx
+# Step 6: Configure nginx
 log_step "Configuring nginx reverse proxy"
 
 if [ ! -f "${INSTALL_ROOT}/scripts/nginx-configure.sh" ]; then
@@ -317,7 +358,7 @@ fi
 
 log_elapsed
 
-# Step 6: Configure services
+# Step 7: Configure services
 log_step "Registering systemd services"
 
 log "Reloading systemd daemon to register service units..."
@@ -353,7 +394,8 @@ echo ""
 log "Installation Summary:"
 log "  ✓ System dependencies: verified (all required commands available)"
 log "  ✓ Native modules: rebuilt for $(uname -m)"
-log "  ✓ Database: initialized with admin user and RBAC roles"
+log "  ✓ Database migrations: schema applied (33 tables created)"
+log "  ✓ Database seeding: initialized with admin user and RBAC roles"
 log "  ✓ Secrets: generated and secured at /etc/escapeplan/api.env"
 log "  ✓ Nginx: configured as reverse proxy"
 log "  ✓ Rescue service: enabled (prevents boot loops)"
