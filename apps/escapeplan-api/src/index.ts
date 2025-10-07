@@ -24,6 +24,7 @@ import {
   listOperatorSummaries,
   listRoles,
   listPermissions,
+  quickStartSession,
   toTimerBroadcast,
   updateGame,
   updateNetworkProfile,
@@ -743,6 +744,32 @@ export async function buildServer() {
         return { sessions: listActiveSessions() };
       }
       return { sessions: listSessions() };
+    });
+
+    api.post('/sessions/quick-start', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_sessions', request.log, auth.user.id)) return;
+
+      const body = request.body as { gameSlug: string; bookingId?: string };
+      if (!body?.gameSlug) {
+        return reply.status(400).send({ statusCode: 400, message: 'gameSlug is required' });
+      }
+
+      try {
+        const session = quickStartSession({ gameSlug: body.gameSlug, bookingId: body.bookingId }, auth.user.id);
+        emitSessionUpdate();
+        emitTimerUpdate();
+        return session;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'quickStartSession',
+          userId: auth.user.id,
+          gameSlug: body.gameSlug,
+          requestId: request.id
+        });
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
     });
 
     api.get('/admin/network/client', async (request, reply) => {
