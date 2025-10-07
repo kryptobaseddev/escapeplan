@@ -1,5 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { PinoLoggerOptions } from 'fastify/types/logger';
+import * as winston from 'winston';
 
 /**
  * Structured logging configuration for EscapePlan API
@@ -13,6 +14,7 @@ import type { PinoLoggerOptions } from 'fastify/types/logger';
  */
 
 const isProduction = process.env.NODE_ENV === 'production';
+const isTest = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
 
 /**
  * Redact sensitive fields from logs
@@ -33,7 +35,7 @@ const redactPaths = [
  * Pino logger configuration
  */
 export const loggerConfig: PinoLoggerOptions = {
-  level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+  level: process.env.LOG_LEVEL || (isTest ? 'silent' : isProduction ? 'info' : 'debug'),
 
   // Redact sensitive information
   redact: {
@@ -71,8 +73,8 @@ export const loggerConfig: PinoLoggerOptions = {
     }
   },
 
-  // Production: JSON only, Development: pretty print
-  transport: !isProduction ? {
+  // Production: JSON only, Development: pretty print, Test: no transport
+  transport: !isProduction && !isTest ? {
     target: 'pino-pretty',
     options: {
       translateTime: 'HH:MM:ss Z',
@@ -177,3 +179,30 @@ export function logPerformance(
     `Performance: ${metric.operation} took ${metric.durationMs}ms`
   );
 }
+
+/**
+ * Winston logger instance for file-based logging and database logging
+ * This is separate from Fastify's Pino logger and is used for:
+ * - Database logging operations
+ * - File-based log persistence
+ * - Background job logging where request context is unavailable
+ */
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || (isProduction ? 'info' : 'debug'),
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  defaultMeta: { service: 'escapeplan-api' },
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      )
+    })
+  ]
+});
+
+export default logger;

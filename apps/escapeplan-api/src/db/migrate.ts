@@ -404,7 +404,7 @@ async function applyMigrations(): Promise<void> {
     // Step 1: Pre-migration checks
     if (!(await performPreMigrationChecks())) {
       logError('Pre-migration checks failed');
-      process.exit(3);
+      throw new Error('Pre-migration checks failed');
     }
 
     // Step 2: Create backup (if database exists)
@@ -464,7 +464,6 @@ async function applyMigrations(): Promise<void> {
     cleanupBackup(backupPath);
 
     logHeader('Migration Completed Successfully');
-    process.exit(0);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
@@ -490,12 +489,12 @@ async function applyMigrations(): Promise<void> {
       } catch (restoreError) {
         logError('Rollback failed - database may be in inconsistent state');
         logError('Manual recovery required using backup at: ' + backupPath);
-        process.exit(1);
+        throw new Error('Rollback failed - database may be in inconsistent state');
       }
     }
 
     logHeader('Migration Failed - Database Rolled Back');
-    process.exit(1);
+    throw error;
   }
 }
 
@@ -568,11 +567,18 @@ async function verifyOnly(): Promise<void> {
 if (import.meta.url === `file://${process.argv[1]}`) {
   const args = process.argv.slice(2);
 
-  // Check for verify-only mode
-  if (args.includes('--verify')) {
-    await verifyOnly();
-  } else {
-    await applyMigrations();
+  try {
+    // Check for verify-only mode
+    if (args.includes('--verify')) {
+      await verifyOnly();
+    } else {
+      await applyMigrations();
+      // When run as CLI, exit with success code
+      process.exit(0);
+    }
+  } catch (error) {
+    // When run as CLI, exit with error code
+    process.exit(1);
   }
 }
 

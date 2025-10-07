@@ -19,3 +19,19 @@ sqlite.pragma('foreign_keys = ON');
 
 // Initialize Drizzle ORM with full schema for type-safe queries
 export const db = drizzle({ client: sqlite, schema });
+
+// ============================================================================
+// MIGRATIONS
+// ============================================================================
+
+/**
+ * Runs database migrations during application startup.
+ * This is a wrapper around the async applyMigrations function from migrate.ts.
+ *
+ * IMPORTANT: This must be awaited in buildServer() to ensure migrations
+ * complete before the application starts accepting requests.
+ */
+export async function runMigrations(): Promise<void> {
+  const { applyMigrations } = await import('./migrate.js');
+  await applyMigrations();
+}

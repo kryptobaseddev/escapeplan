@@ -191,7 +191,7 @@ function ensurePermission(reply: FastifyReply, userRole: OperatorRole, userPermi
 }
 
 export async function buildServer() {
-  runMigrations();
+  await runMigrations();
   const app = Fastify({
     logger: loggerConfig,
     requestIdLogLabel: 'reqId',
@@ -223,7 +223,25 @@ export async function buildServer() {
         });
         return reply.status(401).send({ statusCode: 401, message: 'Invalid credentials' });
       }
-      const valid = await argon2.verify(operator.passwordHash, password);
+
+      // Get password hash from database (not exposed in OperatorProfile)
+      const { sqlite } = await import('./db/client.js');
+      const userRow = sqlite.prepare(`
+        SELECT password_hash, must_reset_password FROM user WHERE id = ? LIMIT 1
+      `).get(operator.id) as { password_hash: string; must_reset_password: number } | undefined;
+
+      if (!userRow || !userRow.password_hash) {
+        logSecurityEvent(request.log, {
+          type: 'auth_failure',
+          username,
+          userId: operator.id,
+          ip: request.ip,
+          details: 'No password set'
+        });
+        return reply.status(401).send({ statusCode: 401, message: 'Invalid credentials' });
+      }
+
+      const valid = await argon2.verify(userRow.password_hash, password);
       if (!valid) {
         logSecurityEvent(request.log, {
           type: 'auth_failure',
@@ -239,7 +257,7 @@ export async function buildServer() {
       updateOperatorLoginTimestamp(operator.id, now);
 
       const response = issueToken(operator.id);
-      response.mustResetPassword = operator.mustResetPassword;
+      response.mustResetPassword = Boolean(userRow.must_reset_password);
       return response;
     });
 
