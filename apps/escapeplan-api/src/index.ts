@@ -294,9 +294,7 @@ export async function buildServer() {
   });
 
   // Register static file serving for assets
-  const assetBasePath = process.env.NODE_ENV === 'development' || process.env.NODE_ENV !== 'production'
-    ? path.join(process.cwd(), 'data', 'assets')
-    : '/var/lib/escapeplan/assets';
+  const assetBasePath = runtime.assetsDir;
 
   await app.register(fastifyStatic, {
     root: assetBasePath,
@@ -2122,10 +2120,26 @@ export async function buildServer() {
 
 const skipAutostart = process.env.ESCAPEPLAN_SKIP_AUTOSTART === '1';
 const isVitest = typeof process.env.VITEST_WORKER_ID !== 'undefined';
-const isTestEnv = process.env.NODE_ENV === 'test' || isVitest;
+const isTestEnv = isVitest;
 
 if (!skipAutostart && !isTestEnv) {
   (async () => {
+    // Production secret validation - ensure required secrets are set
+    if (runtime.isProduction) {
+      const authSecret = process.env.BETTER_AUTH_SECRET;
+      if (!authSecret || authSecret.length < 32 || authSecret.includes('CHANGE_ME')) {
+        console.error('❌ BETTER_AUTH_SECRET must be set to a secure 32+ character value in production');
+        console.error('Generate with: openssl rand -base64 32');
+        process.exit(1);
+      }
+
+      const encKey = process.env.CAMERA_ENCRYPTION_KEY || '';
+      if (encKey === '0000000000000000000000000000000000000000000000000000000000000000') {
+        console.warn('⚠️  WARNING: Using development CAMERA_ENCRYPTION_KEY in production!');
+        console.warn('Generate a production key with: openssl rand -hex 32');
+      }
+    }
+
     const server = await buildServer();
     try {
       // Seed default system settings if needed

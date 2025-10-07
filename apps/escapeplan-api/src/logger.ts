@@ -3,6 +3,7 @@ import DailyRotateFile from 'winston-daily-rotate-file';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mkdirSync } from 'node:fs';
+import { runtime } from '@escapeplan/contracts/runtime';
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const logsPath = resolve(moduleDir, '../logs');
@@ -57,11 +58,11 @@ const consoleTransport = new winston.transports.Console({
 
 export const logger = winston.createLogger({
   levels: logLevels,
-  level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
+  level: runtime.isProduction ? 'info' : 'debug',
   transports: [
     fileRotateTransport,
     errorFileTransport,
-    ...(process.env.NODE_ENV !== 'production' ? [consoleTransport] : [])
+    ...(runtime.isDevelopment ? [consoleTransport] : [])
   ],
   exceptionHandlers: [
     new winston.transports.File({ filename: resolve(logsPath, 'exceptions.log') })
