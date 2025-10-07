@@ -7,6 +7,7 @@
   import Alert from '$lib/components/ui/Alert.svelte';
   import AssetBrowser from '../assets/AssetBrowser.svelte';
   import VolumeSlider from '$lib/components/ui/VolumeSlider.svelte';
+  import { uid } from '$lib/utils/game';
 
   interface Props {
     open?: boolean;
@@ -53,7 +54,7 @@
   let uploadError = $state<string | null>(null);
 
   function createEmptyHint(): EditableHint {
-    const uuid = hint?.uuid ?? `hint-${crypto?.randomUUID?.() || Math.random().toString(36).slice(2,10)}`;
+    const uuid = hint?.uuid ?? uid('hint');
     return {
       uuid,
       type: 'text',

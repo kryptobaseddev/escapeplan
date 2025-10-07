@@ -264,7 +264,7 @@ class CommandsState {
     const displayDurationSeconds = payload?.displayDurationSeconds ? Number(payload.displayDurationSeconds) : undefined;
     const loop = payload?.loop ? Boolean(payload.loop) : false;
     const loopCount = payload?.loopCount ? Number(payload.loopCount) : undefined;
-    const textHintSoundAssetUrl = payload?.textHintSoundAssetUrl ? String(payload.textHintSoundAssetUrl).trim() : null;
+    let textHintSoundAssetUrl = payload?.textHintSoundAssetUrl ? String(payload.textHintSoundAssetUrl).trim() : null;
 
     // Validate based on medium type
     if (medium === 'text') {
@@ -282,8 +282,8 @@ class CommandsState {
             | { file_path: string }
             | undefined;
           if (asset) {
-            // Store the asset URL for later use in room display
-            (payload as Record<string, unknown>).textHintSoundAssetUrl = `/assets/${asset.file_path}`;
+            // Use local variable instead of modifying readonly payload
+            textHintSoundAssetUrl = `/assets/${asset.file_path}`;
           } else {
             logToDatabase('warn', 'session', `Default text hint sound asset not found: ${defaultSoundAssetId}`, {
               sessionId,
@@ -329,9 +329,6 @@ class CommandsState {
     const timerSlugs = timerSlugBySessionStmt.all(sessionId) as { slug: string }[];
     const game = getGameDetails(session.gameId);
 
-    // Re-read textHintSoundAssetUrl after potential lookup
-    const finalTextHintSoundAssetUrl = payload?.textHintSoundAssetUrl ? String(payload.textHintSoundAssetUrl).trim() : null;
-
     for (const { slug } of timerSlugs) {
       emitRoomDisplayMedia({
         slug,
@@ -352,7 +349,7 @@ class CommandsState {
                 backgroundColor: game?.roomDisplayConfig?.textHintBackgroundColor ?? '#FFA500'
               }
             : undefined,
-        textHintSoundAssetUrl: medium === 'text' ? finalTextHintSoundAssetUrl : undefined
+        textHintSoundAssetUrl: medium === 'text' ? textHintSoundAssetUrl : undefined
       });
     }
 

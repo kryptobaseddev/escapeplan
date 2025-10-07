@@ -89,7 +89,10 @@
               event.triggeredAt
             );
 
-            // Auto-dismiss text after 3 seconds
+            // Get text hint duration from timer broadcast or default to 60 seconds
+            const textHintDurationMs = (timer?.roomConfig?.textHintDurationSeconds ?? 60) * 1000;
+
+            // Auto-dismiss text after configured duration
             textHintTimer = setTimeout(() => {
               if (textHintDisplay?.sessionId === event.sessionId && textHintDisplay?.triggeredAt === event.triggeredAt) {
                 // Emit 'finished' status before clearing
@@ -103,7 +106,7 @@
                 textHintDisplay = null;
               }
               textHintTimer = null;
-            }, 3000);
+            }, textHintDurationMs);
           } else {
             // Regular media (audio, video, image)
             // Force cleanup of previous media by clearing state first
