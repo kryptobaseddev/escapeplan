@@ -18,7 +18,7 @@ export function slugify(value: string): string {
  * @returns Unique ID string (uses crypto.randomUUID if available, otherwise fallback)
  */
 export function uid(prefix: string): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
     return `${prefix}-${crypto.randomUUID()}`;
   }
   return `${prefix}-${Math.random().toString(36).slice(2, 10)}`;

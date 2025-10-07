@@ -23,7 +23,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   try {
     const cookie = event.request.headers.get('cookie');
-    const session = await apiFetch<AuthSessionEnvelope | null>(event.fetch, '/auth/get-session', {
+    const session = await apiFetch<AuthSessionEnvelope | null>(event.fetch, '/api/auth/get-session', {
       method: 'GET',
       headers: cookie ? { cookie } : undefined
     });

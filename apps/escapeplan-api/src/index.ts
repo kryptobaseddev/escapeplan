@@ -1,4 +1,4 @@
-import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyReply, type FastifyRequest, type FastifyBaseLogger } from 'fastify';
 import cors from '@fastify/cors';
 import { Server as SocketServer } from 'socket.io';
 import argon2 from 'argon2';
@@ -34,6 +34,8 @@ import { runMigrations } from './db/client.js';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate, emitTimerUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
 import { loggerConfig, logError, logSecurityEvent } from './logger.js';
+import { settings } from './settings.js';
+import { getCurrentSystemHealth } from './system/health.js';
 
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
 
@@ -162,7 +164,33 @@ const networkProvisionSchema = z.object({
     .optional()
 });
 
-function ensureAuth(request: FastifyRequest, reply: FastifyReply) {
+async function ensureAuth(request: FastifyRequest, reply: FastifyReply) {
+  // First, try to get session from Better Auth cookies
+  try {
+    const session = await auth.api.getSession({
+      headers: request.headers as any
+    });
+
+    if (session?.user && session?.session) {
+      // Better Auth session is valid
+      const user = session.user as any;
+      return {
+        token: session.session.token,
+        user: {
+          id: user.id,
+          username: user.username || user.email?.split('@')[0] || 'unknown',
+          name: user.name || 'Unknown',
+          role: user.role,
+          permissions: user.permissions || [],
+          mustResetPassword: false
+        }
+      };
+    }
+  } catch (error) {
+    // Better Auth session check failed, continue to Bearer token fallback
+  }
+
+  // Fallback to Bearer token validation (for existing tests and legacy clients)
   const authHeader = request.headers['authorization'];
   if (!authHeader || typeof authHeader !== 'string' || !authHeader.startsWith('Bearer ')) {
     reply.status(401).send({ statusCode: 401, message: 'Missing Authorization header' });
@@ -192,6 +220,7 @@ function ensurePermission(reply: FastifyReply, userRole: OperatorRole, userPermi
 
 export async function buildServer() {
   await runMigrations();
+  await settings.init();
   const app = Fastify({
     logger: loggerConfig,
     requestIdLogLabel: 'reqId',
@@ -238,7 +267,7 @@ export async function buildServer() {
         reply.send(body || null);
 
       } catch (error) {
-        request.log.error('Better Auth Error:', error);
+        request.log.error({ error }, 'Better Auth Error');
         reply.status(500).send({
           error: 'Internal authentication error',
           code: 'AUTH_FAILURE'
@@ -321,20 +350,20 @@ export async function buildServer() {
     });
 
     api.get('/dashboard', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       return getDashboard();
     });
 
     api.get('/admin/users', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
       return listOperatorSummaries();
     });
 
     api.post('/admin/users', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
       const parsed = createUserSchema.safeParse(request.body);
@@ -360,7 +389,7 @@ export async function buildServer() {
     });
 
     api.patch('/admin/users/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
       const { id } = request.params as { id: string };
@@ -387,7 +416,7 @@ export async function buildServer() {
     });
 
     api.delete('/admin/users/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
       const { id } = request.params as { id: string };
@@ -407,7 +436,7 @@ export async function buildServer() {
     });
 
     api.post('/admin/users/:id/reset-password', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
       const { id } = request.params as { id: string };
@@ -431,7 +460,7 @@ export async function buildServer() {
     });
 
     api.post('/users/me/password', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       const parsed = changePasswordSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -452,7 +481,7 @@ export async function buildServer() {
     });
 
     api.patch('/users/me', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       const parsed = updateOwnProfileSchema.safeParse(request.body);
       if (!parsed.success) {
@@ -473,14 +502,14 @@ export async function buildServer() {
     });
 
     api.get('/admin/games', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games', request.log, auth.user.id)) return;
       return listGameDetails();
     });
 
     api.get('/admin/games/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games', request.log, auth.user.id)) return;
       const { id } = request.params as { id: string };
@@ -492,7 +521,7 @@ export async function buildServer() {
     });
 
     api.post('/admin/games', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games', request.log, auth.user.id)) return;
       const parsed = saveGameSchema.safeParse(request.body);
@@ -533,7 +562,7 @@ export async function buildServer() {
     });
 
     api.put('/admin/games/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games', request.log, auth.user.id)) return;
       const { id } = request.params as { id: string };
@@ -575,7 +604,7 @@ export async function buildServer() {
     });
 
     api.delete('/admin/games/:id', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_games', request.log, auth.user.id)) return;
       const { id } = request.params as { id: string };
@@ -595,14 +624,14 @@ export async function buildServer() {
     });
 
     api.get('/admin/network', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_network', request.log, auth.user.id)) return;
       return getNetworkProfile();
     });
 
     api.post('/admin/network/apply', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_network', request.log, auth.user.id)) return;
       const parsed = networkProvisionSchema.safeParse(request.body);
@@ -625,7 +654,7 @@ export async function buildServer() {
     });
 
     api.patch('/admin/network', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_network', request.log, auth.user.id)) return;
       const parsed = networkUpdateSchema.safeParse(request.body);
@@ -647,8 +676,42 @@ export async function buildServer() {
       }
     });
 
+    api.get('/admin/settings', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_system_health', request.log, auth.user.id)) return;
+      try {
+        const allSettings = await settings.getAll();
+        return { settings: allSettings };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'getSettings',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to load settings' });
+      }
+    });
+
+    api.get('/admin/system/health', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      try {
+        const io = (app.server as any).io;
+        const health = await getCurrentSystemHealth(io);
+        return health;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'getSystemHealth',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to load system health' });
+      }
+    });
+
     api.get('/bookings', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
 
       const { date, scope = 'all' } = request.query as { date?: string; scope?: 'all' | 'storefront' | 'mobile' };
@@ -660,13 +723,13 @@ export async function buildServer() {
     });
 
     api.get('/sessions/active', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
       return listActiveSessions();
     });
 
     api.get('/sessions/:sessionId', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
 
       const { sessionId } = request.params as { sessionId: string };
@@ -678,7 +741,7 @@ export async function buildServer() {
     });
 
     api.post('/sessions/:sessionId/commands', async (request, reply) => {
-      const auth = ensureAuth(request, reply);
+      const auth = await ensureAuth(request, reply);
       if (!auth) return;
 
       const { sessionId } = request.params as { sessionId: string };
