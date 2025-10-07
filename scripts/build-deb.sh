@@ -965,7 +965,8 @@ EOF
 cat > "${BUILD_DIR}/etc/systemd/system/escapeplan-api.service" << 'EOF'
 [Unit]
 Description=EscapePlan Fastify API
-After=network.target escapeplan-rescue.service
+After=network-online.target NetworkManager.service escapeplan-platform-init.service escapeplan-rescue.service
+Wants=network-online.target
 ConditionPathExists=/opt/escapeplan/api/systemd/start.sh
 ConditionPathExists=/var/lib/escapeplan/.db-initialized
 ConditionPathExists=!/var/lib/escapeplan/.rescue-mode
@@ -1050,7 +1051,8 @@ Architecture: ${DEB_ARCH}
 Depends: escapeplan-base (>= 1.0.0) | escapeplan-platform,
          nodejs (>= 22),
          nginx (>= 1.18),
-         sqlite3 (>= 3.34)
+         sqlite3 (>= 3.34),
+         network-manager
 Recommends: build-essential,
             python3
 Breaks: escapeplan-apps (<< 1.0.0~)
