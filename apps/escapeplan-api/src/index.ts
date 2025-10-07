@@ -20,7 +20,10 @@ import {
   getNetworkProfile,
   listGameDetails,
   listActiveSessions,
+  listSessions,
   listOperatorSummaries,
+  listRoles,
+  listPermissions,
   toTimerBroadcast,
   updateGame,
   updateNetworkProfile,
@@ -708,6 +711,38 @@ export async function buildServer() {
         });
         return reply.status(500).send({ statusCode: 500, message: 'Failed to load system health' });
       }
+    });
+
+    api.get('/admin/roles', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_roles', request.log, auth.user.id)) return;
+      return { roles: listRoles() };
+    });
+
+    api.get('/admin/permissions', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_permissions', request.log, auth.user.id)) return;
+      return { permissions: listPermissions() };
+    });
+
+    api.get('/admin/cameras', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_cameras', request.log, auth.user.id)) return;
+      // TODO: Implement camera management state
+      return { cameras: [] };
+    });
+
+    api.get('/sessions', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      const { status = 'active' } = request.query as { status?: 'active' | 'all' };
+      if (status === 'active') {
+        return { sessions: listActiveSessions() };
+      }
+      return { sessions: listSessions() };
     });
 
     api.get('/bookings', async (request, reply) => {

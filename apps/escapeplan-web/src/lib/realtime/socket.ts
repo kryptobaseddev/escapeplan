@@ -6,25 +6,29 @@ import { io, type Socket } from 'socket.io-client';
 let socket: Socket | null = null;
 
 function resolveBaseUrl(): string {
-  // In development, Socket.IO needs to connect directly to the API server
-  // because WebSocket connections bypass the Vite HTTP proxy
+  // In browser, always use page origin in production
+  if (browser) {
+    const base = apiBase.replace(/\/$/, '');
+
+    // If apiBase is just '/api' (relative path), socket connects to page origin
+    if (base === '/api' || base === '') {
+      return window.location.origin;
+    }
+
+    // Otherwise strip /api from absolute URLs
+    if (base.endsWith('/api')) {
+      return base.slice(0, -4);
+    }
+    return base;
+  }
+
+  // SSR: In development, connect to API server directly
   if (dev) {
     return 'http://localhost:4000';
   }
 
-  // In production, handle relative paths
-  const base = apiBase.replace(/\/$/, '');
-
-  // If apiBase is just '/api' (relative path), socket connects to root
-  if (base === '/api') {
-    return browser ? window.location.origin : '/';
-  }
-
-  // Otherwise strip /api from absolute URLs
-  if (base.endsWith('/api')) {
-    return base.slice(0, -4);
-  }
-  return base;
+  // SSR: Production fallback
+  return apiBase.replace(/\/api$/, '') || '/';
 }
 
 export function getSocket(): Socket | null {
