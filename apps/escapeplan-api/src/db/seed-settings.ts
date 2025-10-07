@@ -252,15 +252,17 @@ export async function seedSystemSettings() {
   console.log(`[Seed] System settings: ${seededCount} created, ${skippedCount} skipped (already exist)`);
 }
 
-// CLI entry point
-if (import.meta.url === `file://${process.argv[1]}`) {
-  seedSystemSettings()
-    .then(() => {
-      console.log('[Seed] Done!');
-      process.exit(0);
-    })
-    .catch((error) => {
-      console.error('[Seed] Failed:', error);
-      process.exit(1);
-    });
-}
+// CLI entry point - DISABLED to prevent bundled builds from exiting
+// This caused the server to exit immediately after seeding when bundled into index.js
+// Use: pnpm db:seed:settings to run this script standalone
+// if (import.meta.url === `file://${process.argv[1]}`) {
+//   seedSystemSettings()
+//     .then(() => {
+//       console.log('[Seed] Done!');
+//       process.exit(0);
+//     })
+//     .catch((error) => {
+//       console.error('[Seed] Failed:', error);
+//       process.exit(1);
+//     });
+// }
