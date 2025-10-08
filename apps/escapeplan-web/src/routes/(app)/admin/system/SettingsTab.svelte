@@ -34,7 +34,7 @@
     availableRoles?: Array<{ id: string; name: string; user_type_scope: string }>;
   } = $props();
 
-  // Create local reactive copy of settings
+  // Create local mutable copy of settings for optimistic updates
   let settings = $state<SettingsData>({
     storage: [],
     backup: [],
@@ -45,15 +45,20 @@
     general: []
   });
 
-  // Initialize settings from props
+  // Initialize settings from props only when initialSettings changes
   $effect(() => {
-    settings.storage = [...(initialSettings.storage || [])];
-    settings.backup = [...(initialSettings.backup || [])];
-    settings.updates = [...(initialSettings.updates || [])];
-    settings.business = [...(initialSettings.business || [])];
-    settings.user_validation = [...(initialSettings.user_validation || [])];
-    settings.system = [...(initialSettings.system || [])];
-    settings.general = [...(initialSettings.general || [])];
+    // Only update if initialSettings is provided (not on every render)
+    if (initialSettings) {
+      settings = {
+        storage: [...(initialSettings.storage || [])],
+        backup: [...(initialSettings.backup || [])],
+        updates: [...(initialSettings.updates || [])],
+        business: [...(initialSettings.business || [])],
+        user_validation: [...(initialSettings.user_validation || [])],
+        system: [...(initialSettings.system || [])],
+        general: [...(initialSettings.general || [])]
+      };
+    }
   });
 
   let editedValues: Record<string, any> = $state({});
@@ -75,57 +80,71 @@
   }
 
   function handleEdit(key: string, value: any) {
-    editedValues[key] = value;
-    delete errors[key];
-    delete successMessages[key];
+    // Immutable update
+    editedValues = { ...editedValues, [key]: value };
+
+    // Immutable delete for errors and success messages
+    const { [key]: _err, ...remainingErrors } = errors;
+    const { [key]: _msg, ...remainingMessages } = successMessages;
+    errors = remainingErrors;
+    successMessages = remainingMessages;
   }
 
   async function saveSetting(setting: Setting) {
     const newValue = editedValues[setting.key] ?? setting.value;
 
-    saving[setting.key] = true;
-    delete errors[setting.key];
-    delete successMessages[setting.key];
+    // Immutable updates
+    saving = { ...saving, [setting.key]: true };
+    const { [setting.key]: _err, ...remainingErrors } = errors;
+    const { [setting.key]: _msg, ...remainingMessages } = successMessages;
+    errors = remainingErrors;
+    successMessages = remainingMessages;
 
     try {
       const response = await apiFetch<{ success: boolean; key: string; value: any }>(
         fetch,
         `/admin/settings/${setting.key}`,
         {
-          method: 'PUT',
+          method: 'PATCH',
           body: JSON.stringify({ value: newValue }),
           headers: { 'Content-Type': 'application/json' }
         }
       );
 
       if (response.success) {
-        // Update the setting in the local state by finding the category and updating the array
+        // Update the setting in the local state using immutable patterns
         const category = setting.key.split('.')[0] as keyof SettingsData;
         const categorySettings = settings[category];
         const index = categorySettings.findIndex(s => s.key === setting.key);
 
         if (index !== -1) {
-          // Create new array with updated setting to trigger reactivity
-          categorySettings[index] = { ...categorySettings[index], value: newValue };
-          settings[category] = [...categorySettings];
+          // Immutable update: create new array with updated setting
+          settings = {
+            ...settings,
+            [category]: categorySettings.map((s, i) =>
+              i === index ? { ...s, value: newValue } : s
+            )
+          };
         }
 
-        delete editedValues[setting.key];
-        successMessages[setting.key] = 'Saved successfully';
+        // Immutable delete: create new object without the key
+        const { [setting.key]: _, ...remainingEdited } = editedValues;
+        editedValues = remainingEdited;
+
+        successMessages = { ...successMessages, [setting.key]: 'Saved successfully' };
 
         // Clear success message after 3 seconds
         setTimeout(() => {
-          delete successMessages[setting.key];
-          successMessages = { ...successMessages };
+          const { [setting.key]: __, ...remaining } = successMessages;
+          successMessages = remaining;
         }, 3000);
       }
     } catch (error: any) {
-      errors[setting.key] = error.message || 'Failed to save setting';
+      // Immutable error update
+      errors = { ...errors, [setting.key]: error.message || 'Failed to save setting' };
     } finally {
-      saving[setting.key] = false;
-      saving = { ...saving };
-      errors = { ...errors };
-      successMessages = { ...successMessages };
+      // Immutable update: set saving to false
+      saving = { ...saving, [setting.key]: false };
     }
   }
 
@@ -199,12 +218,12 @@
     }
   }
 
-  function handleUploadSuccess(asset: any) {
+  async function handleUploadSuccess(asset: any) {
     // Set the uploaded asset as the default sound
     const setting = getAllSettings().find(s => s.key === 'business.default_text_hint_sound_asset_id');
     if (setting) {
       editedValues['business.default_text_hint_sound_asset_id'] = asset.id;
-      saveSetting(setting);
+      await saveSetting(setting);
       selectedAssetDetails = asset;
     }
     uploadModalOpen = false;
@@ -246,7 +265,131 @@
       </h3>
 
       <div class="space-y-4">
-        {#each businessSettings as setting}
+        <!-- Text Hint Settings Grid -->
+        {#if businessSettings.some(s => s.key === 'business.default_text_hint_sound_asset_id' || s.key === 'business.default_text_hint_duration_seconds')}
+          {@const hintSettings = businessSettings.filter(s =>
+            s.key === 'business.default_text_hint_sound_asset_id' ||
+            s.key === 'business.default_text_hint_duration_seconds'
+          )}
+          <div class="space-y-3">
+            <h4 class="text-sm font-semibold text-base-content/70 uppercase tracking-wide">Text Hint Defaults</h4>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {#each hintSettings as setting}
+                {@const inputData = renderSettingInput(setting)}
+                <div class="form-control">
+                  <label class="label">
+                    <span class="label-text font-medium">{setting.label}</span>
+                    {#if setting.description}
+                      <HelpTooltip text={setting.description} />
+                    {/if}
+                  </label>
+
+                  {#if typeof inputData === 'string' || typeof inputData === 'number'}
+                    <!-- Read-only display -->
+                    <div class="rounded-lg border border-base-content/10 bg-base-300/50 px-4 py-3 text-sm">
+                      {inputData}
+                    </div>
+                  {:else if setting.type === 'number'}
+                    <div class="flex items-center gap-2">
+                      <input
+                        type="number"
+                        class="input input-bordered flex-1"
+                        value={inputData.value}
+                        oninput={(e) => handleEdit(setting.key, Number(e.currentTarget.value))}
+                        disabled={!setting.isEditable}
+                        min={setting.key === 'business.default_text_hint_duration_seconds' ? 5 : 0}
+                        max={setting.key === 'business.default_text_hint_duration_seconds' ? 300 : undefined}
+                        step={setting.key === 'business.default_text_hint_duration_seconds' ? 5 : 1}
+                      />
+                      {#if inputData.hasChanges}
+                        <button
+                          type="button"
+                          class="btn btn-primary btn-sm"
+                          onclick={() => saveSetting(setting)}
+                          disabled={saving[setting.key]}
+                        >
+                          {#if saving[setting.key]}
+                            <span class="loading loading-spinner loading-xs"></span>
+                          {:else}
+                            Save
+                          {/if}
+                        </button>
+                      {/if}
+                    </div>
+                  {:else if setting.type === 'string' && setting.key === 'business.default_text_hint_sound_asset_id'}
+                    <!-- Asset picker for text hint sound with preview -->
+                    <div class="space-y-2">
+                      <!-- Current sound display -->
+                      {#if loadingAssetDetails}
+                        <div class="skeleton h-10 w-full"></div>
+                      {:else if selectedAssetDetails}
+                        <div class="flex items-center gap-2 p-2 bg-base-200 rounded">
+                          <span class="text-2xl">🎵</span>
+                          <div class="flex-1 min-w-0">
+                            <div class="text-sm font-medium truncate">{selectedAssetDetails.originalFilename}</div>
+                            <div class="text-xs text-base-content/60">{(selectedAssetDetails.sizeBytes / 1024).toFixed(1)} KB</div>
+                          </div>
+                          <audio controls class="h-8">
+                            <source src={selectedAssetDetails.url} type={selectedAssetDetails.mimeType} />
+                          </audio>
+                        </div>
+                      {:else}
+                        <input
+                          type="text"
+                          value="No sound selected"
+                          class="input input-bordered w-full"
+                          disabled
+                        />
+                      {/if}
+
+                      <!-- Action buttons -->
+                      <div class="flex gap-2 flex-wrap">
+                        <button
+                          class="btn btn-primary btn-sm"
+                          onclick={() => openAssetBrowser(setting.key)}
+                          disabled={!setting.isEditable || saving[setting.key]}
+                        >
+                          Select Sound
+                        </button>
+                        <button
+                          class="btn btn-secondary btn-sm"
+                          onclick={() => { uploadModalOpen = true; }}
+                          disabled={!setting.isEditable || saving[setting.key]}
+                        >
+                          Upload New
+                        </button>
+                        {#if selectedAssetDetails}
+                          <button
+                            class="btn btn-error btn-sm"
+                            onclick={() => handleClearAsset(setting)}
+                            disabled={saving[setting.key]}
+                          >
+                            Clear
+                          </button>
+                        {/if}
+                      </div>
+                    </div>
+                  {/if}
+
+                  {#if errors[setting.key]}
+                    <label class="label">
+                      <span class="label-text-alt text-error">{errors[setting.key]}</span>
+                    </label>
+                  {/if}
+
+                  {#if successMessages[setting.key]}
+                    <label class="label">
+                      <span class="label-text-alt text-success">{successMessages[setting.key]}</span>
+                    </label>
+                  {/if}
+                </div>
+              {/each}
+            </div>
+          </div>
+        {/if}
+
+        <!-- Other Business Settings -->
+        {#each businessSettings.filter(s => s.key !== 'business.default_text_hint_sound_asset_id' && s.key !== 'business.default_text_hint_duration_seconds') as setting}
           {@const inputData = renderSettingInput(setting)}
           <div class="form-control">
             <label class="label">
@@ -305,60 +448,7 @@
               </div>
             {:else if setting.type === 'string'}
               <div class="space-y-2">
-                {#if setting.key === 'business.default_text_hint_sound_asset_id'}
-                  <!-- Asset picker for text hint sound with preview -->
-                  <div class="space-y-2">
-                    <!-- Current sound display -->
-                    {#if loadingAssetDetails}
-                      <div class="skeleton h-10 w-full"></div>
-                    {:else if selectedAssetDetails}
-                      <div class="flex items-center gap-2 p-2 bg-base-200 rounded">
-                        <span class="text-2xl">🎵</span>
-                        <div class="flex-1 min-w-0">
-                          <div class="text-sm font-medium truncate">{selectedAssetDetails.originalFilename}</div>
-                          <div class="text-xs text-base-content/60">{(selectedAssetDetails.sizeBytes / 1024).toFixed(1)} KB</div>
-                        </div>
-                        <audio controls class="h-8">
-                          <source src={selectedAssetDetails.url} type={selectedAssetDetails.mimeType} />
-                        </audio>
-                      </div>
-                    {:else}
-                      <input
-                        type="text"
-                        value="No sound selected"
-                        class="input input-bordered w-full"
-                        disabled
-                      />
-                    {/if}
-
-                    <!-- Action buttons -->
-                    <div class="flex gap-2">
-                      <button
-                        class="btn btn-primary btn-sm"
-                        onclick={() => openAssetBrowser(setting.key)}
-                        disabled={!setting.isEditable || saving[setting.key]}
-                      >
-                        Select Sound
-                      </button>
-                      <button
-                        class="btn btn-secondary btn-sm"
-                        onclick={() => { uploadModalOpen = true; }}
-                        disabled={!setting.isEditable || saving[setting.key]}
-                      >
-                        Upload New
-                      </button>
-                      {#if selectedAssetDetails}
-                        <button
-                          class="btn btn-error btn-sm"
-                          onclick={() => handleClearAsset(setting)}
-                          disabled={saving[setting.key]}
-                        >
-                          Clear
-                        </button>
-                      {/if}
-                    </div>
-                  </div>
-                {:else if setting.key.includes('policy')}
+                {#if setting.key.includes('policy')}
                   <!-- Textarea for policies -->
                   <textarea
                     class="textarea textarea-bordered w-full"
@@ -377,7 +467,7 @@
                     disabled={!setting.isEditable}
                   />
                 {/if}
-                {#if inputData.hasChanges && setting.key !== 'business.default_text_hint_sound_asset_id'}
+                {#if inputData.hasChanges}
                   <button
                     type="button"
                     class="btn btn-primary btn-sm"
