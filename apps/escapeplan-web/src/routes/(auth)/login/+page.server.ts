@@ -1,8 +1,6 @@
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions, PageServerLoad } from './$types';
-import { env } from '$env/dynamic/public';
-
-const API_BASE = (env.PUBLIC_API_BASE_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
+import { apiBase } from '$lib/api/client';
 
 function parseSetCookie(header: string | null) {
   if (!header) return null;
@@ -41,7 +39,7 @@ export const actions: Actions = {
     }
 
     try {
-      const response = await event.fetch(`${API_BASE}/auth/sign-in/username`, {
+      const response = await event.fetch(`${apiBase}/auth/sign-in/username`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ username, password, rememberMe: true })

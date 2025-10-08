@@ -1,13 +1,11 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/public';
-
-const API_BASE = (env.PUBLIC_API_BASE_URL ?? 'http://localhost:4000/api').replace(/\/$/, '');
+import { apiBase } from '$lib/api/client';
 
 export const POST: RequestHandler = async (event) => {
   try {
     const cookie = event.cookies.get('better-auth.session_token');
-    await event.fetch(`${API_BASE}/auth/sign-out`, {
+    await event.fetch(`${apiBase}/auth/sign-out`, {
       method: 'POST',
       headers: cookie ? { cookie: `better-auth.session_token=${cookie}` } : undefined
     });
