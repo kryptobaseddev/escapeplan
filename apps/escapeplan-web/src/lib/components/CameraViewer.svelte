@@ -1,33 +1,40 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
 	import type { Camera } from '@escapeplan/contracts';
 
-	export let camera: Camera;
-	export let showControls = true;
-	export let autoplay = true;
+	interface Props {
+		camera: Camera;
+		showControls?: boolean;
+		autoplay?: boolean;
+	}
 
-	let videoElement: HTMLVideoElement;
-	let hls: any;
-	let isMuted = true;
-	let isLoading = true;
-	let error: string | null = null;
+	let { camera, showControls = true, autoplay = true }: Props = $props();
+
+	let videoElement = $state<HTMLVideoElement | null>(null);
+	let hls = $state<any>(null);
+	let isMuted = $state(true);
+	let isLoading = $state(true);
+	let error = $state<string | null>(null);
 
 	// PTZ state
-	let ptzPan = camera.ptzPan || 0;
-	let ptzTilt = camera.ptzTilt || 0;
-	let ptzZoom = camera.ptzZoom || 0;
+	let ptzPan = $state(camera.ptzPan || 0);
+	let ptzTilt = $state(camera.ptzTilt || 0);
+	let ptzZoom = $state(camera.ptzZoom || 0);
 
 	// IR state
-	let irMode = camera.irMode || 'auto';
+	let irMode = $state(camera.irMode || 'auto');
 
 	// Audio state
-	let audioVolume = camera.audioVolume || 50;
+	let audioVolume = $state(camera.audioVolume || 50);
 
-	const streamUrl = `/api/admin/cameras/${camera.id}/stream.m3u8`;
+	const streamUrl = $derived(`/api/admin/cameras/${camera.id}/stream.m3u8`);
 
-	onMount(async () => {
-		// Load HLS.js for HLS playback
-		if (videoElement) {
+	// Initialize HLS stream when video element is available
+	$effect(() => {
+		if (!videoElement) return;
+
+		const initializeStream = async () => {
 			if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
 				// Native HLS support (Safari)
 				videoElement.src = streamUrl;
@@ -78,13 +85,17 @@
 					isLoading = false;
 				}
 			}
-		}
-	});
+		};
 
-	onDestroy(() => {
-		if (hls) {
-			hls.destroy();
-		}
+		initializeStream();
+
+		// Cleanup function
+		return () => {
+			if (hls) {
+				hls.destroy();
+				hls = null;
+			}
+		};
 	});
 
 	function toggleMute() {
