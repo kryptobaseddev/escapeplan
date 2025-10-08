@@ -37,14 +37,21 @@ export function getSocket(): Socket | null {
 
   const url = resolveBaseUrl();
   socket = io(url, {
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
+    tryAllTransports: true,
     withCredentials: true,
-    autoConnect: true
+    autoConnect: true,
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 5000,
+    timeout: 20000,
+    path: '/socket.io'
   });
 
   socket.on('disconnect', (reason: string) => {
     console.log(`[Socket.IO] Disconnected: ${reason}`);
-    socket = null;
+    // Don't set socket = null here - Socket.IO will handle automatic reconnection
   });
 
   socket.on('connect_error', (error: Error) => {
@@ -52,7 +59,11 @@ export function getSocket(): Socket | null {
   });
 
   socket.on('connect', () => {
-    console.log('[Socket.IO] Connected to', url);
+    console.log(`[Socket.IO] Connected via ${socket?.io.engine.transport.name}`);
+  });
+
+  socket.io.engine.on('upgrade', (transport: any) => {
+    console.log(`[Socket.IO] Upgraded to ${transport.name}`);
   });
 
   return socket;
