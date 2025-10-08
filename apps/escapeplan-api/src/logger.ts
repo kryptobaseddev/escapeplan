@@ -1,6 +1,7 @@
 import type { FastifyBaseLogger } from 'fastify';
 import type { PinoLoggerOptions } from 'fastify/types/logger';
 import * as winston from 'winston';
+import DailyRotateFile from 'winston-daily-rotate-file';
 
 /**
  * Structured logging configuration for EscapePlan API
@@ -201,7 +202,30 @@ const logger = winston.createLogger({
         winston.format.colorize(),
         winston.format.simple()
       )
+    }),
+
+    // Daily rotating file for all logs
+    new DailyRotateFile({
+      filename: 'logs/escapeplan-%DATE%.log',
+      datePattern: 'YYYY-MM-DD',
+      maxFiles: '14d',
+      maxSize: '20m',
+      format: winston.format.json()
+    }),
+
+    // Error-only log file
+    new winston.transports.File({
+      filename: 'logs/error.log',
+      level: 'error',
+      maxsize: 10485760, // 10MB
+      maxFiles: 5
     })
+  ],
+  exceptionHandlers: [
+    new winston.transports.File({ filename: 'logs/exceptions.log' })
+  ],
+  rejectionHandlers: [
+    new winston.transports.File({ filename: 'logs/rejections.log' })
   ]
 });
 
