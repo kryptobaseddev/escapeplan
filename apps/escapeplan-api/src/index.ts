@@ -1,9 +1,11 @@
 import Fastify, { type FastifyReply, type FastifyRequest, type FastifyBaseLogger } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
 import { Server as SocketServer } from 'socket.io';
 import argon2 from 'argon2';
 import { z } from 'zod';
-import type { CommandRequest, OperatorPermission, OperatorRole, SaveGameRequest, ApplyNetworkConfigRequest, ApplyNetworkConfigResponse } from '@escapeplan/contracts';
+import type { CommandRequest, OperatorPermission, OperatorRole, SaveGameRequest, QuickStartSessionRequest, ApplyNetworkConfigRequest, ApplyNetworkConfigResponse } from '@escapeplan/contracts';
 import {
   applyCommand,
   changeOwnPassword,
@@ -31,15 +33,21 @@ import {
   updateOperatorAccount,
   updateOwnProfile,
   updateOperatorLoginTimestamp,
-  resetOperatorPassword
+  resetOperatorPassword,
+  startTimerInterval,
+  stopTimerInterval
 } from './state/index.js';
 import { auth, describeSession, issueToken, validateToken } from './auth.js';
-import { runMigrations } from './db/client.js';
+import { runMigrations, db } from './db/client.js';
+import { systemLogs } from '@escapeplan/contracts';
+import { and, eq, desc, count, like } from 'drizzle-orm';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate, emitTimerUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
 import { loggerConfig, logError, logSecurityEvent } from './logger.js';
 import { settings } from './settings.js';
 import { getCurrentSystemHealth } from './system/health.js';
+import { handleAssetUpload } from './assets/upload.js';
+import { env } from './env.js';
 
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
 
@@ -229,10 +237,36 @@ export async function buildServer() {
     logger: loggerConfig,
     requestIdLogLabel: 'reqId',
     requestIdHeader: 'x-request-id',
-    genReqId: (req) => req.headers['x-request-id'] as string || `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    genReqId: (req) => req.headers['x-request-id'] as string || `req-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    trustProxy: true
   });
 
-  await app.register(cors, { origin: true });
+  await app.register(cors, {
+    origin: env.webAppOrigin,
+    credentials: true
+  });
+
+  // Register static file serving for assets
+  const { runtime } = await import('@escapeplan/contracts/runtime');
+  const assetBasePath = runtime.assetsDir;
+
+  await app.register(fastifyStatic, {
+    root: assetBasePath,
+    prefix: '/assets/',
+    decorateReply: false
+  });
+
+  // Register multipart for file uploads
+  await app.register(multipart, {
+    limits: {
+      fieldNameSize: 100,
+      fieldSize: 1024 * 1024,  // 1MB
+      fields: 10,
+      fileSize: 50 * 1024 * 1024,  // 50MB max file size
+      files: 1,
+      headerPairs: 2000
+    }
+  });
 
   // Register Better Auth handler for all /api/auth/* routes
   app.route({
@@ -533,25 +567,8 @@ export async function buildServer() {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
       const data = parsed.data;
-      const payload: SaveGameRequest = {
-        slug: data.slug,
-        name: data.name,
-        description: data.description,
-        storyIntro: data.storyIntro,
-        durationMinutes: data.durationMinutes,
-        difficulty: data.difficulty,
-        pricingModel: data.pricingModel,
-        categories: data.categories ?? [],
-        minPlayers: data.minPlayers,
-        maxPlayers: data.maxPlayers,
-        pricePerPlayerCents: data.pricePerPlayerCents,
-        resourcesRequired: data.resourcesRequired,
-        validationNotes: data.validationNotes,
-        puzzles: (data.puzzles ?? []).map((puzzle, index) => ({ ...puzzle, id: puzzle.id ?? '', displayOrder: puzzle.displayOrder ?? index + 1 })),
-        rooms: (data.rooms ?? []).map((room) => ({ ...room, id: room.id ?? '' }))
-      };
       try {
-        const created = createGame(payload);
+        const created = createGame(data);
         request.log.info({ userId: auth.user.id, gameId: created.id, slug: created.slug }, 'Game created');
         return created;
       } catch (error) {
@@ -575,25 +592,8 @@ export async function buildServer() {
         return reply.status(400).send({ statusCode: 400, message: 'Invalid request', details: parsed.error.flatten() });
       }
       const data = parsed.data;
-      const payload: SaveGameRequest = {
-        slug: data.slug,
-        name: data.name,
-        description: data.description,
-        storyIntro: data.storyIntro,
-        durationMinutes: data.durationMinutes,
-        difficulty: data.difficulty,
-        pricingModel: data.pricingModel,
-        categories: data.categories ?? [],
-        minPlayers: data.minPlayers,
-        maxPlayers: data.maxPlayers,
-        pricePerPlayerCents: data.pricePerPlayerCents,
-        resourcesRequired: data.resourcesRequired,
-        validationNotes: data.validationNotes,
-        puzzles: (data.puzzles ?? []).map((puzzle, index) => ({ ...puzzle, id: puzzle.id ?? '', displayOrder: puzzle.displayOrder ?? index + 1 })),
-        rooms: (data.rooms ?? []).map((room) => ({ ...room, id: room.id ?? '' }))
-      };
       try {
-        const updated = updateGame(id, payload);
+        const updated = updateGame(id, data);
         request.log.info({ userId: auth.user.id, gameId: id, slug: updated.slug }, 'Game updated');
         return updated;
       } catch (error) {
@@ -697,6 +697,42 @@ export async function buildServer() {
       }
     });
 
+    api.patch('/admin/settings/:key', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_system_health', request.log, auth.user.id)) return;
+
+      const { key } = request.params as { key: string };
+      const { value } = request.body as { value: any };
+
+      if (value === undefined) {
+        return reply.status(400).send({ statusCode: 400, message: 'value is required' });
+      }
+
+      try {
+        await settings.set(key as any, value, auth.user.id);
+
+        // Fetch updated setting from database
+        const { db: dbClient } = await import('./db/client.js');
+        const { systemSettings } = await import('@escapeplan/contracts');
+        const { eq } = await import('drizzle-orm');
+        const updatedSetting = await dbClient.query.systemSettings.findFirst({
+          where: eq(systemSettings.key, key)
+        });
+
+        return { success: true, setting: updatedSetting };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'updateSetting',
+          settingKey: key,
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        const message = error instanceof Error ? error.message : 'Failed to update setting';
+        return reply.status(400).send({ statusCode: 400, message });
+      }
+    });
+
     api.get('/admin/system/health', async (request, reply) => {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
@@ -728,6 +764,58 @@ export async function buildServer() {
       return { permissions: listPermissions() };
     });
 
+    api.get('/admin/logs', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_system_logs', request.log, auth.user.id)) return;
+
+      try {
+        const { level, category, limit = '100', offset = '0', search } = request.query as {
+          level?: string;
+          category?: string;
+          limit?: string;
+          offset?: string;
+          search?: string;
+        };
+
+        // Build where conditions using Drizzle operators
+        const conditions = [];
+        if (level) {
+          conditions.push(eq(systemLogs.level, level));
+        }
+        if (category) {
+          conditions.push(eq(systemLogs.category, category));
+        }
+        if (search) {
+          conditions.push(like(systemLogs.message, `%${search}%`));
+        }
+
+        // Query logs using Drizzle ORM
+        const logs = db.select()
+          .from(systemLogs)
+          .where(conditions.length > 0 ? and(...conditions) : undefined)
+          .orderBy(desc(systemLogs.timestamp))
+          .limit(parseInt(limit, 10))
+          .offset(parseInt(offset, 10))
+          .all();
+
+        // Get total count
+        const [totalResult] = db.select({ count: count() })
+          .from(systemLogs)
+          .where(conditions.length > 0 ? and(...conditions) : undefined)
+          .all();
+
+        return { logs, total: totalResult.count };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'getSystemLogs',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
     api.get('/admin/cameras', async (request, reply) => {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
@@ -751,15 +839,14 @@ export async function buildServer() {
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_sessions', request.log, auth.user.id)) return;
 
-      const body = request.body as { gameSlug: string; bookingId?: string };
-      if (!body?.gameSlug) {
-        return reply.status(400).send({ statusCode: 400, message: 'gameSlug is required' });
+      const body = request.body as QuickStartSessionRequest;
+      if (!body?.gameId) {
+        return reply.status(400).send({ statusCode: 400, message: 'gameId is required' });
       }
 
       try {
-        const session = quickStartSession({ gameSlug: body.gameSlug, bookingId: body.bookingId }, auth.user.id);
+        const session = quickStartSession(body, auth.user.id);
         emitSessionUpdate();
-        emitTimerUpdate();
         return session;
       } catch (error) {
         logError(request.log, error, {
@@ -791,6 +878,44 @@ export async function buildServer() {
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_assets', request.log, auth.user.id)) return;
       // TODO: Implement asset management
       return { assets: [], totalSize: 0, count: 0 };
+    });
+
+    api.post('/assets/upload', async (request, reply) => {
+      return handleAssetUpload(request, reply);
+    });
+
+    api.get('/assets/:id', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+
+      const { id } = request.params as { id: string };
+      const { sqlite } = await import('./db/client.js');
+
+      const asset = sqlite.prepare('SELECT * FROM assets WHERE id = ?').get(id) as {
+        id: string;
+        filename: string;
+        original_filename: string;
+        mime_type: string;
+        size_bytes: number;
+        file_path: string;
+        asset_type: string;
+        media_type: string | null;
+      } | undefined;
+
+      if (!asset) {
+        return reply.status(404).send({ statusCode: 404, message: 'Asset not found' });
+      }
+
+      return {
+        id: asset.id,
+        filename: asset.filename,
+        originalFilename: asset.original_filename,
+        mimeType: asset.mime_type,
+        sizeBytes: asset.size_bytes,
+        url: `/assets/${asset.file_path}`,
+        assetType: asset.asset_type,
+        mediaType: asset.media_type
+      };
     });
 
     api.get('/admin/backups', async (request, reply) => {
@@ -870,7 +995,15 @@ export async function buildServer() {
   }, { prefix: '/api' });
 
   const io = new SocketServer(app.server, {
-    cors: { origin: true }
+    cors: {
+      origin: env.webAppOrigin,
+      credentials: true,
+      methods: ['GET', 'POST']
+    },
+    transports: ['polling', 'websocket'],
+    path: '/socket.io',
+    pingInterval: 25000,
+    pingTimeout: 20000
   });
 
   attachRealtime(io);
@@ -890,6 +1023,7 @@ export async function buildServer() {
             role: (session.user as any).role,
             permissions: (session.user as any).permissions || []
           };
+          socket.data.authenticated = true;
           return next();
         }
       }
@@ -904,6 +1038,7 @@ export async function buildServer() {
         return next(new Error('Unauthorized'));
       }
       socket.data.user = user;
+      socket.data.authenticated = true;
       next();
     } catch (error) {
       next(new Error('Unauthorized'));
@@ -926,6 +1061,10 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
   try {
     await server.listen({ port: DEFAULT_PORT, host: '0.0.0.0' });
     server.log.info(`EscapePlan API listening on http://localhost:${DEFAULT_PORT}`);
+
+    // Start timer interval for all running sessions
+    startTimerInterval();
+    server.log.info('[Timer] Started timer interval for running sessions');
   } catch (error) {
     server.log.error(error);
     process.exit(1);
@@ -936,6 +1075,10 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     server.log.info(`${signal} received, starting graceful shutdown`);
 
     try {
+      // Stop timer interval first
+      stopTimerInterval();
+      server.log.info('[Timer] Stopped timer interval');
+
       // Get the Socket.IO instance from the server
       const io = (server.server as any).io;
 
