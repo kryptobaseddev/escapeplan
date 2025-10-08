@@ -33,6 +33,29 @@
   let dragOver = $state(false);
   let fileInput = $state<HTMLInputElement>();
 
+  // Define allowed MIME types for each asset type
+  const ALLOWED_MIME_TYPES: Record<string, string[]> = {
+    thumbnail: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
+    room_background: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
+    gallery: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
+    puzzle_media: [
+      // Images
+      'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif',
+      // Audio
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm',
+      // Video
+      'video/mp4', 'video/webm', 'video/ogg'
+    ],
+    hint_media: [
+      // Images
+      'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif',
+      // Audio
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm',
+      // Video
+      'video/mp4', 'video/webm', 'video/ogg'
+    ]
+  };
+
   async function uploadFile(file: File) {
     if (disabled || uploading) return;
 
@@ -45,6 +68,38 @@
       const maxSize = maxSizeMB * 1024 * 1024;
       if (file.size > maxSize) {
         throw new Error(`File size exceeds ${maxSizeMB}MB limit`);
+      }
+
+      // Validate MIME type
+      const allowedTypes = ALLOWED_MIME_TYPES[assetType];
+      if (allowedTypes && !allowedTypes.includes(file.type)) {
+        const typeCategory = assetType === 'thumbnail' || assetType === 'room_background' || assetType === 'gallery'
+          ? 'image'
+          : mediaType || 'media';
+        throw new Error(`Invalid file type. Please upload a valid ${typeCategory} file.`);
+      }
+
+      // Additional validation: check file extension matches MIME type
+      const extension = file.name.split('.').pop()?.toLowerCase();
+      const mimeExtensionMap: Record<string, string[]> = {
+        'image/jpeg': ['jpg', 'jpeg'],
+        'image/jpg': ['jpg', 'jpeg'],
+        'image/png': ['png'],
+        'image/webp': ['webp'],
+        'image/gif': ['gif'],
+        'audio/mpeg': ['mp3', 'mpeg'],
+        'audio/mp3': ['mp3'],
+        'audio/wav': ['wav'],
+        'audio/ogg': ['ogg', 'oga'],
+        'audio/webm': ['webm'],
+        'video/mp4': ['mp4'],
+        'video/webm': ['webm'],
+        'video/ogg': ['ogg', 'ogv']
+      };
+
+      const expectedExtensions = mimeExtensionMap[file.type];
+      if (extension && expectedExtensions && !expectedExtensions.includes(extension)) {
+        throw new Error(`File extension .${extension} does not match the file type ${file.type}`);
       }
 
       // Build query params
