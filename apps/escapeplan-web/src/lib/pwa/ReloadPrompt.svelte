@@ -1,3 +1,5 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
 
@@ -15,7 +17,8 @@
     needRefresh.set(false);
   };
 
-  $: isVisible = $offlineReady || $needRefresh;
+  // Use $derived for reactive visibility instead of legacy $: syntax
+  const isVisible = $derived($offlineReady || $needRefresh);
 </script>
 
 {#if isVisible}
