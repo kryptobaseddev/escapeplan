@@ -23,17 +23,14 @@ function detectApiBaseUrl(): string {
 
   // 2. Browser runtime detection
   if (browser) {
-    const { protocol, hostname } = window.location;
-
-    // Production: Check if hostname matches production domain
-    const isProduction = hostname === PRODUCTION_DOMAIN;
-
-    if (isProduction) {
-      return `${protocol}//${hostname}${API_BASE_PATH}`;
+    // In development: connect to API server directly
+    if (dev) {
+      return `http://localhost:${DEFAULT_API_PORT}${API_BASE_PATH}`;
     }
 
-    // Development: API on configured port
-    return `http://localhost:${DEFAULT_API_PORT}${API_BASE_PATH}`;
+    // Production: Use relative path (works with any hostname: escapeplan.local, 10.10.10.1, etc.)
+    // nginx proxies all /api requests to the backend
+    return API_BASE_PATH;
   }
 
   // 3. SSR fallback
@@ -41,8 +38,8 @@ function detectApiBaseUrl(): string {
     return `http://localhost:${DEFAULT_API_PORT}${API_BASE_PATH}`;
   }
 
-  // Production SSR
-  return `https://${PRODUCTION_DOMAIN}${API_BASE_PATH}`;
+  // Production SSR: Use relative path
+  return API_BASE_PATH;
 }
 
 export const env: ClientEnvironment = {
@@ -51,11 +48,14 @@ export const env: ClientEnvironment = {
   isProd: !dev
 };
 
-// Log in development
-if (dev && browser) {
+// Log environment configuration
+if (browser) {
   console.log('[ENV] Client environment:', {
     apiBaseUrl: env.apiBaseUrl,
     isDev: env.isDev,
-    currentUrl: window.location.href
+    currentUrl: window.location.href,
+    hostname: window.location.hostname,
+    protocol: window.location.protocol,
+    isProduction: !dev
   });
 }
