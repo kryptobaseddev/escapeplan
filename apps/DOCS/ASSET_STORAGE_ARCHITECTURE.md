@@ -542,9 +542,71 @@ Response:
 }
 ```
 
+## File Write Safety
+
+### Atomic Write Pattern
+
+All file uploads use a temp-file-then-rename pattern to prevent partial writes:
+
+1. Buffer written to `.tmp-{uuid}-{filename}` in target directory (same filesystem required for atomicity)
+2. Atomic rename to final filename using `fs.rename()` (OS-level atomic operation on POSIX systems)
+3. Database record created only after file confirmed on disk
+4. Temp file automatically cleaned up on any error
+
+**Implementation:** `/mnt/projects/escape-plan/escapeplan-app/apps/escapeplan-api/src/assets/fileops.ts`
+
+```typescript
+import { atomicWriteFile } from './fileops.js';
+
+// Atomic write with automatic cleanup on error
+await atomicWriteFile(buffer, finalPath);
+```
+
+This ensures:
+- No partial files visible to system
+- No orphaned files if process crashes mid-write
+- No orphaned DB records if file write fails
+- Filesystem consistency via rename() atomicity guarantee
+
+### Disk Space Monitoring
+
+System checks available disk space before accepting uploads using `fs.statfs()`:
+
+```typescript
+import { checkDiskSpace } from './fileops.js';
+
+// Check with 2x safety margin (processing may expand files temporarily)
+const diskCheck = await checkDiskSpace(basePath, fileBuffer.length * 2);
+if (!diskCheck.available) {
+  return reply.status(507).send({
+    statusCode: 507,
+    error: 'Insufficient Storage',
+    message: `Not enough disk space available...`
+  });
+}
+```
+
+### Error Handling
+
+Specific HTTP status codes for different failure modes:
+
+- **507 Insufficient Storage** (`ENOSPC`) - Disk full, file write failed
+- **500 Internal Server Error** (`EACCES`) - Permission denied, contact admin
+- **400 Bad Request** - Invalid/corrupted file, validation failure
+- **500 Internal Server Error** - Generic server error
+
+### Cleanup Strategy
+
+Orphaned file cleanup occurs automatically in the catch block:
+
+1. **On upload error:** Temp file is unlinked if it exists
+2. **On processing error:** Final file is unlinked before throwing
+3. **Logging:** Successful cleanup is logged for audit trail
+4. **Silent failure:** Cleanup errors are ignored (file may not exist)
+
 ## Implementation Status
 
-### ✅ Completed (Sessions 26, 27, 47)
+### ✅ Completed (Sessions 26, 27, 47, Atomic Writes)
 
 #### Session 26: Foundation
 1. **Database Schema** - `apps/escapeplan-api/src/db/client.ts`
@@ -738,6 +800,15 @@ For **operational configuration and usage**, see: `apps/escapeplan-api/docs/ASSE
 - Added database breakdown showing active DB + backups with counts
 - Wired up backup trigger button with loading/success/error states
 - Ghost file detection: Shows files on disk that aren't in database
+
+**Atomic Writes Implementation (2025-10-09):**
+- Created `fileops.ts` with `atomicWriteFile()` and `checkDiskSpace()` helpers
+- Implemented temp-file-then-rename pattern for all file writes
+- Added pre-upload disk space check with 2x safety margin
+- Enhanced error handling with ENOSPC (507) and EACCES (500) specific responses
+- Added orphaned file cleanup with audit logging
+- Updated `processing.ts` to use atomic writes for images and media files
+- Updated `upload.ts` with comprehensive cleanup logic in catch blocks
 
 ## Known Issues
 
