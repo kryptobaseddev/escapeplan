@@ -247,6 +247,11 @@
     const currentValue = editedValues['business.default_text_hint_sound_asset_id'] ||
                          settings.business.find(s => s.key === 'business.default_text_hint_sound_asset_id')?.value;
 
+    // Skip re-fetching if we already have the correct asset loaded
+    if (selectedAssetDetails && selectedAssetDetails.id === currentValue) {
+      return;
+    }
+
     if (currentValue && currentValue !== 'null') {
       loadAssetDetails(currentValue);
     } else {
