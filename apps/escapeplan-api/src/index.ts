@@ -407,7 +407,74 @@ export async function buildServer() {
     }
   });
 
-  app.get('/health', async () => ({ status: 'ok' }));
+  app.get('/health', async (request, reply) => {
+    const startTime = Date.now();
+
+    try {
+      // Quick database check
+      let dbStatus: 'up' | 'down' = 'down';
+      let dbLatency = 0;
+
+      try {
+        const dbStart = Date.now();
+        const { sqlite } = await import('./db/client.js');
+        sqlite.prepare('SELECT 1').get();
+        dbLatency = Date.now() - dbStart;
+        dbStatus = 'up';
+      } catch (error) {
+        request.log.error({ error }, 'Health check database ping failed');
+      }
+
+      // Check secrets exist
+      const { runtime } = await import('@escapeplan/contracts/runtime');
+      const { existsSync } = await import('node:fs');
+      const secretsExist = existsSync(
+        runtime.isProduction ? '/etc/escapeplan/secrets' : './data/secrets'
+      );
+
+      // Gather system info
+      const health = {
+        status: dbStatus === 'up' ? 'healthy' : 'degraded',
+        timestamp: new Date().toISOString(),
+        version: env.version,
+        environment: env.isProd ? 'production' : 'development',
+        uptime: Math.floor(process.uptime()),
+        checks: {
+          database: {
+            status: dbStatus,
+            latency: dbLatency
+          },
+          secrets: {
+            status: secretsExist ? 'present' : 'missing'
+          },
+          memory: {
+            heapUsed: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+            heapTotal: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+            rss: Math.round(process.memoryUsage().rss / 1024 / 1024)
+          }
+        },
+        responseTime: Date.now() - startTime
+      };
+
+      // Return degraded status if DB is down
+      if (dbStatus === 'down') {
+        reply.status(503);
+      }
+
+      return health;
+
+    } catch (error) {
+      request.log.error({ error }, 'Health check failed');
+
+      reply.status(503);
+      return {
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        error: (error as Error).message,
+        responseTime: Date.now() - startTime
+      };
+    }
+  });
 
   await app.register(async (api) => {
     api.post('/auth/login', async (request, reply) => {

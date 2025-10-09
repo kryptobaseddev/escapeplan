@@ -6,9 +6,11 @@ import type { BetterAuthOptions } from 'better-auth';
 import type { OperatorPermission, OperatorRole } from '@escapeplan/contracts';
 import { db, sqlite } from './db/client.js';
 import { user, session, account, verification } from '@escapeplan/contracts';
+import { env } from './env.js';
 
-const DEFAULT_BASE_URL = process.env.AUTH_BASE_URL ?? 'http://localhost:4000/api/auth';
-const WEB_ORIGIN = process.env.WEB_APP_ORIGIN ?? 'http://localhost:5173';
+// Use centralized environment detection (no hardcoded fallbacks)
+const DEFAULT_BASE_URL = env.authBaseUrl;
+const WEB_ORIGIN = env.webAppOrigin;
 
 export type EscapePlanAuthOptions = BetterAuthOptions;
 
@@ -183,6 +185,7 @@ function buildBaseOptions(): BetterAuthOptions {
           role_id?: string;
           archived_at?: string | null;
           image?: unknown;
+          avatar_config?: unknown;
         };
 
         // Re-fetch user from database to get fresh archived_at status
@@ -202,6 +205,7 @@ function buildBaseOptions(): BetterAuthOptions {
         const role = await getRoleFromDB(enrichedUser.role_id);
 
         // Transform Better Auth's 'image' field to 'avatarConfig' for frontend compatibility
+        // Check both 'image' and 'avatar_config' fields
         let avatarConfig;
         if (enrichedUser.image) {
           try {
@@ -213,7 +217,18 @@ function buildBaseOptions(): BetterAuthOptions {
           }
         }
 
-        const { image, ...userWithoutImage } = enrichedUser;
+        // Also check avatar_config field (not just image)
+        if (!avatarConfig && enrichedUser.avatar_config) {
+          try {
+            avatarConfig = typeof enrichedUser.avatar_config === 'string'
+              ? JSON.parse(enrichedUser.avatar_config)
+              : enrichedUser.avatar_config;
+          } catch {
+            avatarConfig = undefined;
+          }
+        }
+
+        const { image, avatar_config, ...userWithoutImage } = enrichedUser;
 
         return {
           user: {
