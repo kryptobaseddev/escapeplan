@@ -1,6 +1,29 @@
 import fs from 'node:fs/promises';
+import { exec } from 'node:child_process';
+import { promisify } from 'node:util';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
+
+const execAsync = promisify(exec);
+
+let ffprobeAvailable: boolean | null = null;
+
+/**
+ * Check if ffprobe is available on the system.
+ * Cached after first check.
+ */
+export async function checkFfprobeAvailable(): Promise<boolean> {
+  if (ffprobeAvailable !== null) return ffprobeAvailable;
+
+  try {
+    await execAsync('which ffprobe');
+    ffprobeAvailable = true;
+  } catch {
+    ffprobeAvailable = false;
+  }
+
+  return ffprobeAvailable;
+}
 
 export interface ProcessedFile {
   size: number;
@@ -90,9 +113,15 @@ async function processImage(buffer: Buffer, mimeType: string): Promise<{buffer: 
 
 /**
  * Extract metadata from audio/video file using ffmpeg
- * Rejects if ffprobe fails (validation failure)
+ * Rejects if ffprobe fails or is not available (validation failure)
  */
-function extractMediaMetadata(filePath: string): Promise<Record<string, any>> {
+async function extractMediaMetadata(filePath: string): Promise<Record<string, any>> {
+  // Check if ffprobe is available
+  const available = await checkFfprobeAvailable();
+  if (!available) {
+    throw new Error('FFprobe is not installed. Cannot process video/audio files.');
+  }
+
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(filePath, (err, metadata) => {
       if (err) {

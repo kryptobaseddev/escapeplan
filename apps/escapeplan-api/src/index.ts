@@ -1379,6 +1379,7 @@ export async function buildServer() {
     api.get('/assets/:id', async (request, reply) => {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_assets', request.log, auth.user.id)) return;
 
       const { id } = request.params as { id: string };
       const { sqlite } = await import('./db/client.js');

@@ -46,6 +46,24 @@ export interface AssetRecord {
 }
 
 /**
+ * Sanitize filename by removing control characters and normalizing Unicode.
+ * Prevents UI issues and potential security problems.
+ */
+function sanitizeFilename(filename: string): string {
+  return filename
+    // Normalize Unicode (NFC form)
+    .normalize('NFC')
+    // Remove control characters (0x00-0x1F, 0x7F-0x9F)
+    .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+    // Remove zero-width characters that can be used for spoofing
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    // Replace problematic characters with underscores
+    .replace(/[<>:"|?*]/g, '_')
+    // Trim whitespace
+    .trim();
+}
+
+/**
  * Handle asset upload
  */
 export async function handleAssetUpload(request: FastifyRequest, reply: FastifyReply) {
@@ -55,9 +73,12 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     return reply.status(401).send({ statusCode: 401, message: 'Authentication required' });
   }
 
-  // Check permissions (manage_games permission required)
-  if (session.user.role !== 'admin' && !session.user.permissions?.includes('manage_games')) {
-    return reply.status(403).send({ statusCode: 403, message: 'Permission denied' });
+  // Check permissions (manage_assets permission required)
+  if (session.user.role !== 'admin' && !session.user.permissions?.includes('manage_assets')) {
+    return reply.status(403).send({
+      statusCode: 403,
+      message: 'Insufficient permissions. Required: manage_assets'
+    });
   }
 
   // Parse query params

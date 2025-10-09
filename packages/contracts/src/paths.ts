@@ -138,7 +138,6 @@ export function getExtensionFromMime(mimeType: string): string {
     'image/png': 'png',
     'image/gif': 'gif',
     'image/webp': 'webp',
-    'image/svg+xml': 'svg',
     'audio/mpeg': 'mp3',
     'audio/mp3': 'mp3',
     'audio/mp4': 'm4a',
@@ -163,7 +162,7 @@ export function getAllowedMimeTypes(assetType: string, mediaType?: string): stri
 
   if (assetType === 'hint_media' || assetType === 'milestone_media') {
     if (mediaType === 'image') {
-      return ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+      return ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     }
     if (mediaType === 'audio') {
       return ['audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/wav', 'audio/ogg'];
@@ -176,7 +175,7 @@ export function getAllowedMimeTypes(assetType: string, mediaType?: string): stri
   // Gallery supports all media types (images, audio, video)
   if (assetType === 'gallery') {
     return [
-      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
       'audio/mpeg', 'audio/mp3', 'audio/mp4', 'audio/wav', 'audio/ogg',
       'video/mp4', 'video/webm', 'video/ogg'
     ];
@@ -184,7 +183,7 @@ export function getAllowedMimeTypes(assetType: string, mediaType?: string): stri
 
   // Images only for thumbnails, room backgrounds, puzzle media
   if (['thumbnail', 'room_background', 'puzzle_media'].includes(assetType)) {
-    return ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    return ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
   }
 
   return [];
