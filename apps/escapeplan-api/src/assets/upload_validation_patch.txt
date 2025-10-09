@@ -1,0 +1,57 @@
+    // First check: Validate declared MIME type against allowed types
+    const allowedTypes = getAllowedMimeTypes(assetType, mediaType);
+    if (!allowedTypes.includes(data.mimetype)) {
+      return reply.status(400).send({
+        statusCode: 400,
+        message: `Invalid file type. Allowed: ${allowedTypes.join(', ')}`
+      });
+    }
+
+    // Second check: Validate actual file content matches declared MIME type (magic number validation)
+    const detectedType = await fileTypeFromBuffer(fileBuffer);
+
+    if (!detectedType) {
+      // Some valid files (like plain text, CSV) may not have magic numbers
+      // For our use case, all media files should have detectable signatures
+      request.log.warn({
+        declaredMime: data.mimetype,
+        filename: originalFilename,
+        assetType,
+        userId: session.user.id
+      }, 'No magic number detected - possible unsupported file type');
+
+      // For security, reject files without magic numbers unless they're known text-based formats
+      const textFormats = ['text/plain', 'text/csv'];
+      if (!textFormats.includes(data.mimetype)) {
+        return reply.status(400).send({
+          statusCode: 400,
+          message: `Unable to verify file type. File content does not match expected format for ${data.mimetype}.`
+        });
+      }
+    } else if (!allowedTypes.includes(detectedType.mime)) {
+      // File content does not match any allowed MIME type - potential spoofing attack
+      request.log.warn({
+        userId: session.user.id,
+        declaredMime: data.mimetype,
+        detectedMime: detectedType.mime,
+        filename: originalFilename,
+        assetType,
+        gameId
+      }, 'SECURITY: MIME type mismatch detected - possible file spoofing attempt');
+
+      return reply.status(400).send({
+        statusCode: 400,
+        message: `File content validation failed. Declared type: ${data.mimetype}, detected type: ${detectedType.mime}. Possible file type spoofing attempt.`
+      });
+    } else if (detectedType.mime !== data.mimetype) {
+      // Detected type is allowed, but differs from declared type
+      // Log for security monitoring but allow the upload
+      request.log.info({
+        userId: session.user.id,
+        declaredMime: data.mimetype,
+        detectedMime: detectedType.mime,
+        filename: originalFilename,
+        assetType,
+        gameId
+      }, 'MIME type mismatch detected but both types are allowed - allowing upload');
+    }
