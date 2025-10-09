@@ -57,6 +57,9 @@ import { settings } from './settings.js';
 import { getCurrentSystemHealth } from './system/health.js';
 import { handleAssetUpload } from './assets/upload.js';
 import { env } from './env.js';
+import { hasExternalWiFi, detectWiFiInterfaces } from './platform/wifi-detect.js';
+import { scanWiFiNetworks } from './platform/wifi-scan.js';
+import { connectToWiFi, disconnectWiFi, getWiFiStatus } from './platform/wifi-connect.js';
 
 const DEFAULT_PORT = Number(process.env.PORT ?? 4000);
 
@@ -280,9 +283,49 @@ export async function buildServer() {
     throw new Error('Invalid camera encryption key format');
   }
 
-  // Continue with migrations and settings
-  await runMigrations();
-  await settings.init();
+  // Database initialization with error handling
+  console.log('[STARTUP] Initializing database...');
+  try {
+    await runMigrations();
+    console.log('[STARTUP] ✅ Database migrations complete');
+  } catch (error) {
+    console.error('[STARTUP] ❌ Database migration failed:', error);
+
+    // Check if database file exists
+    const { runtime } = await import('@escapeplan/contracts/runtime');
+    const dbPath = `${runtime.dataDir}/escapeplan.db`;
+    const { existsSync } = await import('node:fs');
+
+    if (!existsSync(dbPath)) {
+      console.error(`[STARTUP] Database file not found: ${dbPath}`);
+      console.error('[STARTUP] Creating new database...');
+
+      // Retry migrations (will create new DB)
+      try {
+        await runMigrations();
+        console.log('[STARTUP] ✅ New database created successfully');
+      } catch (retryError) {
+        console.error('[STARTUP] ❌ Failed to create database:', retryError);
+        throw new Error('Database initialization failed. Check logs for details.');
+      }
+    } else {
+      console.error('[STARTUP] Database exists but migrations failed');
+      console.error('[STARTUP] Possible corruption. Manual intervention required.');
+      throw new Error('Database migration failed. See logs for details.');
+    }
+  }
+
+  // Settings initialization with error handling
+  console.log('[STARTUP] Initializing settings system...');
+  try {
+    await settings.init();
+    console.log('[STARTUP] ✅ Settings initialized');
+  } catch (error) {
+    console.error('[STARTUP] ⚠️  Settings initialization failed:', error);
+    console.warn('[STARTUP] Continuing with default settings');
+  }
+
+  // Continue with rest of server setup
   const app = Fastify({
     logger: loggerConfig,
     requestIdLogLabel: 'reqId',
@@ -864,6 +907,111 @@ export async function buildServer() {
       return { roles: listRoles() };
     });
 
+    api.get('/admin/roles/:id', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_roles', request.log, auth.user.id)) return;
+
+      const { id } = request.params as { id: string };
+      const role = getRoleById(id);
+
+      if (!role) {
+        return reply.status(404).send({ statusCode: 404, message: 'Role not found' });
+      }
+
+      return role;
+    });
+
+    api.post('/admin/roles', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_roles', request.log, auth.user.id)) return;
+
+      const parsed = createRoleSchema.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          statusCode: 400,
+          message: 'Invalid request',
+          details: parsed.error.flatten()
+        });
+      }
+
+      try {
+        const role = createRole(parsed.data);
+        request.log.info({ userId: auth.user.id, roleId: role.id }, 'Role created');
+        return role;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'createRole',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(400).send({
+          statusCode: 400,
+          message: (error as Error).message
+        });
+      }
+    });
+
+    api.patch('/admin/roles/:id', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_roles', request.log, auth.user.id)) return;
+
+      const { id } = request.params as { id: string };
+      const parsed = updateRoleSchema.safeParse(request.body);
+
+      if (!parsed.success) {
+        return reply.status(400).send({
+          statusCode: 400,
+          message: 'Invalid request',
+          details: parsed.error.flatten()
+        });
+      }
+
+      try {
+        const role = updateRole(id, parsed.data);
+        request.log.info({ userId: auth.user.id, roleId: id }, 'Role updated');
+        return role;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'updateRole',
+          userId: auth.user.id,
+          roleId: id,
+          requestId: request.id
+        });
+        return reply.status(400).send({
+          statusCode: 400,
+          message: (error as Error).message
+        });
+      }
+    });
+
+    api.delete('/admin/roles/:id', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_roles', request.log, auth.user.id)) return;
+
+      const { id } = request.params as { id: string };
+
+      try {
+        deleteRole(id);
+        request.log.info({ userId: auth.user.id, roleId: id }, 'Role deleted');
+        reply.status(204).send();
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'deleteRole',
+          userId: auth.user.id,
+          roleId: id,
+          requestId: request.id
+        });
+        return reply.status(400).send({
+          statusCode: 400,
+          message: (error as Error).message
+        });
+      }
+    });
+
     api.get('/admin/permissions', async (request, reply) => {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
@@ -920,6 +1068,49 @@ export async function buildServer() {
           requestId: request.id
         });
         return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/alert-rules', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_system_health', request.log, auth.user.id)) return;
+      
+      const rules = listAlertRules();
+      return { rules };
+    });
+
+    api.patch('/admin/alert-rules/:id', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_system_health', request.log, auth.user.id)) return;
+      
+      const { id } = request.params as { id: string };
+      const parsed = updateAlertRuleSchema.safeParse(request.body);
+      
+      if (!parsed.success) {
+        return reply.status(400).send({
+          statusCode: 400,
+          message: 'Invalid request',
+          details: parsed.error.flatten()
+        });
+      }
+      
+      try {
+        updateAlertRule(id, parsed.data);
+        request.log.info({ userId: auth.user.id, ruleId: id }, 'Alert rule updated');
+        return { success: true };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'updateAlertRule',
+          userId: auth.user.id,
+          ruleId: id,
+          requestId: request.id
+        });
+        return reply.status(400).send({
+          statusCode: 400,
+          message: (error as Error).message
+        });
       }
     });
 
