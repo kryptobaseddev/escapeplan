@@ -136,7 +136,7 @@ export const operatorAccounts = account;
 export const operatorVerifications = verification;
 
 // ============================================================================
-// GAMES & ROOMS
+// GAMES
 // ============================================================================
 
 export const games = sqliteTable('games', {
@@ -645,7 +645,7 @@ export const schema = {
   roles,
   permissions,
   rolePermissions,
-  // Games & Rooms
+  // Games
   games,
   gamePuzzles,
   gameMilestones,

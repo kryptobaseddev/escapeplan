@@ -70,13 +70,16 @@
     }
   };
 
-  // Build occupiedGameMap from activeSessions
+  // Build occupiedGameMap from activeSessions prop
   $effect(() => {
     const map = new Map<string, GameSessionDetails>();
-    const activeSessions = props.activeSessions ?? [];
-    for (const session of activeSessions) {
-      // Each active session occupies its game
-      map.set(session.gameId, session);
+    const sessions = props.activeSessions ?? [];
+    // Ensure we have an iterable array
+    if (Array.isArray(sessions)) {
+      for (const session of sessions) {
+        // Each active session occupies its game
+        map.set(session.gameId, session);
+      }
     }
     occupiedGameMap = map;
   });

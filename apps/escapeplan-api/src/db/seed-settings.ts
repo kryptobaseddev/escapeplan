@@ -155,6 +155,15 @@ export async function seedSystemSettings() {
       description: 'Asset ID for the background sound that plays when text hints are displayed',
       is_editable: true
     },
+    {
+      key: SETTING_KEYS.BUSINESS.DEFAULT_TEXT_HINT_DURATION_SECONDS,
+      value: String(BUSINESS_DEFAULTS.DEFAULT_TEXT_HINT_DURATION_SECONDS),
+      type: 'number',
+      category: 'business',
+      label: 'Default Text Hint Duration (Seconds)',
+      description: 'How long text hints remain visible on the room display before auto-dismissing',
+      is_editable: true
+    },
 
     // ========== USER VALIDATION SETTINGS ==========
     {

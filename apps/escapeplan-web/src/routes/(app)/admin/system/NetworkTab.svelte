@@ -179,9 +179,27 @@
 		return '📉';
 	}
 
+	function getSignalStrength(signal: number): string {
+		if (signal >= 75) return 'Excellent';
+		if (signal >= 50) return 'Good';
+		if (signal >= 25) return 'Fair';
+		return 'Weak';
+	}
+
+	function getSignalIconTooltip(signal: number): string {
+		return `Signal Strength: ${getSignalStrength(signal)} (${signal}%)`;
+	}
+
 	function getSecurityIcon(security: string): string {
 		if (security.toLowerCase().includes('open')) return '🔓';
 		return '🔒';
+	}
+
+	function getSecurityIconTooltip(security: string): string {
+		const isOpen = security.toLowerCase().includes('open');
+		return isOpen
+			? 'Open Network - No password required'
+			: `Secured Network - ${security}`;
 	}
 
 	// Load WiFi status on mount
@@ -549,30 +567,65 @@
 				<!-- Available Networks -->
 				{#if wifiNetworks.length > 0}
 					<div class="divider">Available Networks</div>
+
+					<!-- Icon Legend -->
+					<div class="bg-base-100 rounded-lg p-3 mb-3 text-xs text-base-content/70">
+						<div class="font-semibold mb-2">Icon Legend:</div>
+						<div class="grid grid-cols-2 gap-2">
+							<div><span class="text-base">📶</span> Excellent/Good signal</div>
+							<div><span class="text-base">📡</span> Fair signal</div>
+							<div><span class="text-base">📉</span> Weak signal</div>
+							<div><span class="text-base">🔒</span> Password protected</div>
+							<div><span class="text-base">🔓</span> Open network</div>
+						</div>
+					</div>
+
 					<div class="space-y-2 max-h-96 overflow-y-auto">
 						{#each wifiNetworks as network}
-							<div class="card bg-base-100 border border-base-content/10">
+							<div class="card bg-base-100 border border-base-content/10 hover:border-primary/30 transition-colors">
 								<div class="card-body p-4">
 									<div class="flex items-center justify-between">
-										<div class="flex items-center gap-3">
-											<span class="text-xl">{getSignalIcon(network.signal)}</span>
-											<div>
+										<div class="flex items-center gap-3 flex-1">
+											<span
+												class="text-2xl"
+												title={getSignalIconTooltip(network.signal)}
+											>
+												{getSignalIcon(network.signal)}
+											</span>
+											<div class="flex-1 min-w-0">
 												<div class="font-medium flex items-center gap-2">
-													{network.ssid}
+													<span
+														class="text-base"
+														title={getSecurityIconTooltip(network.security)}
+													>
+														{getSecurityIcon(network.security)}
+													</span>
+													<span class="truncate">{network.ssid}</span>
 													{#if network.inUse}
-														<span class="badge badge-primary badge-sm">In Use</span>
+														<span class="badge badge-primary badge-sm">Connected</span>
 													{/if}
 												</div>
-												<div class="text-xs text-base-content/60">
-													{getSecurityIcon(network.security)} {network.security} | Channel {network.channel}
-													| {network.signal}%
+												<div class="text-xs text-base-content/60 flex items-center gap-2 mt-1">
+													<span class="badge badge-ghost badge-xs">
+														{getSignalStrength(network.signal)} ({network.signal}%)
+													</span>
+													{#if network.channel > 0}
+														<span class="badge badge-ghost badge-xs">
+															Ch {network.channel}
+														</span>
+													{/if}
+													{#if network.security !== 'Open'}
+														<span class="badge badge-ghost badge-xs">
+															{network.security}
+														</span>
+													{/if}
 												</div>
 											</div>
 										</div>
 										{#if canManage && !network.inUse}
 											<button
 												type="button"
-												class="btn btn-primary btn-sm"
+												class="btn btn-primary btn-sm shrink-0"
 												onclick={() => (selectedNetwork = network)}
 											>
 												Connect

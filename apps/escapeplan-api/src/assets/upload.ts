@@ -62,10 +62,15 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
 
   // Parse query params
   const query = request.query as UploadAssetQuery;
-  const { gameId, assetType, puzzleId, mediaType, order, isReusable } = query;
+  let { gameId, assetType, puzzleId, mediaType, order, isReusable } = query;
+
+  // Treat special gameId values as "no game" (shared/system assets)
+  const sharedGameValues = ['shared', 'system', 'reusable', ''];
+  if (gameId && sharedGameValues.includes(gameId.toLowerCase())) {
+    gameId = undefined;
+  }
 
   // Validate required params
-  // gameId is required UNLESS assetType is 'system_audio'
   if (!assetType) {
     return reply.status(400).send({
       statusCode: 400,
@@ -73,10 +78,14 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     });
   }
 
-  if (!gameId && assetType !== 'system_audio') {
+  // For gallery and reusable assets, gameId is optional
+  const systemAssetTypes = ['system_audio', 'gallery'];
+  const requiresGame = !systemAssetTypes.includes(assetType) && !isReusable;
+
+  if (!gameId && requiresGame) {
     return reply.status(400).send({
       statusCode: 400,
-      message: 'gameId is required for non-system assets'
+      message: `gameId is required for ${assetType} assets unless marked as reusable`
     });
   }
 
@@ -154,8 +163,8 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
         return reply.status(404).send({ statusCode: 404, message: `Game not found: ${gameId}` });
       }
     } else {
-      // System asset - use virtual game object
-      game = { id: '', slug: 'system', name: 'System Assets' };
+      // Shared/System asset - use virtual game object for naming
+      game = { id: '', slug: 'shared', name: 'Shared Assets' };
     }
 
     // Get puzzle details if needed
@@ -204,7 +213,8 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       game_id: game.id || null,
       puzzle_id: puzzleId || null,
       hint_order: order ? parseInt(String(order), 10) : null,
-      is_reusable: assetType === 'system_audio' ? 1 : (isReusable ? 1 : 0),
+      // Mark as reusable if: system_audio, no game (shared), or explicitly flagged
+      is_reusable: (assetType === 'system_audio' || !game.id || isReusable) ? 1 : 0,
       uploaded_by: session.user.id as string,
       uploaded_at: new Date().toISOString(),
       metadata: JSON.stringify(processed.metadata)

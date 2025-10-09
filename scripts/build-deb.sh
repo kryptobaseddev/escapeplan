@@ -208,7 +208,6 @@ mkdir -p "${BUILD_DIR}/opt/escapeplan/api"
 mkdir -p "${BUILD_DIR}/opt/escapeplan/web"
 mkdir -p "${BUILD_DIR}/etc/systemd/system"
 mkdir -p "${BUILD_DIR}/etc/escapeplan"
-mkdir -p "${BUILD_DIR}/etc/nginx/sites-available"
 
 # Use pnpm deploy to create production node_modules with real files (no symlinks)
 echo "Deploying production dependencies for API..."
@@ -1037,10 +1036,6 @@ cp scripts/systemd/escapeplan-backup-notify@.service "${BUILD_DIR}/etc/systemd/s
 echo "Adding rescue systemd unit to package..."
 cp scripts/systemd/escapeplan-rescue.service "${BUILD_DIR}/etc/systemd/system/"
 
-# Copy nginx configuration
-echo "Adding nginx reverse proxy configuration to package..."
-cp scripts/nginx/escapeplan.conf "${BUILD_DIR}/etc/nginx/sites-available/"
-
 # Create control file
 cat > "${BUILD_DIR}/DEBIAN/control" << EOF
 Package: ${PKG_NAME}
@@ -1299,12 +1294,6 @@ case "$1" in
         fi
 
         log "✓ All contracts packages verified and dependencies linked"
-
-        # Configure nginx reverse proxy
-        log "Configuring nginx reverse proxy..."
-        ln -sf /etc/nginx/sites-available/escapeplan /etc/nginx/sites-enabled/escapeplan
-        rm -f /etc/nginx/sites-enabled/default
-        log "✓ Nginx configuration installed"
 
         log "Package installation complete. Running orchestrator for system configuration..."
         log ""

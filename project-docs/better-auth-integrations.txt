@@ -1,6 +1,0 @@
- here is the sveltekit integration https://www.better-auth.com/docs/integrations/svelte-kit
- here is the fastify https://www.better-auth.com/docs/integrations/fastify
- need to use username plugin https://www.better-auth.com/docs/plugins/username
- user admin plugin https://www.better-auth.com/docs/plugins/admin
- drizzle integration https://www.better-auth.com/docs/adapters/drizzle
- sqlite not sure if we need this too with Drizzle https://www.better-auth.com/docs/adapters/sqlite

@@ -55,7 +55,7 @@ import { applyEscapePlanConfig } from './platform.js';
 import { loggerConfig, logError, logSecurityEvent } from './logger.js';
 import { settings } from './settings.js';
 import { getCurrentSystemHealth } from './system/health.js';
-import { handleAssetUpload } from './assets/upload.js';
+import { handleAssetUpload, listAssets, getStorageMetrics, deleteAsset, linkReusableAsset } from './assets/upload.js';
 import { env } from './env.js';
 import { hasExternalWiFi, detectWiFiInterfaces } from './platform/wifi-detect.js';
 import { scanWiFiNetworks } from './platform/wifi-scan.js';
@@ -1334,8 +1334,34 @@ export async function buildServer() {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_assets', request.log, auth.user.id)) return;
-      // TODO: Implement asset management
-      return { assets: [], totalSize: 0, count: 0 };
+
+      try {
+        const { gameId, assetType, mediaType, isReusable, search } = request.query as {
+          gameId?: string;
+          assetType?: string;
+          mediaType?: string;
+          isReusable?: string;
+          search?: string;
+        };
+
+        const assets = await listAssets({
+          gameId,
+          assetType,
+          mediaType,
+          isReusable: isReusable === 'true' ? true : isReusable === 'false' ? false : undefined,
+          search
+        });
+
+        // Return array directly as per spec (ASSET_STORAGE_ARCHITECTURE.md line 452-453)
+        return assets;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'listAssets',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to list assets' });
+      }
     });
 
     api.post('/assets/upload', async (request, reply) => {
@@ -1374,6 +1400,78 @@ export async function buildServer() {
         assetType: asset.asset_type,
         mediaType: asset.media_type
       };
+    });
+
+    api.delete('/assets/:id', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_assets', request.log, auth.user.id)) return;
+
+      const { id } = request.params as { id: string };
+
+      try {
+        await deleteAsset(id, auth.user.id, auth.user.role);
+        request.log.info({ userId: auth.user.id, assetId: id }, 'Asset deleted');
+        return { success: true };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'deleteAsset',
+          userId: auth.user.id,
+          assetId: id,
+          requestId: request.id
+        });
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.post('/assets/link', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_assets', request.log, auth.user.id)) return;
+
+      const { assetId, gameId, usageType, puzzleId } = request.body as {
+        assetId: string;
+        gameId: string;
+        usageType: 'thumbnail' | 'room_bg' | 'gallery' | 'puzzle' | 'hint';
+        puzzleId?: string;
+      };
+
+      if (!assetId || !gameId || !usageType) {
+        return reply.status(400).send({ statusCode: 400, message: 'assetId, gameId, and usageType are required' });
+      }
+
+      try {
+        const result = await linkReusableAsset({ assetId, gameId, usageType, puzzleId });
+        request.log.info({ userId: auth.user.id, assetId, gameId }, 'Asset linked to game');
+        return result;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'linkReusableAsset',
+          userId: auth.user.id,
+          assetId,
+          gameId,
+          requestId: request.id
+        });
+        return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/storage/metrics', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_storage', request.log, auth.user.id)) return;
+
+      try {
+        const metrics = await getStorageMetrics();
+        return metrics;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'getStorageMetrics',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to load storage metrics' });
+      }
     });
 
     api.get('/admin/backups', async (request, reply) => {

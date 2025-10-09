@@ -49,7 +49,7 @@
   };
 
   const sessions = $derived(
-    [...allSessions]
+    [...(Array.isArray(allSessions) ? allSessions : [])]
       .filter(matchesStatus)
       .filter(matchesSearch)
       .sort((a, b) => {
@@ -77,8 +77,10 @@
   const handleQuickStartSuccess = (session: GameSessionDetails) => {
     quickStartOpen = false;
     setToast('Session started successfully.');
-    if (!allSessions.some((existing: GameSessionDetails) => existing.id === session.id)) {
-      allSessions = [session, ...allSessions];
+    // Ensure allSessions is an array before checking
+    const currentSessions = Array.isArray(allSessions) ? allSessions : [];
+    if (!currentSessions.some((existing: GameSessionDetails) => existing.id === session.id)) {
+      allSessions = [session, ...currentSessions];
     }
     goto(`/games/${session.id}`);
   };
@@ -132,15 +134,20 @@
 
     // Subscribe to real-time session updates and merge with local list
     unsubSessions = sessionsStore.subscribe((storeSessions) => {
+      // Ensure allSessions is an array before operating on it
+      const currentSessions = Array.isArray(allSessions) ? allSessions : [];
+
       // Update allSessions with real-time data
-      allSessions = allSessions.map(session => {
+      allSessions = currentSessions.map(session => {
         const updated = storeSessions.find(s => s.id === session.id);
         return updated || session;
       });
+
       // Also add any new sessions from the store that aren't in our list
       storeSessions.forEach(storeSession => {
-        if (!allSessions.find(s => s.id === storeSession.id)) {
-          allSessions = [...allSessions, storeSession];
+        const sessions = Array.isArray(allSessions) ? allSessions : [];
+        if (!sessions.find(s => s.id === storeSession.id)) {
+          allSessions = [...sessions, storeSession];
         }
       });
     });

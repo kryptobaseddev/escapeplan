@@ -34,7 +34,7 @@ export const DEFAULT_FILE_SIZE_LIMITS = {
 export const DEFAULT_BACKUP_RETENTION_DAYS = 7;
 
 /** Default GitHub repository for updates */
-export const DEFAULT_GITHUB_REPO = 'escapeplan/escapeplan';
+export const DEFAULT_GITHUB_REPO = 'kryptobaseddev/escapeplan';
 
 /** Default auto-update setting */
 export const DEFAULT_AUTO_UPDATE_ENABLED = true;
@@ -55,7 +55,9 @@ export const BUSINESS_DEFAULTS = {
   /** Default booking window in days */
   DEFAULT_BOOKING_WINDOW_DAYS: 90,
   /** Default text hint sound asset ID */
-  DEFAULT_TEXT_HINT_SOUND_ASSET_ID: null as string | null
+  DEFAULT_TEXT_HINT_SOUND_ASSET_ID: null as string | null,
+  /** Default text hint duration in seconds */
+  DEFAULT_TEXT_HINT_DURATION_SECONDS: 60
 } as const;
 
 /** User validation defaults */
@@ -111,7 +113,8 @@ export const SETTING_KEYS = {
     DEFAULT_CANCELLATION_POLICY: 'business.default_cancellation_policy',
     DEFAULT_BOOKING_BUFFER_MINUTES: 'business.default_booking_buffer_minutes',
     DEFAULT_BOOKING_WINDOW_DAYS: 'business.default_booking_window_days',
-    DEFAULT_TEXT_HINT_SOUND_ASSET_ID: 'business.default_text_hint_sound_asset_id'
+    DEFAULT_TEXT_HINT_SOUND_ASSET_ID: 'business.default_text_hint_sound_asset_id',
+    DEFAULT_TEXT_HINT_DURATION_SECONDS: 'business.default_text_hint_duration_seconds'
   },
   /** User validation settings */
   USER_VALIDATION: {

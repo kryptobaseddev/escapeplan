@@ -31,6 +31,10 @@ export function upsertBookings(calendar: BookingCalendarResponse) {
 }
 
 export function upsertTimerBroadcast(broadcast: TimerBroadcast) {
+  if (!broadcast || !broadcast.slug) {
+    console.warn('[Realtime] Received invalid timer broadcast:', broadcast);
+    return;
+  }
   timerBroadcasts.update((current) => {
     const next = new Map(current);
     next.set(broadcast.slug, broadcast);

@@ -1,0 +1,59 @@
+{
+  "version": "0.2.0",
+  "releaseDate": "2025-10-08",
+  "components": {
+    "os": {
+      "version": "0.2.0",
+      "imageFile": "2025-10-08-escapeplan-os-lite.img.xz",
+      "sha256": "TBD",
+      "repository": "escapeplan-base"
+    },
+    "app": {
+      "version": "0.2.0",
+      "debFile": "escapeplan-app_0.2.0_arm64.deb",
+      "sha256": "TBD",
+      "repository": "escapeplan-app"
+    }
+  },
+  "compatibility": {
+    "minOsVersion": "0.2.0",
+    "minAppVersion": "0.2.0"
+  },
+  "features": {
+    "new": [
+      "WiFi external network management via NetworkManager",
+      "WiFi client interface detection (wlan1)",
+      "WiFi network scanning and connection",
+      "Internet sharing from external WiFi to AP clients",
+      "Automated release creation script",
+      "Version synchronization between OS and App"
+    ],
+    "improved": [
+      "Enhanced health check endpoint with detailed status",
+      "Better error handling for database initialization",
+      "Improved secrets management"
+    ]
+  },
+  "changelog": {
+    "0.2.0": {
+      "date": "2025-10-08",
+      "changes": [
+        "Added WiFi external network system with NetworkManager integration",
+        "Implemented WiFi detection, scanning, and connection management",
+        "Added internet sharing via iptables NAT",
+        "Created automated release process with GitHub integration",
+        "Added version manifest for OS/App compatibility tracking"
+      ]
+    },
+    "0.1.0": {
+      "date": "2025-10-04",
+      "changes": [
+        "Initial release",
+        "Escape room management system",
+        "Better Auth integration",
+        "Database-driven RBAC",
+        "Real-time WebSocket communication"
+      ]
+    }
+  }
+}

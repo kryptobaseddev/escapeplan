@@ -56,6 +56,7 @@ export interface SystemSettingValues {
   'business.default_booking_buffer_minutes': number;
   'business.default_booking_window_days': number;
   'business.default_text_hint_sound_asset_id': string | null;
+  'business.default_text_hint_duration_seconds': number;
 
   // User validation
   'user_validation.email_required': boolean;

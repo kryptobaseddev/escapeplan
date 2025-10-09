@@ -82,7 +82,9 @@ export const load: PageServerLoad = async (event) => {
 
 		// Roles data for settings default role dropdown
 		canManageSystemHealth
-			? apiFetch<Array<{ id: string; name: string; user_type_scope: string }>>('/admin/roles').catch(() => [])
+			? apiFetch<{ roles: Array<{ id: string; name: string; user_type_scope: string }> }>('/admin/roles')
+					.then((res) => res.roles)
+					.catch(() => [])
 			: []
 	]);
 

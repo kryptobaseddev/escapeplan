@@ -293,6 +293,7 @@ export interface RoomDisplayConfig {
   defaultMediaScale: number;
   textHintTextColor: string;
   textHintBackgroundColor: string;
+  textHintDurationSeconds?: number;
   timerTextColor: string;
   timerBackgroundColor: string;
   timerOpacity: number;
