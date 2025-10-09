@@ -7,6 +7,7 @@ import { Server as SocketServer } from 'socket.io';
 import argon2 from 'argon2';
 import { z } from 'zod';
 import type { CommandRequest, OperatorPermission, OperatorRole, SaveGameRequest, QuickStartSessionRequest, ApplyNetworkConfigRequest, ApplyNetworkConfigResponse } from '@escapeplan/contracts';
+import { saveGameSchema } from '@escapeplan/contracts/validation';
 import {
   applyCommand,
   archiveOperatorAccount,
@@ -106,40 +107,8 @@ const updateOwnProfileSchema = z.object({
   bio: z.string().max(500).optional().or(z.literal(null))
 });
 
-const puzzleSchema = z.object({
-  id: z.string().min(1).optional(),
-  title: z.string().min(1),
-  description: z.string().optional(),
-  solution: z.string().optional(),
-  mediaAsset: z.string().optional(),
-  operatorActions: z.string().optional(),
-  displayOrder: z.number().int().nonnegative().optional()
-});
-
-const roomSchema = z.object({
-  id: z.string().min(1).optional(),
-  name: z.string().min(1),
-  isMobileCapable: z.boolean(),
-  themeToken: z.string().optional()
-});
-
-const saveGameSchema = z.object({
-  slug: z.string().regex(/^[a-z0-9-]+$/),
-  name: z.string().min(1),
-  description: z.string().min(1),
-  storyIntro: z.string().optional(),
-  durationMinutes: z.number().int().positive(),
-  difficulty: z.string().min(1),
-  pricingModel: z.string().min(1),
-  categories: z.array(z.string().min(1)).optional().default([]),
-  minPlayers: z.number().int().positive(),
-  maxPlayers: z.number().int().positive(),
-  pricePerPlayerCents: z.number().int().nonnegative(),
-  resourcesRequired: z.number().int().positive(),
-  validationNotes: z.string().optional(),
-  puzzles: z.array(puzzleSchema).optional().default([]),
-  rooms: z.array(roomSchema).optional().default([])
-});
+// NOTE: saveGameSchema is now imported from @escapeplan/contracts/validation
+// This ensures API validation matches the canonical schema used across the application
 
 const networkUpdateSchema = z.object({
   name: z.string().min(1).optional(),
@@ -815,7 +784,7 @@ export async function buildServer() {
           operation: 'createGame',
           userId: auth.user.id,
           requestId: request.id,
-          gameSlug: payload.slug
+          gameSlug: data.slug
         });
         return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
       }
