@@ -51,8 +51,8 @@ export async function processFile(
     metadata = result.metadata;
   } else if (mimeType.startsWith('audio/') || mimeType.startsWith('video/')) {
     // Extract metadata from audio/video
-    // For now, write the file first, then extract metadata
-    await fs.writeFile(outputPath, buffer);
+    // Write file atomically first, then extract metadata
+    await atomicWriteFile(buffer, outputPath);
     metadata = await extractMediaMetadata(outputPath);
 
     return {
@@ -61,8 +61,8 @@ export async function processFile(
     };
   }
 
-  // Write processed file
-  await fs.writeFile(outputPath, finalBuffer);
+  // Write processed file atomically
+  await atomicWriteFile(finalBuffer, outputPath);
 
   return {
     size: finalBuffer.length,

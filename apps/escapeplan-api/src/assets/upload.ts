@@ -5,6 +5,7 @@ import { db } from '../db/client.js';
 import { backups } from '@escapeplan/contracts';
 import { eq } from 'drizzle-orm';
 import type { FastifyRequest, FastifyReply } from 'fastify';
+import { fileTypeFromBuffer } from 'file-type';
 import {
   getAssetBasePath,
   getAssetSubPath,
@@ -16,6 +17,7 @@ import {
 import { processFile } from './processing.js';
 import { requireSession } from '../auth.js';
 import { settings } from '../settings.js';
+import { checkDiskSpace } from './fileops.js';
 
 export interface UploadAssetQuery {
   gameId?: string;

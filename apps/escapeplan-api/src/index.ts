@@ -351,16 +351,30 @@ export async function buildServer() {
   });
 
   // Register multipart for file uploads
+  // Get max size from settings (use highest limit for multipart parser)
+  const maxImageMB = settings.getMaxImageSizeMB();
+  const maxAudioMB = settings.getMaxAudioSizeMB();
+  const maxVideoMB = settings.getMaxVideoSizeMB();
+  const maxFileSizeMB = Math.max(maxImageMB, maxAudioMB, maxVideoMB);
+  const maxFileSizeBytes = maxFileSizeMB * 1024 * 1024;
+
   await app.register(multipart, {
     limits: {
       fieldNameSize: 100,
       fieldSize: 1024 * 1024,  // 1MB
       fields: 10,
-      fileSize: 50 * 1024 * 1024,  // 50MB max file size
+      fileSize: maxFileSizeBytes,  // Use highest limit from settings
       files: 1,
       headerPairs: 2000
     }
   });
+
+  app.log.info({
+    maxImageMB,
+    maxAudioMB,
+    maxVideoMB,
+    multipartLimitMB: maxFileSizeMB
+  }, 'Configured multipart file size limits from settings');
 
   // Register rate limiting (configured per-route, not global)
   await app.register(rateLimit, {

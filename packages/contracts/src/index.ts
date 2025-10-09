@@ -1057,6 +1057,7 @@ export const ROLE_PERMISSIONS: Record<OperatorRole, OperatorPermission[]> = {
   game_master: [
     'view_dashboard', 'view_bookings',
     'view_sessions', 'manage_sessions', 'view_games',
+    'view_assets', 'manage_assets',
     'view_cameras',
     'view_system_logs'
   ],
