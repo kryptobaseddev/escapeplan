@@ -596,7 +596,7 @@
                 console.log('[Media] Updated galleryAssetIds to:', workingGame.media?.galleryAssetIds);
                 markDirty();
               }}
-              onAssetCacheUpdate={(assetId, asset) => { assetCache[assetId] = asset; }}
+              onAssetCacheUpdate={(assetId, asset) => { assetCache = { ...assetCache, [assetId]: asset }; }}
             />
           {:else if activeTab === 'puzzles'}
             <GamePuzzlesSection
