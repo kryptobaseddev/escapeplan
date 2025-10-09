@@ -1372,7 +1372,84 @@ export async function buildServer() {
       }
     });
 
-    api.post('/assets/upload', async (request, reply) => {
+    api.post('/assets/upload', {
+      config: {
+        rateLimit: {
+          max: 10, // 10 uploads per hour per user
+          timeWindow: '1 hour',
+          keyGenerator: async (request: FastifyRequest) => {
+            // Rate limit by user ID (not IP) for multi-device scenarios
+            // Extract user from Better Auth session or Bearer token
+            try {
+              const session = await auth.api.getSession({
+                headers: request.headers as any
+              });
+              if (session?.user) {
+                return `upload:user:${session.user.id}`;
+              }
+            } catch (error) {
+              // Fallback to Bearer token
+            }
+
+            const authHeader = request.headers['authorization'];
+            if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+              const token = authHeader.split(' ')[1] ?? '';
+              const user = validateToken(token);
+              if (user) {
+                return `upload:user:${user.id}`;
+              }
+            }
+
+            // Fallback to IP if no session (shouldn't happen for authenticated endpoint)
+            return `upload:ip:${request.ip}`;
+          },
+          allowList: async (request: FastifyRequest) => {
+            // Admins bypass rate limiting
+            try {
+              const session = await auth.api.getSession({
+                headers: request.headers as any
+              });
+              if (session?.user && (session.user as any).role === 'admin') {
+                return true;
+              }
+            } catch (error) {
+              // Fallback to Bearer token
+            }
+
+            const authHeader = request.headers['authorization'];
+            if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
+              const token = authHeader.split(' ')[1] ?? '';
+              const user = validateToken(token);
+              if (user && user.role === 'admin') {
+                return true;
+              }
+            }
+
+            return false;
+          },
+          errorResponseBuilder: (request: FastifyRequest, context: any) => {
+            const retryMinutes = Math.ceil(context.ttl / 1000 / 60);
+
+            // Log security event for rate limit hit
+            request.log.warn({
+              endpoint: '/api/assets/upload',
+              rateLimitHit: true,
+              maxAttempts: 10,
+              timeWindow: '1 hour',
+              retryAfter: context.ttl,
+              ip: request.ip
+            }, 'RATE LIMIT: Upload rate limit exceeded');
+
+            return {
+              statusCode: 429,
+              error: 'Too Many Requests',
+              message: `Upload rate limit exceeded. Maximum 10 uploads per hour allowed. Try again in ${retryMinutes} minute${retryMinutes !== 1 ? 's' : ''}.`,
+              retryAfter: Math.ceil(context.ttl / 1000) // seconds
+            };
+          }
+        }
+      }
+    }, async (request, reply) => {
       return handleAssetUpload(request, reply);
     });
 

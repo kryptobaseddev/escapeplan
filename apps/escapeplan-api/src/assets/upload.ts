@@ -144,6 +144,31 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     });
   }
 
+  // Sanitize and truncate original filename
+  let originalFilename = sanitizeFilename(data.filename);
+
+  // Truncate to 255 characters (filesystem limit)
+  if (originalFilename.length > 255) {
+    // Keep extension, truncate base name
+    const ext = path.extname(originalFilename);
+    const baseName = path.basename(originalFilename, ext);
+    const maxBaseLength = 255 - ext.length;
+    originalFilename = baseName.substring(0, maxBaseLength) + ext;
+
+    request.log.warn({
+      original: data.filename,
+      truncated: originalFilename
+    }, 'Filename truncated to 255 characters');
+  }
+
+  // Log if filename was sanitized
+  if (originalFilename !== data.filename) {
+    request.log.info({
+      original: data.filename,
+      sanitized: originalFilename
+    }, 'Filename sanitized');
+  }
+
   try {
     // Validate file type
     const allowedTypes = getAllowedMimeTypes(assetType, mediaType);
@@ -236,7 +261,7 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     const assetRecord: AssetRecord = {
       id: assetId,
       filename,
-      original_filename: data.filename,
+      original_filename: originalFilename,
       mime_type: data.mimetype,
       size_bytes: processed.size,
       asset_type: assetType,

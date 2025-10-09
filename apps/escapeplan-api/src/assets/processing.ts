@@ -3,6 +3,7 @@ import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
+import { atomicWriteFile } from './fileops.js';
 
 const execAsync = promisify(exec);
 
