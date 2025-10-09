@@ -324,10 +324,31 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
 
   } catch (error) {
     request.log.error({ err: error }, 'Failed to upload asset');
+
+    // Cleanup uploaded file if processing failed
+    try {
+      await fs.unlink(fullPath);
+    } catch {
+      // File might not exist yet, ignore cleanup errors
+    }
+
+    // Return 400 for client errors (bad file format, validation failures)
+    const errorMessage = (error as Error).message;
+    if (errorMessage.includes('validation failed') ||
+        errorMessage.includes('FFprobe') ||
+        errorMessage.includes('not installed')) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: errorMessage
+      });
+    }
+
+    // Return 500 for server errors
     return reply.status(500).send({
       statusCode: 500,
       message: 'Failed to upload asset',
-      error: (error as Error).message
+      error: errorMessage
     });
   }
 }
