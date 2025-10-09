@@ -349,20 +349,42 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     };
 
   } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
     request.log.error({ err: error }, 'Failed to upload asset');
 
     // Cleanup uploaded file if processing failed
+    // This handles orphaned files from partial writes or processing errors
     try {
       await fs.unlink(fullPath);
+      request.log.info({ filePath: fullPath }, 'Cleaned up orphaned file after error');
     } catch {
       // File might not exist yet, ignore cleanup errors
+    }
+
+    // Handle specific filesystem errors with appropriate HTTP status codes
+    if (nodeError.code === 'ENOSPC') {
+      return reply.status(507).send({
+        statusCode: 507,
+        error: 'Insufficient Storage',
+        message: 'Disk full. Cannot upload file. Please free up disk space and try again.'
+      });
+    }
+
+    if (nodeError.code === 'EACCES') {
+      return reply.status(500).send({
+        statusCode: 500,
+        error: 'Internal Server Error',
+        message: 'File system permission denied. Contact system administrator.'
+      });
     }
 
     // Return 400 for client errors (bad file format, validation failures)
     const errorMessage = (error as Error).message;
     if (errorMessage.includes('validation failed') ||
         errorMessage.includes('FFprobe') ||
-        errorMessage.includes('not installed')) {
+        errorMessage.includes('not installed') ||
+        errorMessage.includes('Invalid or corrupted image') ||
+        errorMessage.includes('Image processing failed')) {
       return reply.status(400).send({
         statusCode: 400,
         error: 'Bad Request',
@@ -373,8 +395,9 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     // Return 500 for server errors
     return reply.status(500).send({
       statusCode: 500,
+      error: 'Internal Server Error',
       message: 'Failed to upload asset',
-      error: errorMessage
+      details: errorMessage
     });
   }
 }

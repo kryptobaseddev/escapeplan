@@ -72,10 +72,32 @@ export async function processFile(
 
 /**
  * Process image: compress and extract metadata
+ * Throws client-error-specific exceptions for corrupted/invalid images
  */
 async function processImage(buffer: Buffer, mimeType: string): Promise<{buffer: Buffer; metadata: Record<string, any>}> {
-  const image = sharp(buffer);
-  const info = await image.metadata();
+  let image;
+  let info;
+
+  try {
+    image = sharp(buffer);
+    info = await image.metadata();
+  } catch (error) {
+    // Differentiate between client errors (bad file) and server errors
+    const errorMessage = (error as Error).message;
+    if (errorMessage.includes('Input buffer') ||
+        errorMessage.includes('unsupported image format') ||
+        errorMessage.includes('corrupt') ||
+        errorMessage.includes('invalid') ||
+        errorMessage.includes('VipsJpeg') ||
+        errorMessage.includes('VipsPng') ||
+        errorMessage.includes('premature end')) {
+      // This is a client error - bad file format
+      throw new Error(`Invalid or corrupted image file: ${errorMessage}`);
+    }
+
+    // Server error - re-throw as-is
+    throw error;
+  }
 
   const metadata = {
     width: info.width,
@@ -88,28 +110,40 @@ async function processImage(buffer: Buffer, mimeType: string): Promise<{buffer: 
   let processedImage = image;
 
   // Compress based on format
-  if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
-    processedImage = image.jpeg({
-      quality: 85,
-      mozjpeg: true // Better compression
-    });
-  } else if (mimeType === 'image/png') {
-    processedImage = image.png({
-      compressionLevel: 8,
-      adaptiveFiltering: true
-    });
-  } else if (mimeType === 'image/webp') {
-    processedImage = image.webp({
-      quality: 85
-    });
+  try {
+    if (mimeType === 'image/jpeg' || mimeType === 'image/jpg') {
+      processedImage = image.jpeg({
+        quality: 85,
+        mozjpeg: true // Better compression
+      });
+    } else if (mimeType === 'image/png') {
+      processedImage = image.png({
+        compressionLevel: 8,
+        adaptiveFiltering: true
+      });
+    } else if (mimeType === 'image/webp') {
+      processedImage = image.webp({
+        quality: 85
+      });
+    }
+
+    const finalBuffer = await processedImage.toBuffer();
+
+    return {
+      buffer: finalBuffer,
+      metadata
+    };
+  } catch (error) {
+    // Catch any processing errors
+    const errorMessage = (error as Error).message;
+    if (errorMessage.includes('Input buffer') ||
+        errorMessage.includes('unsupported') ||
+        errorMessage.includes('corrupt') ||
+        errorMessage.includes('invalid')) {
+      throw new Error(`Image processing failed: ${errorMessage}`);
+    }
+    throw error;
   }
-
-  const finalBuffer = await processedImage.toBuffer();
-
-  return {
-    buffer: finalBuffer,
-    metadata
-  };
 }
 
 /**
