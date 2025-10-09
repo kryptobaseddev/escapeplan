@@ -101,6 +101,15 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     });
   }
 
+  // Validate puzzleId requires gameId
+  if (puzzleId && !gameId) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: 'puzzleId cannot be provided without gameId. Puzzles must be associated with a game.'
+    });
+  }
+
   // For gallery and reusable assets, gameId is optional
   const systemAssetTypes = ['system_audio', 'gallery'];
   const requiresGame = !systemAssetTypes.includes(assetType) && !isReusable;
