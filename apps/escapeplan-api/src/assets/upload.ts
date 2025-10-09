@@ -101,6 +101,25 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     });
   }
 
+  // Validate asset type against allowed values
+  const validAssetTypes = [
+    'thumbnail',
+    'room_background',
+    'gallery',
+    'puzzle_media',
+    'hint_media',
+    'milestone_media',
+    'system_audio'
+  ];
+
+  if (!validAssetTypes.includes(assetType)) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: `Invalid asset type: ${assetType}. Allowed: ${validAssetTypes.join(', ')}`
+    });
+  }
+
   // Validate puzzleId requires gameId
   if (puzzleId && !gameId) {
     return reply.status(400).send({
@@ -135,6 +154,18 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       statusCode: 400,
       message: `mediaType is required for ${assetType}`
     });
+  }
+
+  // Validate media type for hint/milestone assets
+  if ((assetType === 'hint_media' || assetType === 'milestone_media') && mediaType) {
+    const validMediaTypes = ['text', 'image', 'audio', 'video'];
+    if (!validMediaTypes.includes(mediaType)) {
+      return reply.status(400).send({
+        statusCode: 400,
+        error: 'Bad Request',
+        message: `Invalid media type: ${mediaType}. Allowed: ${validMediaTypes.join(', ')}`
+      });
+    }
   }
 
   // Get the uploaded file
@@ -180,6 +211,9 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     }, 'Filename sanitized');
   }
 
+  let fullPath: string = "";
+  // Declare fullPath in outer scope for cleanup in catch block
+
   try {
     // Validate file type
     const allowedTypes = getAllowedMimeTypes(assetType, mediaType);
@@ -215,8 +249,8 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
 
     // Check available disk space before accepting upload
     // Use 2x file size as safety margin (processed files may be larger before compression)
-    const basePath = getAssetBasePath();
-    const diskCheck = await checkDiskSpace(basePath, fileBuffer.length * 2);
+    const assetBasePath = getAssetBasePath();
+    const diskCheck = await checkDiskSpace(assetBasePath, fileBuffer.length * 2);
     if (!diskCheck.available) {
       return reply.status(507).send({
         statusCode: 507,
