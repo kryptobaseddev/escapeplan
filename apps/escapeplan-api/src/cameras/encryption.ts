@@ -4,15 +4,16 @@
  */
 
 import sodium from 'sodium-native';
+import { loadSecrets } from '../secrets.js';
 
-// Get encryption key from environment or generate for dev
-const ENCRYPTION_KEY_HEX = process.env.CAMERA_ENCRYPTION_KEY ||
-  '0000000000000000000000000000000000000000000000000000000000000000'; // 32-byte key as hex
+// Load secrets on module initialization
+const secrets = loadSecrets();
+const ENCRYPTION_KEY_HEX = secrets.cameraEncryptionKey;
 
+// Validate key length
 const encryptionKey = Buffer.from(ENCRYPTION_KEY_HEX, 'hex');
-
 if (encryptionKey.length !== sodium.crypto_secretbox_KEYBYTES) {
-  throw new Error(`CAMERA_ENCRYPTION_KEY must be ${sodium.crypto_secretbox_KEYBYTES} bytes (${sodium.crypto_secretbox_KEYBYTES * 2} hex chars)`);
+  throw new Error(`Camera encryption key must be ${sodium.crypto_secretbox_KEYBYTES} bytes (${sodium.crypto_secretbox_KEYBYTES * 2} hex chars)`);
 }
 
 /**

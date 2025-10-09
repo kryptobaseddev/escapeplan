@@ -8,18 +8,24 @@ import { z } from 'zod';
 import type { CommandRequest, OperatorPermission, OperatorRole, SaveGameRequest, QuickStartSessionRequest, ApplyNetworkConfigRequest, ApplyNetworkConfigResponse } from '@escapeplan/contracts';
 import {
   applyCommand,
+  archiveOperatorAccount,
   changeOwnPassword,
   createGame,
   createOperatorAccount,
+  createRole,
   deleteGame,
   deleteOperatorAccount,
+  deleteRole,
   findOperatorByUsername,
+  getAlertRule,
   getGameDetails,
   getBookingsByDate,
   getDashboard,
+  getRoleById,
   getSessionById,
   getSessionBySlug,
   getNetworkProfile,
+  listAlertRules,
   listGameDetails,
   listActiveSessions,
   listSessions,
@@ -28,11 +34,14 @@ import {
   listPermissions,
   quickStartSession,
   toTimerBroadcast,
+  unarchiveOperatorAccount,
+  updateAlertRule,
   updateGame,
   updateNetworkProfile,
   updateOperatorAccount,
   updateOwnProfile,
   updateOperatorLoginTimestamp,
+  updateRole,
   resetOperatorPassword,
   startTimerInterval,
   stopTimerInterval
@@ -58,8 +67,9 @@ const createUserSchema = z.object({
   name: z.string().min(1),
   role: z.enum(operatorRoleValues),
   password: z.string().min(12),
-  email: z.string().email().optional(),
+  email: z.string().email().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   avatarUrl: z.string().url().optional(),
+  avatarConfig: z.any().optional(),
   bio: z.string().max(500).optional(),
   mustResetPassword: z.boolean().optional()
 });
@@ -67,8 +77,9 @@ const createUserSchema = z.object({
 const updateUserSchema = z.object({
   name: z.string().min(1).optional(),
   role: z.enum(operatorRoleValues).optional(),
-  email: z.string().email().optional(),
+  email: z.string().email().optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   avatarUrl: z.string().url().optional().or(z.literal(null)),
+  avatarConfig: z.any().optional(),
   bio: z.string().max(500).optional().or(z.literal(null)),
   mustResetPassword: z.boolean().optional()
 });
@@ -85,8 +96,9 @@ const changePasswordSchema = z.object({
 
 const updateOwnProfileSchema = z.object({
   name: z.string().min(1),
-  email: z.string().email().optional().or(z.literal(null)),
+  email: z.string().email().optional().or(z.literal('')).transform(val => val === '' ? undefined : val).or(z.literal(null)),
   avatarUrl: z.string().url().optional().or(z.literal(null)),
+  avatarConfig: z.any().optional(),
   bio: z.string().max(500).optional().or(z.literal(null))
 });
 
@@ -176,6 +188,30 @@ const networkProvisionSchema = z.object({
     .optional()
 });
 
+
+const updateAlertRuleSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
+  category: z.string().optional(),
+  level: z.enum(['info', 'warning', 'critical']).optional(),
+  enabled: z.boolean().optional(),
+  conditions: z.record(z.any()).optional(),
+  title_template: z.string().optional(),
+  message_template: z.string().optional(),
+  auto_dismiss_on: z.array(z.string()).nullable().optional()
+});
+
+const createRoleSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().nullable().optional(),
+  permissionIds: z.array(z.string()).optional()
+});
+
+const updateRoleSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().nullable().optional()
+});
+
 async function ensureAuth(request: FastifyRequest, reply: FastifyReply) {
   // First, try to get session from Better Auth cookies
   try {
@@ -231,6 +267,20 @@ function ensurePermission(reply: FastifyReply, userRole: OperatorRole, userPermi
 }
 
 export async function buildServer() {
+  // Load secrets first (before database, before Better Auth)
+  console.log('[STARTUP] Loading application secrets...');
+  const { loadSecrets, validateSecret } = await import('./secrets.js');
+  const secrets = loadSecrets();
+
+  // Validate secrets
+  if (!validateSecret(secrets.betterAuthSecret)) {
+    throw new Error('Invalid Better Auth secret format');
+  }
+  if (!validateSecret(secrets.cameraEncryptionKey)) {
+    throw new Error('Invalid camera encryption key format');
+  }
+
+  // Continue with migrations and settings
   await runMigrations();
   await settings.init();
   const app = Fastify({
@@ -397,7 +447,9 @@ export async function buildServer() {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
-      return listOperatorSummaries();
+
+      const { status, role, search } = request.query as { status?: 'active' | 'archived'; role?: string; search?: string };
+      return listOperatorSummaries({ status, role, search });
     });
 
     api.post('/admin/users', async (request, reply) => {
@@ -494,6 +546,61 @@ export async function buildServer() {
           requestId: request.id
         });
         return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
+      }
+    });
+
+    api.patch('/admin/users/:id/archive', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
+
+      const { id } = request.params as { id: string };
+      const { reason } = request.body as { reason?: string };
+
+      if (id === auth.user.id) {
+        return reply.status(400).send({ statusCode: 400, message: 'Cannot archive yourself' });
+      }
+
+      try {
+        const archived = await archiveOperatorAccount(id, auth.user.id, reason);
+        request.log.info({ userId: auth.user.id, targetUserId: id }, 'User archived');
+        return archived;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'archiveUser',
+          userId: auth.user.id,
+          targetUserId: id,
+          requestId: request.id
+        });
+        return reply.status(400).send({
+          statusCode: 400,
+          message: (error as Error).message
+        });
+      }
+    });
+
+    api.patch('/admin/users/:id/unarchive', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
+
+      const { id } = request.params as { id: string };
+
+      try {
+        const unarchived = await unarchiveOperatorAccount(id);
+        request.log.info({ userId: auth.user.id, targetUserId: id }, 'User unarchived');
+        return unarchived;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'unarchiveUser',
+          userId: auth.user.id,
+          targetUserId: id,
+          requestId: request.id
+        });
+        return reply.status(400).send({
+          statusCode: 400,
+          message: (error as Error).message
+        });
       }
     });
 
