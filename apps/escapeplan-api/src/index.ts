@@ -2,6 +2,7 @@ import Fastify, { type FastifyReply, type FastifyRequest, type FastifyBaseLogger
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import fastifyStatic from '@fastify/static';
+import rateLimit from '@fastify/rate-limit';
 import { Server as SocketServer } from 'socket.io';
 import argon2 from 'argon2';
 import { z } from 'zod';
@@ -359,6 +360,13 @@ export async function buildServer() {
       files: 1,
       headerPairs: 2000
     }
+  });
+
+  // Register rate limiting (configured per-route, not global)
+  await app.register(rateLimit, {
+    global: false, // We'll apply rate limits on specific routes
+    max: 100, // Default: 100 requests per minute per IP (fallback)
+    timeWindow: '1 minute'
   });
 
   // Register Better Auth handler for all /api/auth/* routes

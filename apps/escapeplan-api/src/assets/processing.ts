@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises';
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
-import type { MultipartFile } from '@fastify/multipart';
 
 export interface ProcessedFile {
   size: number;
@@ -14,11 +13,10 @@ export interface ProcessedFile {
  * - Audio/Video: extract metadata only
  */
 export async function processFile(
-  data: MultipartFile,
+  buffer: Buffer,
   outputPath: string,
   mimeType: string
 ): Promise<ProcessedFile> {
-  const buffer = await data.toBuffer();
   let metadata: Record<string, any> = {};
   let finalBuffer = buffer;
 

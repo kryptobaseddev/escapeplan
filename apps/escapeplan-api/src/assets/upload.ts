@@ -111,6 +111,18 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     return reply.status(400).send({ statusCode: 400, message: 'No file uploaded' });
   }
 
+  // Read file buffer first for validation
+  const fileBuffer = await data.toBuffer();
+
+  // Check for empty file
+  if (fileBuffer.length === 0) {
+    return reply.status(400).send({
+      statusCode: 400,
+      error: 'Bad Request',
+      message: 'Uploaded file is empty (0 bytes). Please upload a valid file.'
+    });
+  }
+
   try {
     // Validate file type
     const allowedTypes = getAllowedMimeTypes(assetType, mediaType);
@@ -134,7 +146,6 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
       maxSize = settings.getMaxImageSizeMB() * 1024 * 1024;
     }
 
-    const fileBuffer = await data.toBuffer();
     if (fileBuffer.length > maxSize) {
       return reply.status(400).send({
         statusCode: 400,
@@ -197,7 +208,7 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     await fs.mkdir(path.dirname(fullPath), { recursive: true });
 
     // Process and save file
-    const processed = await processFile(data, fullPath, data.mimetype);
+    const processed = await processFile(fileBuffer, fullPath, data.mimetype);
 
     // Create database record
     const assetId = crypto.randomUUID();
