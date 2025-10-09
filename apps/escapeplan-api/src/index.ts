@@ -1157,17 +1157,110 @@ export async function buildServer() {
       }
     });
 
+    // WiFi Client Management Endpoints
+    api.get('/admin/network/wifi/detect', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_network', request.log, auth.user.id)) return;
+
+      try {
+        const hasWiFi = await hasExternalWiFi();
+        const interfaces = await detectWiFiInterfaces();
+        return { hasExternalWiFi: hasWiFi, interfaces };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'detectWiFi',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.get('/admin/network/scan', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_network', request.log, auth.user.id)) return;
+
+      try {
+        const hasWiFi = await hasExternalWiFi();
+        if (!hasWiFi) {
+          return reply.status(400).send({ statusCode: 400, message: 'No external WiFi adapter detected' });
+        }
+
+        const networks = await scanWiFiNetworks();
+        return { networks, scannedAt: new Date().toISOString() };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'scanWiFi',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
     api.get('/admin/network/client', async (request, reply) => {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_network', request.log, auth.user.id)) return;
-      // TODO: Implement WiFi client status
-      return {
-        status: 'disconnected',
-        ssid: null,
-        signalStrength: null,
-        ipAddress: null
-      };
+
+      try {
+        const status = await getWiFiStatus();
+        return status;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'getWiFiStatus',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.post('/admin/network/client', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_network', request.log, auth.user.id)) return;
+
+      const connectionRequest = request.body as import('@escapeplan/contracts').WiFiClientConnectRequest;
+
+      if (!connectionRequest?.ssid) {
+        return reply.status(400).send({ statusCode: 400, message: 'ssid is required' });
+      }
+
+      try {
+        const status = await connectToWiFi(connectionRequest);
+        request.log.info({ userId: auth.user.id, ssid: connectionRequest.ssid }, 'Connected to external WiFi');
+        return status;
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'connectWiFi',
+          userId: auth.user.id,
+          ssid: connectionRequest.ssid,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
+    });
+
+    api.delete('/admin/network/client', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_network', request.log, auth.user.id)) return;
+
+      try {
+        await disconnectWiFi();
+        request.log.info({ userId: auth.user.id }, 'Disconnected from external WiFi');
+        return { success: true, message: 'Disconnected successfully' };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'disconnectWiFi',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: (error as Error).message });
+      }
     });
 
     api.get('/assets/list', async (request, reply) => {

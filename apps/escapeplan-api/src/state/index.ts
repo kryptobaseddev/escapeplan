@@ -118,6 +118,17 @@ export {
   invalidateDashboardCache
 } from './dashboard/index.svelte.js';
 
+// Alert Rules state management
+export {
+  listAlertRules,
+  getAlertRule,
+  updateAlertRule
+} from './alert-rules.js';
+export type {
+  AlertRule,
+  UpdateAlertRuleData
+} from './alert-rules.js';
+
 /**
  * NOTE: Function exports will be added by subsequent agents as they
  * implement the business logic for each domain. The current exports
