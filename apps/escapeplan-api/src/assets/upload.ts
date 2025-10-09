@@ -195,9 +195,24 @@ export async function handleAssetUpload(request: FastifyRequest, reply: FastifyR
     }
 
     if (fileBuffer.length > maxSize) {
-      return reply.status(400).send({
-        statusCode: 400,
-        message: `File too large. Max size: ${Math.round(maxSize / 1024 / 1024)}MB`
+      const fileType = data.mimetype.startsWith('image/') ? 'images' :
+                       data.mimetype.startsWith('audio/') ? 'audio' : 'video';
+      return reply.status(413).send({
+        statusCode: 413,
+        error: 'Payload Too Large',
+        message: `File size ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB exceeds limit of ${(maxSize / 1024 / 1024).toFixed(2)}MB for ${fileType}. (Configurable in System Settings)`
+      });
+    }
+
+    // Check available disk space before accepting upload
+    // Use 2x file size as safety margin (processed files may be larger before compression)
+    const basePath = getAssetBasePath();
+    const diskCheck = await checkDiskSpace(basePath, fileBuffer.length * 2);
+    if (!diskCheck.available) {
+      return reply.status(507).send({
+        statusCode: 507,
+        error: 'Insufficient Storage',
+        message: `Not enough disk space available. Required: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB, Available: ${(diskCheck.freeBytes / 1024 / 1024).toFixed(2)}MB`
       });
     }
 
