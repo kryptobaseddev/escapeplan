@@ -211,16 +211,30 @@ rm -rf node_modules/.pnpm/@img+sharp-darwin-x64@* 2>/dev/null || true
 rm -rf node_modules/.pnpm/@img+sharp-darwin-arm64@* 2>/dev/null || true
 echo "✓ Non-ARM64 Linux sharp binaries removed"
 
-# Download and extract sharp binary for target architecture
-echo "Downloading sharp ${DEB_ARCH} prebuilt binary..."
+# Download and install sharp binary for target architecture
+echo "Downloading sharp ${DEB_ARCH} prebuilt package..."
 curl -L https://registry.npmjs.org/@img/sharp-${SHARP_PLATFORM}/-/sharp-${SHARP_PLATFORM}-0.34.4.tgz -o /tmp/sharp-${DEB_ARCH}.tgz
-mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/lib"
+mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}"
 tar -xzf /tmp/sharp-${DEB_ARCH}.tgz -C /tmp
-cp /tmp/package/lib/sharp-${SHARP_PLATFORM}.node "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/lib/"
-cp /tmp/package/package.json "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/"
+cp -r /tmp/package/* "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/"
 rm -f /tmp/sharp-${DEB_ARCH}.tgz
 rm -rf /tmp/package
-echo "✓ Sharp ${DEB_ARCH} binary installed (ONLY ARM64 platform available)"
+echo "✓ Sharp ${DEB_ARCH} binary installed"
+
+# Download and install sharp-libvips (contains bundled libvips shared libraries)
+echo "Downloading sharp-libvips ${DEB_ARCH} package (bundled libvips libraries)..."
+curl -L https://registry.npmjs.org/@img/sharp-libvips-${SHARP_PLATFORM}/-/sharp-libvips-${SHARP_PLATFORM}-1.2.3.tgz -o /tmp/sharp-libvips-${DEB_ARCH}.tgz
+mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}"
+tar -xzf /tmp/sharp-libvips-${DEB_ARCH}.tgz -C /tmp
+cp -r /tmp/package/* "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}/"
+
+# Verify bundled libraries were copied
+LIBVIPS_LIB_DIR="${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}/lib"
+SHARED_LIBS=$(find "${LIBVIPS_LIB_DIR}" -name "*.so*" -type f 2>/dev/null | wc -l)
+echo "✓ Sharp-libvips ${DEB_ARCH} package installed with ${SHARED_LIBS} bundled libraries"
+
+rm -f /tmp/sharp-libvips-${DEB_ARCH}.tgz
+rm -rf /tmp/package
 cd -
 
 echo "Installing ${DEB_ARCH}-specific better-sqlite3 binaries for API..."
