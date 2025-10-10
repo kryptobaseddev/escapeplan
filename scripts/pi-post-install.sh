@@ -13,7 +13,7 @@ set -euo pipefail
 #   - Validates native module architecture (better-sqlite3, etc.)
 #   - Rebuilds native modules for ARM64 when x86_64 binaries detected
 #   - Performs pre-flight dependency validation (build tools, npm)
-#   - Runs final health check to verify system readiness
+#   - Skips health check (runs too early - use health-check.sh after install)
 #
 # System Requirements:
 #   - ARM64 (aarch64) architecture
@@ -225,11 +225,11 @@ rebuild_native_modules() {
         rm -rf "${sqlite_build_dir}/build"
     fi
 
-    # Rebuild better-sqlite3 for current architecture
-    log "Running: npm rebuild better-sqlite3"
+    # Rebuild better-sqlite3 and sharp for current architecture
+    log "Running: npm rebuild better-sqlite3 sharp"
     log "This may take 2-3 minutes on Raspberry Pi..."
 
-    if timeout 300 npm rebuild better-sqlite3 >> "${LOG_FILE}" 2>&1; then
+    if timeout 300 npm rebuild better-sqlite3 sharp >> "${LOG_FILE}" 2>&1; then
         log "✓ npm rebuild successful"
     else
         local exit_code=$?
@@ -430,7 +430,6 @@ main() {
     log "  - WiFi Access Point verification (non-fatal)"
     log "  - Pre-flight dependency validation (Agent 13)"
     log "  - Native module rebuild for ARM64 architecture (Agent 2)"
-    log "  - Final health check validation (Agent 8)"
 
     # Verify WiFi Access Point (non-fatal check)
     verify_wifi_ap
@@ -448,13 +447,9 @@ main() {
         ((total_errors++))
     fi
 
-    # Execute health check unless skipped
-    if [ "${SKIP_HEALTH}" != true ]; then
-        if ! step_health_check; then
-            log_warning "Health check reported issues"
-            ((total_errors++))
-        fi
-    fi
+    # NOTE: Health check is skipped during postinst because database and secrets
+    # are created AFTER this script completes (in orchestrator steps 3-5).
+    # Users can run /opt/escapeplan/scripts/health-check.sh after installation.
 
     # Summary
     log_section "Native Module Rebuild Summary"

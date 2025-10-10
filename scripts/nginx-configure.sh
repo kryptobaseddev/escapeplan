@@ -30,6 +30,31 @@ log "Creating backup of current nginx configuration..."
 cp -r /etc/nginx/sites-enabled "${BACKUP_DIR}/"
 log_success "Backup created at ${BACKUP_DIR}"
 
+# Generate self-signed SSL certificates if missing
+CERT_DIR="/etc/escapeplan/certs"
+CERT_FILE="${CERT_DIR}/escapeplan.local.crt"
+KEY_FILE="${CERT_DIR}/escapeplan.local.key"
+
+if [ ! -f "${CERT_FILE}" ] || [ ! -f "${KEY_FILE}" ]; then
+    log "SSL certificates not found - generating self-signed certificates..."
+    mkdir -p "${CERT_DIR}"
+
+    # Generate self-signed certificate valid for 10 years
+    openssl req -x509 -nodes -days 3650 -newkey rsa:2048 \
+        -keyout "${KEY_FILE}" \
+        -out "${CERT_FILE}" \
+        -subj "/C=US/ST=State/L=City/O=EscapePlan/CN=escapeplan.local" \
+        -addext "subjectAltName=DNS:escapeplan.local,DNS:*.escapeplan.local,IP:10.10.10.1" \
+        2>/dev/null
+
+    chmod 644 "${CERT_FILE}"
+    chmod 600 "${KEY_FILE}"
+
+    log_success "Self-signed SSL certificates generated at ${CERT_DIR}"
+else
+    log "SSL certificates already exist at ${CERT_DIR}"
+fi
+
 # Check if escapeplan.conf exists
 if [ ! -f "/etc/nginx/sites-available/escapeplan.conf" ]; then
     log_error "escapeplan.conf not found in /etc/nginx/sites-available/"
