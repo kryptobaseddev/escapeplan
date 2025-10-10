@@ -63,18 +63,16 @@ pnpm build
 
 # 7. Build .deb package
 echo "[RELEASE] Building .deb package..."
-if [ ! -f "build/deb/build.sh" ]; then
-  echo "[WARNING] .deb build script not found at build/deb/build.sh"
+if [ ! -f "scripts/build-deb-arm64.sh" ]; then
+  echo "[WARNING] .deb build script not found at scripts/build-deb-arm64.sh"
   echo "[WARNING] Skipping .deb package creation"
   DEB_FILE=""
 else
-  cd build/deb
-  ./build.sh
-  cd ../..
-  DEB_FILE=$(find build/deb/output -name "escapeplan-app_*.deb" -type f | head -1)
+  bash scripts/build-deb-arm64.sh
+  DEB_FILE=$(find dist -name "escapeplan_*.deb" -type f | head -1)
 
   if [ -z "$DEB_FILE" ]; then
-    echo "[WARNING] .deb package not found in build/deb/output/"
+    echo "[WARNING] .deb package not found in dist/"
     echo "[WARNING] Continuing without .deb package"
   else
     echo "[RELEASE] .deb package created: $DEB_FILE"
