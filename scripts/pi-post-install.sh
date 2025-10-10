@@ -185,7 +185,7 @@ rebuild_native_modules() {
         return 1
     fi
 
-    # Find better-sqlite3 in pnpm structure
+    # Find better-sqlite3 and sharp in pnpm structure
     local sqlite_module
     sqlite_module=$(find node_modules/.pnpm -type f -name "better_sqlite3.node" 2>/dev/null | head -n1)
 
@@ -196,13 +196,40 @@ rebuild_native_modules() {
 
     log "Found better-sqlite3 at: ${sqlite_module}"
 
-    # Validate current architecture before rebuild
+    local sharp_module
+    sharp_module=$(find node_modules/.pnpm -type f -path "*/sharp*/build/Release/sharp-*.node" 2>/dev/null | head -n1)
+
+    if [ -z "${sharp_module}" ]; then
+        log "WARNING: sharp native module not found - may not be installed"
+        sharp_module=""
+    else
+        log "Found sharp at: ${sharp_module}"
+    fi
+
+    # Validate current architecture before rebuild - check BOTH modules
+    local sqlite_ok=false
+    local sharp_ok=false
+
     if validate_native_module "${sqlite_module}" "better-sqlite3 (before rebuild)"; then
-        log "Native module is already ARM-compatible, skipping rebuild"
+        sqlite_ok=true
+    fi
+
+    if [ -n "${sharp_module}" ]; then
+        if validate_native_module "${sharp_module}" "sharp (before rebuild)"; then
+            sharp_ok=true
+        fi
+    else
+        # If sharp not found, assume it needs rebuild
+        sharp_ok=false
+    fi
+
+    # Only skip rebuild if BOTH modules are ARM-compatible
+    if [ "${sqlite_ok}" = true ] && [ "${sharp_ok}" = true ]; then
+        log "All native modules are already ARM-compatible, skipping rebuild"
         return 0
     fi
 
-    log "Native module is x86_64, rebuilding for ARM..."
+    log "One or more native modules need rebuilding for ARM..."
 
     # Check for build dependencies
     local missing_deps=()
@@ -242,22 +269,47 @@ rebuild_native_modules() {
         return 1
     fi
 
-    # Validate rebuilt module
-    local rebuilt_module
-    rebuilt_module=$(find node_modules/.pnpm -type f -name "better_sqlite3.node" 2>/dev/null | head -n1)
+    # Validate rebuilt modules
+    local rebuilt_sqlite
+    rebuilt_sqlite=$(find node_modules/.pnpm -type f -name "better_sqlite3.node" 2>/dev/null | head -n1)
 
-    if [ -z "${rebuilt_module}" ]; then
+    if [ -z "${rebuilt_sqlite}" ]; then
         log "ERROR: better-sqlite3 native module not found after rebuild"
         return 1
     fi
 
-    if validate_native_module "${rebuilt_module}" "better-sqlite3 (after rebuild)"; then
-        log "✓ Native module rebuild successful and validated"
-        return 0
+    local rebuilt_sharp
+    rebuilt_sharp=$(find node_modules/.pnpm -type f -path "*/sharp*/build/Release/sharp-*.node" 2>/dev/null | head -n1)
+
+    local validation_failed=false
+
+    # Validate better-sqlite3
+    if validate_native_module "${rebuilt_sqlite}" "better-sqlite3 (after rebuild)"; then
+        log "✓ better-sqlite3 rebuild successful and validated"
     else
-        log "ERROR: Native module validation failed after rebuild"
+        log "ERROR: better-sqlite3 validation failed after rebuild"
+        validation_failed=true
+    fi
+
+    # Validate sharp if found
+    if [ -n "${rebuilt_sharp}" ]; then
+        if validate_native_module "${rebuilt_sharp}" "sharp (after rebuild)"; then
+            log "✓ sharp rebuild successful and validated"
+        else
+            log "ERROR: sharp validation failed after rebuild"
+            validation_failed=true
+        fi
+    else
+        log "WARNING: sharp module not found after rebuild - may not be installed"
+    fi
+
+    if [ "${validation_failed}" = true ]; then
+        log "ERROR: One or more native modules failed validation"
         return 1
     fi
+
+    log "✓ All native modules rebuilt and validated successfully"
+    return 0
 }
 
 # ============================================================================

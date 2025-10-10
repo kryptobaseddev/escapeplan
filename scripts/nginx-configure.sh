@@ -55,6 +55,27 @@ else
     log "SSL certificates already exist at ${CERT_DIR}"
 fi
 
+# Ensure WebSocket upgrade map directive exists
+WEBSOCKET_CONF="/etc/nginx/conf.d/websocket-upgrade.conf"
+
+if [ ! -f "${WEBSOCKET_CONF}" ]; then
+    log "WebSocket upgrade configuration not found - creating it..."
+    mkdir -p /etc/nginx/conf.d
+
+    cat > "${WEBSOCKET_CONF}" <<'EOF'
+# WebSocket upgrade header mapping for escapeplan
+# This allows nginx to properly proxy WebSocket connections
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    '' close;
+}
+EOF
+
+    log_success "WebSocket upgrade configuration created at ${WEBSOCKET_CONF}"
+else
+    log "WebSocket upgrade configuration already exists"
+fi
+
 # Check if escapeplan.conf exists
 if [ ! -f "/etc/nginx/sites-available/escapeplan.conf" ]; then
     log_error "escapeplan.conf not found in /etc/nginx/sites-available/"
