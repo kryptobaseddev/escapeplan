@@ -424,9 +424,86 @@ ls: /opt/escapeplan/api/node_modules/@img/ → No such file or directory
 
 ---
 
+---
+
+### v1.0.12: Fix Dynamic Linker RPATH (ACTUAL FIX)
+
+**Files Changed:**
+- `scripts/build-deb-arm64.sh`:
+  - Add RPATH-compatible symlink inside sharp-linux-arm64 package (lines 272-285)
+- `VERSION`: 1.0.11 → 1.0.12
+
+**v1.0.11 Post-Mortem:**
+
+Installed v1.0.11 on Pi and discovered it still failed:
+```bash
+ldd sharp-linux-arm64.node | grep libvips
+# Output: libvips-cpp.so.8.17.2 => not found
+
+node -e "require('sharp')"
+# Error: Could not load the "sharp" module using the linux-arm64 runtime
+```
+
+**The REAL Problem - RPATH vs Module Resolution:**
+
+v1.0.11 fixed **Node module resolution** (top-level symlinks), but Sharp still failed because of the **dynamic linker**.
+
+RPATH inspection revealed:
+```bash
+readelf -d sharp-linux-arm64.node | grep RPATH
+# Output: Library rpath: [$ORIGIN/../../sharp-libvips-linux-arm64/lib:...]
+```
+
+The .node binary has `$ORIGIN/../../sharp-libvips-linux-arm64/lib` in RPATH.
+
+Where $ORIGIN = `.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-linux-arm64/lib/`
+
+This resolves to:
+`.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-libvips-linux-arm64/lib`
+
+**BUT that symlink didn't exist in v1.0.11!**
+
+v1.0.11 created:
+- ✅ `node_modules/@img/sharp-linux-arm64` (for Node resolution)
+- ✅ `node_modules/@img/sharp-libvips-linux-arm64` (for Node resolution)
+
+But **NOT:**
+- ❌ `.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-libvips-linux-arm64` (for RPATH/linker)
+
+**The Fix:**
+
+Added symlink inside sharp-linux-arm64's own node_modules directory:
+```bash
+mkdir -p node_modules/.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img
+ln -sf "../../../@img+sharp-libvips-linux-arm64@1.2.3/node_modules/@img/sharp-libvips-linux-arm64" \
+       "node_modules/.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-libvips-linux-arm64"
+```
+
+This matches pnpm's standard structure where each package has its own `node_modules/` with symlinks to dependencies.
+
+**Why Two Levels of Symlinks Are Required:**
+
+1. **Top-level symlinks** (`node_modules/@img/...`) - For Node.js module resolution
+   - Allows `require('@img/sharp-linux-arm64')` to work
+
+2. **Package-internal symlinks** (`.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/...`) - For dynamic linker RPATH
+   - Allows `ld.so` to find libvips when loading the .node binary
+
+**Build Output Changes:**
+```
+✓ Sharp binary symlink created: node_modules/@img/sharp-linux-arm64
+✓ Sharp-libvips symlink created: node_modules/@img/sharp-libvips-linux-arm64
+✓ RPATH symlink created for dynamic linker
+✓ Sharp module resolution structure complete
+```
+
+---
+
 ## Session End State
 
-- **Version:** v1.0.11 ready to build
-- **Status:** FIX IMPLEMENTED - Root cause identified and resolved
-- **Root Cause:** Missing pnpm top-level symlinks prevented module resolution
-- **Next Action:** Build v1.0.11, test on Pi, verify Sharp loads successfully
+- **Version:** v1.0.12 built and released
+- **Status:** COMPLETE - Both Node module resolution AND dynamic linker fixed
+- **Root Causes Resolved:**
+  1. v1.0.11: Missing top-level symlinks (Node module resolution)
+  2. v1.0.12: Missing package-internal symlinks (dynamic linker RPATH)
+- **Next Action:** Install v1.0.12 on Pi, verify Sharp loads successfully

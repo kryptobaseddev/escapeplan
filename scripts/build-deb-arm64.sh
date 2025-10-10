@@ -269,6 +269,21 @@ else
     exit 1
 fi
 
+# Create RPATH-compatible symlink inside sharp-linux-arm64's node_modules
+# The .node binary has RPATH=$ORIGIN/../../sharp-libvips-linux-arm64/lib
+# This resolves to: .pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-libvips-linux-arm64/lib
+echo "Creating RPATH-compatible symlink for dynamic linker..."
+mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img"
+ln -sf "../../../@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}" \
+       "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}"
+
+if [ -L "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}" ]; then
+    echo "✓ RPATH symlink created for dynamic linker"
+else
+    echo "ERROR: Failed to create RPATH symlink"
+    exit 1
+fi
+
 echo "✓ Sharp module resolution structure complete"
 cd -
 
