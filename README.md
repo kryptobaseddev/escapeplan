@@ -76,9 +76,10 @@ EscapePlan is a comprehensive escape room management system designed specificall
 - **For Offline Setup**: USB drive with downloaded releases
 - **Access Point Mode**: Automatic WiFi AP created on first boot
   - SSID: `EscapePlan`
-  - Password: `escapeplan2024`
+  - Password: `Canuescap3`
   - IP Range: `10.10.10.0/24`
   - Gateway: `10.10.10.1`
+  - 🛡️ **Auto-Protected (v0.2.0+)**: Settings auto-reset on boot if changed
 
 ### Client Devices
 - Modern web browser (Chrome 90+, Firefox 88+, Safari 14+, Edge 90+)
@@ -109,15 +110,19 @@ EscapePlan is a comprehensive escape room management system designed specificall
 
 3. **Boot and Connect**
    - Insert microSD card into Raspberry Pi
-   - Power on the device
-   - Connect to WiFi network `EscapePlan` (password: `escapeplan2024`)
-   - Navigate to: `https://10.10.10.1`
+   - Power on the device (wait ~2 minutes for first boot)
+   - Connect to WiFi network `EscapePlan` (password: `Canuescap3`)
+   - Navigate to: `https://10.10.10.1` or `https://escapeplan.local`
 
 4. **Complete Setup**
    - Accept self-signed certificate warning (first time only)
+   - Login with default credentials: `escapeplan/escapeplan`
    - Create your first operator account
    - Configure your location and games
    - Start managing bookings!
+
+**🛡️ Auto-Protected Defaults (v0.2.0+)**
+Even if you customize settings during flash, EscapePlan automatically resets critical settings (hostname, WiFi AP, credentials) on every boot. Your timezone preference is preserved!
 
 ### Offline Installation
 
@@ -225,6 +230,13 @@ For complete installation instructions, see:
 - Backup database regularly
 - Monitor logs for suspicious activity
 - Consider custom TLS certificates for production
+
+### 🛡️ Auto-Reset Protection (v0.2.0+)
+To ensure reliable operation, EscapePlan automatically resets critical settings on every boot:
+- **Protected**: Hostname, WiFi credentials, login credentials (always match documentation)
+- **Preserved**: Your timezone, locale, and keyboard preferences
+- **Why**: Prevents accidental misconfiguration during image flashing
+- **Logs**: `/var/log/escapeplan/settings-reset.log`
 
 See [docs/SECURITY.md](docs/SECURITY.md) for comprehensive security guidance.
 
