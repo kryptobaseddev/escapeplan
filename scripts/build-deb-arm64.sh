@@ -198,9 +198,60 @@ mkdir -p "${BUILD_DIR}/etc/escapeplan"
 echo "Deploying production dependencies for API..."
 pnpm --filter escapeplan-api deploy --prod --legacy "${BUILD_DIR}/opt/escapeplan/api"
 
-# Sharp will be installed on-device during postinst (see postinst script)
-# This ensures correct ARM64 optional dependencies are installed natively
-echo "Sharp will be installed during package installation on target device"
+# Install Sharp ARM64 binaries with RPATH-compatible symlink structure
+echo "Installing Sharp ARM64 optional dependencies..."
+cd "${BUILD_DIR}/opt/escapeplan/api"
+
+# Create temporary directory for Sharp downloads
+TEMP_SHARP_DIR="/tmp/sharp-arm64-$$"
+mkdir -p "${TEMP_SHARP_DIR}"
+
+# Download Sharp ARM64 platform package
+echo "Downloading @img/sharp-linux-arm64@0.34.4..."
+if curl -L "https://registry.npmjs.org/@img/sharp-linux-arm64/-/sharp-linux-arm64-0.34.4.tgz" -o "${TEMP_SHARP_DIR}/sharp-linux-arm64.tgz"; then
+    echo "✓ Downloaded sharp-linux-arm64"
+    tar -xzf "${TEMP_SHARP_DIR}/sharp-linux-arm64.tgz" -C "${TEMP_SHARP_DIR}"
+    mkdir -p "node_modules/.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img"
+    cp -r "${TEMP_SHARP_DIR}/package" "node_modules/.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-linux-arm64"
+    echo "✓ Installed sharp-linux-arm64 to .pnpm"
+else
+    echo "ERROR: Failed to download sharp-linux-arm64"
+    rm -rf "${TEMP_SHARP_DIR}"
+    exit 1
+fi
+
+# Download Sharp libvips ARM64 package
+echo "Downloading @img/sharp-libvips-linux-arm64@1.2.3..."
+if curl -L "https://registry.npmjs.org/@img/sharp-libvips-linux-arm64/-/sharp-libvips-linux-arm64-1.2.3.tgz" -o "${TEMP_SHARP_DIR}/sharp-libvips.tgz"; then
+    echo "✓ Downloaded sharp-libvips-linux-arm64"
+    tar -xzf "${TEMP_SHARP_DIR}/sharp-libvips.tgz" -C "${TEMP_SHARP_DIR}"
+    mkdir -p "node_modules/.pnpm/@img+sharp-libvips-linux-arm64@1.2.3/node_modules/@img"
+    cp -r "${TEMP_SHARP_DIR}/package" "node_modules/.pnpm/@img+sharp-libvips-linux-arm64@1.2.3/node_modules/@img/sharp-libvips-linux-arm64"
+    echo "✓ Installed sharp-libvips-linux-arm64 to .pnpm"
+else
+    echo "ERROR: Failed to download sharp-libvips-linux-arm64"
+    rm -rf "${TEMP_SHARP_DIR}"
+    exit 1
+fi
+
+# Create RPATH-compatible symlink (critical for Sharp to find libvips)
+# The Sharp binary's RPATH expects: ../../node_modules/@img/sharp-libvips-linux-arm64/lib
+echo "Creating RPATH-compatible symlink for libvips..."
+ln -sf "../../../@img+sharp-libvips-linux-arm64@1.2.3/node_modules/@img/sharp-libvips-linux-arm64" \
+       "node_modules/.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-libvips-linux-arm64"
+echo "✓ RPATH symlink created"
+
+# Create top-level symlinks for module resolution
+echo "Creating top-level symlinks for module resolution..."
+mkdir -p "node_modules/@img"
+ln -sf "../.pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-linux-arm64" "node_modules/@img/sharp-linux-arm64"
+ln -sf "../.pnpm/@img+sharp-libvips-linux-arm64@1.2.3/node_modules/@img/sharp-libvips-linux-arm64" "node_modules/@img/sharp-libvips-linux-arm64"
+echo "✓ Top-level symlinks created"
+
+# Clean up
+rm -rf "${TEMP_SHARP_DIR}"
+echo "✓ Sharp ARM64 binaries installed with correct RPATH structure"
+cd -
 
 echo "Installing ${DEB_ARCH}-specific better-sqlite3 binaries for API..."
 cd "${BUILD_DIR}/opt/escapeplan/api"
@@ -1267,28 +1318,6 @@ case "$1" in
         fi
 
         log "✓ All contracts packages verified and dependencies linked"
-
-        # Install Sharp with correct ARM64 optional dependencies
-        log "Installing Sharp image processing library..."
-        log "This will download ARM64-specific binaries for the current platform"
-
-        cd /opt/escapeplan/api
-        if npm install --no-save --include=optional sharp@0.34.4 2>&1 | tee -a "${LOG_FILE}"; then
-            log "✓ Sharp installed successfully"
-
-            # Verify Sharp can be loaded
-            if node -e "require('sharp')" 2>&1 | tee -a "${LOG_FILE}"; then
-                log "✓ Sharp module verified - loads correctly"
-            else
-                log_error "Sharp installed but failed to load"
-                log_error "This may indicate a libvips dependency issue"
-                exit 1
-            fi
-        else
-            log_error "Failed to install Sharp"
-            exit 1
-        fi
-        cd -
 
         log "Package installation complete. Running orchestrator for system configuration..."
         log ""
