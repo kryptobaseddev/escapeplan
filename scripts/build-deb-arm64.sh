@@ -198,94 +198,8 @@ mkdir -p "${BUILD_DIR}/etc/escapeplan"
 echo "Deploying production dependencies for API..."
 pnpm --filter escapeplan-api deploy --prod --legacy "${BUILD_DIR}/opt/escapeplan/api"
 
-echo "Installing ${DEB_ARCH}-specific sharp binaries for API..."
-cd "${BUILD_DIR}/opt/escapeplan/api"
-
-# Remove ALL sharp platform binaries AND libvips packages installed by pnpm deploy
-# This prevents Sharp's runtime loader from selecting the wrong platform
-echo "Removing x86_64 sharp binaries and libvips to force ARM64 usage..."
-rm -rf node_modules/.pnpm/@img+sharp-linux-x64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-linuxmusl-x64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-win32-x64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-darwin-x64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-darwin-arm64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-libvips-linux-x64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-libvips-linuxmusl-x64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-libvips-win32-x64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-libvips-darwin-x64@* 2>/dev/null || true
-rm -rf node_modules/.pnpm/@img+sharp-libvips-darwin-arm64@* 2>/dev/null || true
-echo "✓ Non-ARM64 sharp binaries and libvips packages removed"
-
-# Download and install sharp binary for target architecture
-echo "Downloading sharp ${DEB_ARCH} prebuilt package..."
-curl -L https://registry.npmjs.org/@img/sharp-${SHARP_PLATFORM}/-/sharp-${SHARP_PLATFORM}-0.34.4.tgz -o /tmp/sharp-${DEB_ARCH}.tgz
-mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}"
-tar -xzf /tmp/sharp-${DEB_ARCH}.tgz -C /tmp
-cp -r /tmp/package/* "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/"
-rm -f /tmp/sharp-${DEB_ARCH}.tgz
-rm -rf /tmp/package
-echo "✓ Sharp ${DEB_ARCH} binary installed"
-
-# Download and install sharp-libvips (contains bundled libvips shared libraries)
-echo "Downloading sharp-libvips ${DEB_ARCH} package (bundled libvips libraries)..."
-curl -L https://registry.npmjs.org/@img/sharp-libvips-${SHARP_PLATFORM}/-/sharp-libvips-${SHARP_PLATFORM}-1.2.3.tgz -o /tmp/sharp-libvips-${DEB_ARCH}.tgz
-mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}"
-tar -xzf /tmp/sharp-libvips-${DEB_ARCH}.tgz -C /tmp
-cp -r /tmp/package/* "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}/"
-
-# Verify bundled libraries were copied
-LIBVIPS_LIB_DIR="${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}/lib"
-SHARED_LIBS=$(find "${LIBVIPS_LIB_DIR}" -name "*.so*" -type f 2>/dev/null | wc -l)
-echo "✓ Sharp-libvips ${DEB_ARCH} package installed with ${SHARED_LIBS} bundled libraries"
-
-rm -f /tmp/sharp-libvips-${DEB_ARCH}.tgz
-rm -rf /tmp/package
-
-# Create pnpm top-level symlinks for sharp packages
-# This is required for Node's module resolution to find @img/sharp-libvips-linux-arm64
-echo "Creating pnpm module resolution symlinks for sharp packages..."
-mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/@img"
-
-# Symlink sharp-linux-arm64 binary package
-ln -sf "../../.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}" \
-       "${BUILD_DIR}/opt/escapeplan/api/node_modules/@img/sharp-${SHARP_PLATFORM}"
-
-# Symlink sharp-libvips-linux-arm64 library package
-ln -sf "../../.pnpm/@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}" \
-       "${BUILD_DIR}/opt/escapeplan/api/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}"
-
-# Verify symlinks were created
-if [ -L "${BUILD_DIR}/opt/escapeplan/api/node_modules/@img/sharp-${SHARP_PLATFORM}" ]; then
-    echo "✓ Sharp binary symlink created: node_modules/@img/sharp-${SHARP_PLATFORM}"
-else
-    echo "ERROR: Failed to create sharp binary symlink"
-    exit 1
-fi
-
-if [ -L "${BUILD_DIR}/opt/escapeplan/api/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}" ]; then
-    echo "✓ Sharp-libvips symlink created: node_modules/@img/sharp-libvips-${SHARP_PLATFORM}"
-else
-    echo "ERROR: Failed to create sharp-libvips symlink"
-    exit 1
-fi
-
-# Create RPATH-compatible symlink inside sharp-linux-arm64's node_modules
-# The .node binary has RPATH=$ORIGIN/../../sharp-libvips-linux-arm64/lib
-# This resolves to: .pnpm/@img+sharp-linux-arm64@0.34.4/node_modules/@img/sharp-libvips-linux-arm64/lib
-echo "Creating RPATH-compatible symlink for dynamic linker..."
-mkdir -p "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img"
-ln -sf "../../../@img+sharp-libvips-${SHARP_PLATFORM}@1.2.3/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}" \
-       "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}"
-
-if [ -L "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-libvips-${SHARP_PLATFORM}" ]; then
-    echo "✓ RPATH symlink created for dynamic linker"
-else
-    echo "ERROR: Failed to create RPATH symlink"
-    exit 1
-fi
-
-echo "✓ Sharp module resolution structure complete"
-cd -
+# Sharp will use system libvips (installed via .deb dependency)
+echo "Sharp will use system libvips42 package (no manual installation needed)"
 
 echo "Installing ${DEB_ARCH}-specific better-sqlite3 binaries for API..."
 cd "${BUILD_DIR}/opt/escapeplan/api"
@@ -1104,6 +1018,7 @@ Section: web
 Priority: optional
 Architecture: ${DEB_ARCH}
 Depends: nodejs (>= 22),
+         libvips42,
          nginx (>= 1.18),
          sqlite3 (>= 3.34),
          network-manager
