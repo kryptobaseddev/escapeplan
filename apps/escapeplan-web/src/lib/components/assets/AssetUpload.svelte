@@ -37,7 +37,14 @@
   const ALLOWED_MIME_TYPES: Record<string, string[]> = {
     thumbnail: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
     room_background: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'],
-    gallery: ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'],
+    gallery: [
+      // Images
+      'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif',
+      // Audio
+      'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/webm', 'audio/mp4',
+      // Video
+      'video/mp4', 'video/webm', 'video/ogg'
+    ],
     puzzle_media: [
       // Images
       'image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif',

@@ -406,15 +406,23 @@ async function enforceBackupRetention(destination: 'local' | 'usb'): Promise<voi
 }
 
 /**
- * Get latest backup date
+ * Get latest backup date using BackupManager
  */
 export async function getLastBackupDate(): Promise<string | null> {
-  const [latest] = await db
-    .select()
-    .from(backups)
-    .where(eq(backups.status, 'completed'))
-    .orderBy(desc(backups.created_at))
-    .limit(1);
+  try {
+    const { BackupManager } = await import('../db/backup/BackupManager.js');
+    const { runtime } = await import('@escapeplan/contracts/runtime');
+    const { env } = await import('../env.js');
+    const dbPath = `${runtime.dataDir}/escapeplan.db`;
+    const backupManager = new BackupManager(dbPath, env.backupDir);
 
-  return latest?.completed_at || null;
+    const allBackups = await backupManager.listBackups();
+    if (allBackups.length === 0) return null;
+
+    // Backups are already sorted by creation date (newest first)
+    return allBackups[0].createdAt;
+  } catch (error) {
+    console.error('Failed to get last backup date:', error);
+    return null;
+  }
 }

@@ -47,6 +47,7 @@
 	let backups = $state<BackupResponse[]>([]);
 	let loadingBackups = $state(false);
 	let deletingBackupId = $state<string | null>(null);
+	let assetBrowserRefreshKey = $state(0);
 
 	async function refreshMetrics() {
 		refreshing = true;
@@ -91,10 +92,14 @@
 	async function loadBackups() {
 		loadingBackups = true;
 		try {
-			const result = await apiFetch<BackupResponse[]>(fetch, '/admin/backups?destination=local', {
-				credentials: 'include'
-			});
-			backups = result;
+			const result = await apiFetch<{ backups: BackupResponse[]; destination: string }>(
+				fetch,
+				'/admin/backups?destination=local',
+				{
+					credentials: 'include'
+				}
+			);
+			backups = result.backups;
 		} catch (err) {
 			console.error('Failed to load backups:', err);
 		} finally {
@@ -498,6 +503,7 @@
 						maxSizeMB={50}
 						onSuccess={() => {
 							refreshMetrics();
+							assetBrowserRefreshKey++;
 						}}
 					/>
 				</div>
@@ -508,6 +514,7 @@
 					<h2 class="card-title">Asset Library</h2>
 					<AssetBrowser
 						showSearch={true}
+						refreshKey={assetBrowserRefreshKey}
 						onSelect={(asset) => {
 							console.log('Selected asset:', asset);
 						}}

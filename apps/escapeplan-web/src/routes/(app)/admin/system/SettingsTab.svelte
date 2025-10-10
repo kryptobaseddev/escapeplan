@@ -206,7 +206,7 @@
 
       if (response.ok) {
         const data = await response.json();
-        selectedAssetDetails = data.asset;
+        selectedAssetDetails = data;
       } else {
         selectedAssetDetails = null;
       }

@@ -205,6 +205,31 @@
       />
     {/if}
 
+    <!-- Z-index 15: Game Status Overlay -->
+    {#if timer.timer.status === 'idle'}
+      <div class="fixed inset-0 z-[15] flex items-center justify-center pointer-events-none">
+        <div class="text-center px-8 py-6 bg-base-100/90 backdrop-blur-sm rounded-2xl border-2 border-base-content/20 shadow-2xl">
+          <h2 class="text-4xl md:text-6xl font-display font-bold text-base-content">
+            No Current Game
+          </h2>
+          <p class="mt-3 text-lg md:text-xl text-base-content/70">
+            Waiting for session to start...
+          </p>
+        </div>
+      </div>
+    {:else if timer.timer.status === 'paused'}
+      <div class="fixed inset-0 z-[15] flex items-center justify-center pointer-events-none">
+        <div class="text-center px-8 py-6 bg-warning/90 backdrop-blur-sm rounded-2xl border-2 border-warning-content/20 shadow-2xl">
+          <h2 class="text-4xl md:text-6xl font-display font-bold text-warning-content">
+            Game Paused
+          </h2>
+          <p class="mt-3 text-lg md:text-xl text-warning-content/80">
+            Timer is temporarily paused
+          </p>
+        </div>
+      </div>
+    {/if}
+
     <!-- Z-index 20+: Media Overlays -->
 
     <!-- Text hints with separate lifecycle -->

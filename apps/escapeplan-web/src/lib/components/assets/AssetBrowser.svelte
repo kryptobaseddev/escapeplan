@@ -32,6 +32,7 @@
 		selectedAssetId?: string;
 		showSearch?: boolean;
 		selectionMode?: 'single' | 'multiple';
+		refreshKey?: number;
 	}
 
 	let {
@@ -43,7 +44,8 @@
 		onSelectMultiple = undefined,
 		selectedAssetId = undefined,
 		showSearch = true,
-		selectionMode = 'single'
+		selectionMode = 'single',
+		refreshKey = 0
 	}: AssetBrowserProps = $props();
 
 	let assets = $state<AssetRecord[]>([]);
@@ -348,6 +350,7 @@
 		searchQuery;
 		filterAssetType;
 		filterMediaType;
+		refreshKey; // Watch refreshKey to trigger refresh on parent request
 
 		if (debounceTimer) clearTimeout(debounceTimer);
 		debounceTimer = setTimeout(() => {

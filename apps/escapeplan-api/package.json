@@ -51,6 +51,7 @@
     "@types/better-sqlite3": "^7.6.5",
     "@types/node": "^20.11.30",
     "@types/tar": "^6.1.13",
+    "dotenv": "^17.2.3",
     "drizzle-kit": "^0.31.5",
     "pino-pretty": "^13.1.1",
     "tsup": "^8.2.4",

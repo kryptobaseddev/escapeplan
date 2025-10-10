@@ -34,14 +34,17 @@
 	$effect(() => {
 		if (!videoElement) return;
 
+		// Capture the video element reference for use in async function
+		const video = videoElement;
+
 		const initializeStream = async () => {
-			if (videoElement.canPlayType('application/vnd.apple.mpegurl')) {
+			if (video.canPlayType('application/vnd.apple.mpegurl')) {
 				// Native HLS support (Safari)
-				videoElement.src = streamUrl;
-				videoElement.addEventListener('loadedmetadata', () => {
+				video.src = streamUrl;
+				video.addEventListener('loadedmetadata', () => {
 					isLoading = false;
 					if (autoplay) {
-						videoElement.play().catch(err => {
+						video.play().catch(err => {
 							error = 'Failed to autoplay: ' + err.message;
 						});
 					}
@@ -57,11 +60,11 @@
 							backBufferLength: 90,
 						});
 						hls.loadSource(streamUrl);
-						hls.attachMedia(videoElement);
+						hls.attachMedia(video);
 						hls.on(Hls.Events.MANIFEST_PARSED, () => {
 							isLoading = false;
 							if (autoplay) {
-								videoElement.play().catch(err => {
+								video.play().catch(err => {
 									error = 'Failed to autoplay: ' + err.message;
 								});
 							}

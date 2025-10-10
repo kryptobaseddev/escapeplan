@@ -3,6 +3,10 @@
  * No hardcoded URLs in 2025!
  */
 
+// Load environment variables from .env.local (dev only) - MUST be first!
+import { config as dotenvConfig } from 'dotenv';
+dotenvConfig({ path: '.env.local' });
+
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
@@ -37,6 +41,10 @@ export interface AppEnvironment {
 
   // Feature flags
   enableAutoUpdate: boolean;
+
+  // Dev-mode auth bypass (dev only)
+  devAuthBypass: boolean;
+  devAuthUserId: string | null;
 
   // Asset storage
   maxImageSizeMB: number;
@@ -148,6 +156,10 @@ export function loadEnvironment(): AppEnvironment {
     // Features
     enableAutoUpdate: process.env.ENABLE_AUTO_UPDATE !== 'false' ? DEFAULT_AUTO_UPDATE_ENABLED : false,
 
+    // Dev auth bypass (only enabled in dev mode)
+    devAuthBypass: runtime.isDevelopment && process.env.DEV_AUTH_BYPASS === 'true',
+    devAuthUserId: process.env.DEV_AUTH_USER_ID || null,
+
     // Storage (use runtime detection with env var overrides)
     maxImageSizeMB: Number(process.env.MAX_IMAGE_SIZE_MB || DEFAULT_FILE_SIZE_LIMITS.IMAGE_MB),
     maxAudioSizeMB: Number(process.env.MAX_AUDIO_SIZE_MB || DEFAULT_FILE_SIZE_LIMITS.AUDIO_MB),
@@ -175,6 +187,8 @@ if (env.isDev) {
     githubRepo: env.githubRepo,
     dataDir: env.dataDir,
     assetDir: env.assetDir,
-    backupDir: env.backupDir
+    backupDir: env.backupDir,
+    devAuthBypass: env.devAuthBypass,
+    devAuthUserId: env.devAuthUserId ? `${env.devAuthUserId.substring(0, 8)}...` : null
   });
 }

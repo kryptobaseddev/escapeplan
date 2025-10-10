@@ -289,30 +289,32 @@ function cancelStopSession() {
           </button>
         {/if}
 
-        {#if session.timer.status !== 'completed'}
-          <button
-            type="button"
-            class="btn btn-circle btn-xs sm:btn-sm btn-ghost"
-            onclick={() => handleTimerCommand('reset_timer')}
-            aria-label="Reset timer"
-            title="Reset timer"
+        <!-- Reset/Restart button - always visible so completed games can be restarted -->
+        <button
+          type="button"
+          class="btn btn-circle btn-xs sm:btn-sm btn-ghost"
+          onclick={() => handleTimerCommand('reset_timer')}
+          aria-label={session.timer.status === 'completed' ? 'Restart game' : 'Reset timer'}
+          title={session.timer.status === 'completed' ? 'Restart game' : 'Reset timer'}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="h-3 w-3 sm:h-4 sm:w-4"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-3 w-3 sm:h-4 sm:w-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-          </button>
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+            />
+          </svg>
+        </button>
 
+        <!-- Stop button - only show for active games (not completed) -->
+        {#if session.timer.status !== 'completed'}
           <button
             type="button"
             class="btn btn-circle btn-xs sm:btn-sm btn-error"

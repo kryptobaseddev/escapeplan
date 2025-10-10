@@ -1,3 +1,4 @@
+// Environment variables are loaded in env.ts - do not load here!
 import Fastify, { type FastifyReply, type FastifyRequest, type FastifyBaseLogger } from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
@@ -7,7 +8,8 @@ import { Server as SocketServer } from 'socket.io';
 import argon2 from 'argon2';
 import { z } from 'zod';
 import type { CommandRequest, OperatorPermission, OperatorRole, SaveGameRequest, QuickStartSessionRequest, ApplyNetworkConfigRequest, ApplyNetworkConfigResponse } from '@escapeplan/contracts';
-import { saveGameSchema } from '@escapeplan/contracts/validation';
+import { saveGameSchema } from '@escapeplan/contracts';
+import { BackupManager } from './db/backup/BackupManager.js';
 import {
   applyCommand,
   archiveOperatorAccount,
@@ -18,9 +20,11 @@ import {
   deleteGame,
   deleteOperatorAccount,
   deleteRole,
+  findOperatorById,
   findOperatorByUsername,
   getAlertRule,
   getGameDetails,
+  getGameBySlug,
   getBookingsByDate,
   getDashboard,
   getRoleById,
@@ -50,7 +54,7 @@ import {
 } from './state/index.js';
 import { auth, describeSession, issueToken, validateToken } from './auth.js';
 import { runMigrations, db } from './db/client.js';
-import { systemLogs } from '@escapeplan/contracts';
+import { systemLogs, user } from '@escapeplan/contracts';
 import { and, eq, desc, count, like } from 'drizzle-orm';
 import { attachRealtime, emitDashboardUpdate, emitSessionUpdate, emitTimerUpdate } from './realtime.js';
 import { applyEscapePlanConfig } from './platform.js';
@@ -107,7 +111,7 @@ const updateOwnProfileSchema = z.object({
   bio: z.string().max(500).optional().or(z.literal(null))
 });
 
-// NOTE: saveGameSchema is now imported from @escapeplan/contracts/validation
+// NOTE: saveGameSchema is now imported from @escapeplan/contracts (main entry point)
 // This ensures API validation matches the canonical schema used across the application
 
 const networkUpdateSchema = z.object({
@@ -186,6 +190,25 @@ const updateRoleSchema = z.object({
 });
 
 async function ensureAuth(request: FastifyRequest, reply: FastifyReply) {
+  // DEV ONLY: Bypass auth if enabled (for development across server restarts)
+  if (env.devAuthBypass && env.devAuthUserId) {
+    const user = findOperatorById(env.devAuthUserId);
+    if (user) {
+      console.log('[DEV AUTH BYPASS] Using dev user:', user.username);
+      return {
+        token: 'dev-bypass-token',
+        user: {
+          id: user.id,
+          username: user.username,
+          name: user.name,
+          role: user.role,
+          permissions: user.permissions,
+          mustResetPassword: false
+        }
+      };
+    }
+  }
+
   // First, try to get session from Better Auth cookies
   try {
     const session = await auth.api.getSession({
@@ -295,6 +318,13 @@ export async function buildServer() {
     console.warn('[STARTUP] Continuing with default settings');
   }
 
+  // Initialize backup manager
+  console.log('[STARTUP] Initializing backup manager...');
+  const { runtime: runtimeForBackup } = await import('@escapeplan/contracts/runtime');
+  const dbPath = `${runtimeForBackup.dataDir}/escapeplan.db`;
+  const backupManager = new BackupManager(dbPath, env.backupDir);
+  console.log('[STARTUP] ✅ Backup manager initialized');
+
   // Continue with rest of server setup
   const app = Fastify({
     logger: loggerConfig,
@@ -310,11 +340,8 @@ export async function buildServer() {
   });
 
   // Register static file serving for assets
-  const { runtime } = await import('@escapeplan/contracts/runtime');
-  const assetBasePath = runtime.assetsDir;
-
   await app.register(fastifyStatic, {
-    root: assetBasePath,
+    root: env.assetDir,
     prefix: '/assets/',
     decorateReply: false
   });
@@ -550,7 +577,66 @@ export async function buildServer() {
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
 
       const { status, role, search } = request.query as { status?: 'active' | 'archived'; role?: string; search?: string };
-      return listOperatorSummaries({ status, role, search });
+      return listOperatorSummaries({ status, role: role as OperatorRole | 'all' | undefined, search });
+    });
+
+    api.get('/admin/users/check-username', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
+
+      const { username } = request.query as { username?: string };
+      if (!username || username.trim().length < 3) {
+        return reply.status(400).send({ statusCode: 400, message: 'Username must be at least 3 characters' });
+      }
+
+      try {
+        const existing = await db.select().from(user).where(eq(user.username, username.trim())).limit(1);
+        return { available: existing.length === 0 };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'checkUsername',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to check username availability' });
+      }
+    });
+
+    api.get('/admin/users/check-email', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
+
+      const { email } = request.query as { email?: string };
+      if (!email || email.trim().length === 0) {
+        return reply.status(400).send({ statusCode: 400, message: 'Email is required' });
+      }
+
+      try {
+        const existing = await db.select().from(user).where(eq(user.email, email.trim())).limit(1);
+        return { available: existing.length === 0 };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'checkEmail',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to check email availability' });
+      }
+    });
+
+    api.get('/admin/users/:id', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_users', request.log, auth.user.id)) return;
+
+      const { id } = request.params as { id: string };
+      const operator = findOperatorById(id);
+      if (!operator) {
+        return reply.status(404).send({ statusCode: 404, message: 'User not found' });
+      }
+      return operator;
     });
 
     api.post('/admin/users', async (request, reply) => {
@@ -995,7 +1081,7 @@ export async function buildServer() {
       }
 
       try {
-        const role = createRole(parsed.data);
+        const role = createRole({ ...parsed.data, permissionIds: parsed.data.permissionIds || [] });
         request.log.info({ userId: auth.user.id, roleId: role.id }, 'Role created');
         return role;
       } catch (error) {
@@ -1185,9 +1271,9 @@ export async function buildServer() {
       if (!auth) return;
       const { status = 'active' } = request.query as { status?: 'active' | 'all' };
       if (status === 'active') {
-        return { sessions: listActiveSessions() };
+        return listActiveSessions();
       }
-      return { sessions: listSessions() };
+      return listSessions({ status });
     });
 
     api.post('/sessions/quick-start', async (request, reply) => {
@@ -1202,13 +1288,16 @@ export async function buildServer() {
 
       try {
         const session = quickStartSession(body, auth.user.id);
-        emitSessionUpdate();
+        const fullSession = getSessionById(session.session.id);
+        if (fullSession) {
+          emitSessionUpdate(fullSession);
+        }
         return session;
       } catch (error) {
         logError(request.log, error, {
           operation: 'quickStartSession',
           userId: auth.user.id,
-          gameSlug: body.gameSlug,
+          gameId: body.gameId,
           requestId: request.id
         });
         return reply.status(400).send({ statusCode: 400, message: (error as Error).message });
@@ -1543,13 +1632,121 @@ export async function buildServer() {
       }
     });
 
+    // Backup management endpoints
     api.get('/admin/backups', async (request, reply) => {
       const auth = await ensureAuth(request, reply);
       if (!auth) return;
       if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'view_storage', request.log, auth.user.id)) return;
-      const { destination = 'local' } = request.query as { destination?: 'local' | 'external' };
-      // TODO: Implement backup management
-      return { backups: [], destination };
+
+      try {
+        const backups = await backupManager.listBackups();
+
+        // Transform BackupMetadata to BackupResponse format expected by frontend
+        const transformedBackups = backups.map(backup => ({
+          id: backup.id,
+          type: backup.trigger === 'scheduled-daily' ? 'scheduled' :
+                backup.trigger === 'pre-update' ? 'pre-update' : 'manual',
+          status: 'completed', // BackupManager only stores completed backups
+          filePath: backup.databasePath,
+          fileSizeBytes: backup.sizeBytes,
+          includes: {
+            database: true,
+            games: false,
+            assets: false,
+            logs: false
+          },
+          destination: 'local' as const,
+          checksumSha256: backup.checksumSha256,
+          createdBy: backup.notes?.includes('created by')
+            ? backup.notes.split('created by ')[1] || 'system'
+            : 'system',
+          createdAt: backup.createdAt,
+          completedAt: backup.createdAt
+        }));
+
+        return { backups: transformedBackups, destination: 'local' };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'listBackups',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({ statusCode: 500, message: 'Failed to list backups' });
+      }
+    });
+
+    api.post('/admin/backups', async (request, reply) => {
+      const auth = await ensureAuth(request, reply);
+      if (!auth) return;
+      if (!ensurePermission(reply, auth.user.role, auth.user.permissions, 'manage_storage', request.log, auth.user.id)) return;
+
+      try {
+        // Parse request body
+        const requestSchema = z.object({
+          type: z.enum(['manual', 'on-demand']).optional().default('manual'),
+          notes: z.string().optional(),
+          verify: z.boolean().optional().default(true)
+        });
+
+        const parsed = requestSchema.safeParse(request.body);
+        if (!parsed.success) {
+          return reply.status(400).send({
+            statusCode: 400,
+            message: 'Invalid request body',
+            details: parsed.error.format()
+          });
+        }
+
+        const { type, notes, verify } = parsed.data;
+
+        // Create backup using BackupManager
+        const metadata = await backupManager.createFullBackup({
+          trigger: type,
+          checkpointWal: true,  // Recommended for consistency
+          verifyAfterCreate: verify,
+          appVersion: env.version,
+          notes: notes || `Manual backup created by ${auth.user.username}`
+        });
+
+        request.log.info({
+          userId: auth.user.id,
+          backupId: metadata.id,
+          sizeBytes: metadata.sizeBytes
+        }, 'Database backup created');
+
+        // Transform to BackupResponse format expected by frontend
+        return {
+          success: true,
+          backup: {
+            id: metadata.id,
+            type: type,
+            status: metadata.verified ? 'completed' : 'completed', // Backup completed even if not verified
+            filePath: metadata.databasePath,
+            fileSizeBytes: metadata.sizeBytes,
+            includes: {
+              database: true,
+              games: false,
+              assets: false,
+              logs: false
+            },
+            destination: 'local' as const,
+            checksumSha256: metadata.checksumSha256,
+            createdBy: auth.user.username,
+            createdAt: metadata.createdAt,
+            completedAt: metadata.createdAt
+          }
+        };
+      } catch (error) {
+        logError(request.log, error, {
+          operation: 'createBackup',
+          userId: auth.user.id,
+          requestId: request.id
+        });
+        return reply.status(500).send({
+          statusCode: 500,
+          message: `Backup failed: ${(error as Error).message}`
+        });
+      }
     });
 
     api.get('/bookings', async (request, reply) => {
@@ -1608,6 +1805,45 @@ export async function buildServer() {
       }
     });
 
+    api.get('/public/room/:slug', async (request, reply) => {
+      const { slug } = request.params as { slug: string };
+
+      // Try to find an active session for this game slug
+      const sessionRecord = getSessionBySlug(slug);
+
+      if (sessionRecord) {
+        // Session is running - return full timer broadcast
+        return toTimerBroadcast(sessionRecord.slug, sessionRecord.session, sessionRecord.narrative);
+      }
+
+      // No active session - get game info to show room display with "No Current Game" state
+      const game = getGameBySlug(slug);
+      if (!game) {
+        return reply.status(404).send({ statusCode: 404, message: 'Room not found' });
+      }
+
+      // Return minimal data for inactive state
+      const background = game.roomDisplayConfig?.backgroundAssetId
+        ? { type: 'image' as const, url: `/assets/${game.roomDisplayConfig.backgroundAssetId}` }
+        : { type: 'image' as const, url: '/default-room-bg.jpg' };
+
+      return {
+        slug: game.slug,
+        sessionId: null,
+        gameName: game.name,
+        roomName: game.name,
+        background,
+        timer: {
+          status: 'idle' as const,
+          totalSeconds: game.durationMinutes * 60,
+          remainingSeconds: game.durationMinutes * 60,
+          elapsedSeconds: 0,
+          displayTime: `${game.durationMinutes}:00`
+        },
+        roomConfig: game.roomDisplayConfig
+      };
+    });
+
     api.get('/public/timer/:slug', async (request, reply) => {
       const { slug } = request.params as { slug: string };
       const sessionRecord = getSessionBySlug(slug);
@@ -1655,18 +1891,25 @@ export async function buildServer() {
 
       // Fallback to Bearer token
       const token = (socket.handshake.auth?.token ?? socket.handshake.query?.token) as string | undefined;
-      if (!token) {
-        return next(new Error('Unauthorized'));
+      if (token) {
+        const user = validateToken(token);
+        if (user) {
+          socket.data.user = user;
+          socket.data.authenticated = true;
+          return next();
+        }
       }
-      const user = validateToken(token);
-      if (!user) {
-        return next(new Error('Unauthorized'));
-      }
-      socket.data.user = user;
-      socket.data.authenticated = true;
+
+      // Allow unauthenticated connections for public room displays
+      // These will only receive public events (timer updates, hints)
+      socket.data.authenticated = false;
+      socket.data.isPublic = true;
       next();
     } catch (error) {
-      next(new Error('Unauthorized'));
+      // On error, allow as public connection
+      socket.data.authenticated = false;
+      socket.data.isPublic = true;
+      next();
     }
   });
 

@@ -594,11 +594,17 @@ export async function getStorageMetrics() {
     console.error('Failed to get database size:', error);
   }
 
-  // Count completed backups
+  // Count backups using BackupManager
   try {
-    const completedBackups = await db.select().from(backups).where(eq(backups.status, 'completed'));
-    backupCount = completedBackups.length;
-    databaseBackups = completedBackups.reduce((sum, b) => sum + (b.file_size_bytes || 0), 0);
+    const { BackupManager } = await import('../db/backup/BackupManager.js');
+    const { runtime } = await import('@escapeplan/contracts/runtime');
+    const { env } = await import('../env.js');
+    const dbPath = `${runtime.dataDir}/escapeplan.db`;
+    const backupManager = new BackupManager(dbPath, env.backupDir);
+
+    const allBackups = await backupManager.listBackups();
+    backupCount = allBackups.length;
+    databaseBackups = allBackups.reduce((sum, b) => sum + b.totalSizeBytes, 0);
   } catch (error) {
     console.error('Failed to get backup stats:', error);
   }

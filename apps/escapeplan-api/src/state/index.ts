@@ -33,6 +33,7 @@ export {
   gamesState,
   listGameDetails,
   getGameDetails,
+  getGameBySlug,
   createGame,
   updateGame,
   deleteGame,

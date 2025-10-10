@@ -360,6 +360,22 @@ class GamesState {
   }
 
   /**
+   * Gets a single game by slug
+   */
+  getGameBySlug(slug: string): GameDetails | undefined {
+    const row = sqlite.prepare(
+      `SELECT id, slug, name, description, story_intro, duration_minutes, difficulty, game_type, pricing_model, category, categories,
+              min_players, max_players, price_per_player_cents, resources_required, validation_notes, default_volume, camera_ids,
+              media_config, room_display_config, pricing_config, booking_rules_config,
+              created_at, updated_at, archived_at, archived_by, archived_reason
+       FROM games
+       WHERE slug = ?`
+    ).get(slug) as GameRow | undefined;
+    if (!row) return undefined;
+    return mapGameDetailsRow(row);
+  }
+
+  /**
    * Creates a new game
    */
   createGame(payload: SaveGameRequest): GameDetails {
@@ -619,6 +635,7 @@ export const gamesState = new GamesState();
  */
 export const listGameDetails = (filters?: GameListFilters) => gamesState.listGameDetails(filters);
 export const getGameDetails = (gameId: string) => gamesState.getGameDetails(gameId);
+export const getGameBySlug = (slug: string) => gamesState.getGameBySlug(slug);
 export const createGame = (payload: SaveGameRequest) => gamesState.createGame(payload);
 export const updateGame = (gameId: string, payload: SaveGameRequest) => gamesState.updateGame(gameId, payload);
 export const deleteGame = (gameId: string) => gamesState.deleteGame(gameId);
