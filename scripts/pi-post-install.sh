@@ -185,7 +185,7 @@ rebuild_native_modules() {
         return 1
     fi
 
-    # Find better-sqlite3 and sharp in pnpm structure
+    # Find better-sqlite3 in pnpm structure
     local sqlite_module
     sqlite_module=$(find node_modules/.pnpm -type f -name "better_sqlite3.node" 2>/dev/null | head -n1)
 
@@ -196,34 +196,40 @@ rebuild_native_modules() {
 
     log "Found better-sqlite3 at: ${sqlite_module}"
 
-    local sharp_module
-    sharp_module=$(find node_modules/.pnpm -type f -path "*/sharp*/build/Release/sharp-*.node" 2>/dev/null | head -n1)
+    # Sharp v0.34+ uses platform-specific optional dependencies, not node-gyp builds
+    # Check if ONLY ARM64 sharp binary exists (x64 binaries should be removed during build)
+    local sharp_arm64_binary
+    sharp_arm64_binary=$(find node_modules/.pnpm/@img+sharp-linux-arm64@* -type f -name "sharp-linux-arm64.node" 2>/dev/null | head -n1)
 
-    if [ -z "${sharp_module}" ]; then
-        log "WARNING: sharp native module not found - may not be installed"
-        sharp_module=""
-    else
-        log "Found sharp at: ${sharp_module}"
-    fi
+    local sharp_x64_binary
+    sharp_x64_binary=$(find node_modules/.pnpm/@img+sharp-linux-x64@* -type f -name "sharp-linux-x64.node" 2>/dev/null | head -n1)
 
-    # Validate current architecture before rebuild - check BOTH modules
+    # Validate better-sqlite3 architecture
     local sqlite_ok=false
-    local sharp_ok=false
-
     if validate_native_module "${sqlite_module}" "better-sqlite3 (before rebuild)"; then
         sqlite_ok=true
     fi
 
-    if [ -n "${sharp_module}" ]; then
-        if validate_native_module "${sharp_module}" "sharp (before rebuild)"; then
+    # Validate sharp platform binaries
+    local sharp_ok=false
+    if [ -n "${sharp_arm64_binary}" ]; then
+        log "Found sharp ARM64 binary: ${sharp_arm64_binary}"
+        if validate_native_module "${sharp_arm64_binary}" "sharp ARM64"; then
             sharp_ok=true
         fi
     else
-        # If sharp not found, assume it needs rebuild
-        sharp_ok=false
+        log "WARNING: sharp ARM64 binary not found"
     fi
 
-    # Only skip rebuild if BOTH modules are ARM-compatible
+    if [ -n "${sharp_x64_binary}" ]; then
+        log "ERROR: sharp x64 binary found - this will cause runtime errors"
+        log "Removing x64 sharp binaries to force ARM64 usage..."
+        rm -rf node_modules/.pnpm/@img+sharp-linux-x64@* 2>/dev/null || true
+        rm -rf node_modules/.pnpm/@img+sharp-linuxmusl-x64@* 2>/dev/null || true
+        log "✓ x64 sharp binaries removed"
+    fi
+
+    # Only skip rebuild if better-sqlite3 is ARM-compatible AND sharp ARM64 exists
     if [ "${sqlite_ok}" = true ] && [ "${sharp_ok}" = true ]; then
         log "All native modules are already ARM-compatible, skipping rebuild"
         return 0
@@ -252,11 +258,12 @@ rebuild_native_modules() {
         rm -rf "${sqlite_build_dir}/build"
     fi
 
-    # Rebuild better-sqlite3 and sharp for current architecture
-    log "Running: npm rebuild better-sqlite3 sharp"
+    # Rebuild better-sqlite3 for current architecture
+    # Note: Sharp v0.34+ doesn't support rebuilding - it uses prebuilt platform binaries
+    log "Running: npm rebuild better-sqlite3"
     log "This may take 2-3 minutes on Raspberry Pi..."
 
-    if timeout 300 npm rebuild better-sqlite3 sharp >> "${LOG_FILE}" 2>&1; then
+    if timeout 300 npm rebuild better-sqlite3 >> "${LOG_FILE}" 2>&1; then
         log "✓ npm rebuild successful"
     else
         local exit_code=$?
@@ -269,7 +276,7 @@ rebuild_native_modules() {
         return 1
     fi
 
-    # Validate rebuilt modules
+    # Validate rebuilt better-sqlite3
     local rebuilt_sqlite
     rebuilt_sqlite=$(find node_modules/.pnpm -type f -name "better_sqlite3.node" 2>/dev/null | head -n1)
 
@@ -278,37 +285,29 @@ rebuild_native_modules() {
         return 1
     fi
 
-    local rebuilt_sharp
-    rebuilt_sharp=$(find node_modules/.pnpm -type f -path "*/sharp*/build/Release/sharp-*.node" 2>/dev/null | head -n1)
-
-    local validation_failed=false
-
-    # Validate better-sqlite3
-    if validate_native_module "${rebuilt_sqlite}" "better-sqlite3 (after rebuild)"; then
-        log "✓ better-sqlite3 rebuild successful and validated"
-    else
+    if ! validate_native_module "${rebuilt_sqlite}" "better-sqlite3 (after rebuild)"; then
         log "ERROR: better-sqlite3 validation failed after rebuild"
-        validation_failed=true
-    fi
-
-    # Validate sharp if found
-    if [ -n "${rebuilt_sharp}" ]; then
-        if validate_native_module "${rebuilt_sharp}" "sharp (after rebuild)"; then
-            log "✓ sharp rebuild successful and validated"
-        else
-            log "ERROR: sharp validation failed after rebuild"
-            validation_failed=true
-        fi
-    else
-        log "WARNING: sharp module not found after rebuild - may not be installed"
-    fi
-
-    if [ "${validation_failed}" = true ]; then
-        log "ERROR: One or more native modules failed validation"
         return 1
     fi
+    log "✓ better-sqlite3 rebuild successful and validated"
 
-    log "✓ All native modules rebuilt and validated successfully"
+    # Re-check sharp ARM64 binary (no rebuild needed, just verify it exists)
+    local sharp_arm64_check
+    sharp_arm64_check=$(find node_modules/.pnpm/@img+sharp-linux-arm64@* -type f -name "sharp-linux-arm64.node" 2>/dev/null | head -n1)
+
+    if [ -n "${sharp_arm64_check}" ]; then
+        if validate_native_module "${sharp_arm64_check}" "sharp ARM64 (after rebuild)"; then
+            log "✓ sharp ARM64 binary verified"
+        else
+            log "ERROR: sharp ARM64 binary validation failed"
+            return 1
+        fi
+    else
+        log "WARNING: sharp ARM64 binary not found - API may fail to start"
+        log "This should have been installed during package build"
+    fi
+
+    log "✓ All native modules validated successfully"
     return 0
 }
 

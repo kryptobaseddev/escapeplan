@@ -200,7 +200,16 @@ pnpm --filter escapeplan-api deploy --prod --legacy "${BUILD_DIR}/opt/escapeplan
 
 echo "Installing ${DEB_ARCH}-specific sharp binaries for API..."
 cd "${BUILD_DIR}/opt/escapeplan/api"
-pnpm add @img/sharp-${SHARP_PLATFORM}@0.34.4 --save-optional --lockfile-only || echo "Warning: Could not update lockfile for sharp"
+
+# Remove ALL sharp platform binaries installed by pnpm deploy
+# This prevents Sharp's runtime loader from selecting the wrong platform
+echo "Removing x86_64 sharp binaries to force ARM64 usage..."
+rm -rf node_modules/.pnpm/@img+sharp-linux-x64@* 2>/dev/null || true
+rm -rf node_modules/.pnpm/@img+sharp-linuxmusl-x64@* 2>/dev/null || true
+rm -rf node_modules/.pnpm/@img+sharp-win32-x64@* 2>/dev/null || true
+rm -rf node_modules/.pnpm/@img+sharp-darwin-x64@* 2>/dev/null || true
+rm -rf node_modules/.pnpm/@img+sharp-darwin-arm64@* 2>/dev/null || true
+echo "✓ Non-ARM64 Linux sharp binaries removed"
 
 # Download and extract sharp binary for target architecture
 echo "Downloading sharp ${DEB_ARCH} prebuilt binary..."
@@ -211,7 +220,7 @@ cp /tmp/package/lib/sharp-${SHARP_PLATFORM}.node "${BUILD_DIR}/opt/escapeplan/ap
 cp /tmp/package/package.json "${BUILD_DIR}/opt/escapeplan/api/node_modules/.pnpm/@img+sharp-${SHARP_PLATFORM}@0.34.4/node_modules/@img/sharp-${SHARP_PLATFORM}/"
 rm -f /tmp/sharp-${DEB_ARCH}.tgz
 rm -rf /tmp/package
-echo "✓ Sharp ${DEB_ARCH} binary installed"
+echo "✓ Sharp ${DEB_ARCH} binary installed (ONLY ARM64 platform available)"
 cd -
 
 echo "Installing ${DEB_ARCH}-specific better-sqlite3 binaries for API..."
