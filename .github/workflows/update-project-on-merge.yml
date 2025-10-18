@@ -1,0 +1,47 @@
+name: Update Project on PR Merge
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  update-status:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+
+    steps:
+      - name: Get project item ID
+        id: get-item
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          ITEM_ID=$(gh api graphql -f query='
+            query($url: URI!) {
+              resource(url: $url) {
+                ... on PullRequest {
+                  projectItems(first: 10) {
+                    nodes {
+                      id
+                      project { number }
+                    }
+                  }
+                }
+              }
+            }' -f url="$PR_URL" --jq '.data.resource.projectItems.nodes[] | select(.project.number == 7) | .id')
+
+          echo "item_id=$ITEM_ID" >> $GITHUB_OUTPUT
+
+      - name: Update status to Done
+        if: steps.get-item.outputs.item_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ITEM_ID: ${{ steps.get-item.outputs.item_id }}
+        run: |
+          # Status field ID: PVTSSF_lAHOBa5S9s4BFT0Zzg2ryeM
+          # "Done" option ID: 98236657
+          gh project item-edit 7 --owner kryptobaseddev \
+            --id "$ITEM_ID" \
+            --field-id "PVTSSF_lAHOBa5S9s4BFT0Zzg2ryeM" \
+            --single-select-option-id "98236657"

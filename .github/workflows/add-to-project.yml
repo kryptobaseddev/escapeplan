@@ -1,0 +1,21 @@
+name: Add to Project
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+jobs:
+  add-to-project:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add to project
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROJECT_NUMBER: 7
+          PROJECT_OWNER: kryptobaseddev
+        run: |
+          ITEM_URL="${{ github.event.issue.html_url || github.event.pull_request.html_url }}"
+          gh project item-add "$PROJECT_NUMBER" \
+            --owner "$PROJECT_OWNER" \
+            --url "$ITEM_URL"

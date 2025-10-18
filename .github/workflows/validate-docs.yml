@@ -1,0 +1,66 @@
+name: Validate Documentation
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**/*.md'
+      - 'docs/**/*.mdx'
+
+jobs:
+  validate-frontmatter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Frontmatter
+        run: |
+          EXIT_CODE=0
+
+          # Find all markdown files in docs/
+          FILES=$(find docs -name "*.md" -o -name "*.mdx")
+
+          for FILE in $FILES; do
+            echo "Checking $FILE..."
+
+            # Check for required fields
+            if ! grep -q "^title:" "$FILE"; then
+              echo "❌ Missing 'title' in $FILE"
+              EXIT_CODE=1
+            fi
+
+            if ! grep -q "^description:" "$FILE"; then
+              echo "❌ Missing 'description' in $FILE"
+              EXIT_CODE=1
+            fi
+
+            if ! grep -q "^status:" "$FILE"; then
+              echo "❌ Missing 'status' in $FILE"
+              EXIT_CODE=1
+            fi
+
+            if ! grep -q "^version:" "$FILE"; then
+              echo "❌ Missing 'version' in $FILE"
+              EXIT_CODE=1
+            fi
+
+            if ! grep -q "^last_updated:" "$FILE"; then
+              echo "❌ Missing 'last_updated' in $FILE"
+              EXIT_CODE=1
+            fi
+
+            if ! grep -q "^component:" "$FILE"; then
+              echo "❌ Missing 'component' in $FILE"
+              EXIT_CODE=1
+            fi
+
+            if ! grep -q "^type:" "$FILE"; then
+              echo "❌ Missing 'type' in $FILE"
+              EXIT_CODE=1
+            fi
+          done
+
+          if [ $EXIT_CODE -eq 0 ]; then
+            echo "✅ All frontmatter validation passed"
+          fi
+
+          exit $EXIT_CODE

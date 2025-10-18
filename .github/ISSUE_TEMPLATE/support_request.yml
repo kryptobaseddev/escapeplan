@@ -1,0 +1,52 @@
+name: 🆘 Support Request
+description: Get help with using EscapePlan
+title: "[Support]: "
+labels: ["type:support", "status:needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Need help with EscapePlan? We're here to assist!
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What do you need help with?
+      description: Describe the issue or question you have
+      placeholder: Tell us what you're trying to do
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you already tried?
+      description: List any troubleshooting steps you've already attempted
+      placeholder: |
+        - Checked documentation at...
+        - Tried restarting...
+        - Looked at logs...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: EscapePlan Version
+      placeholder: "e.g., v1.0.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Error Messages
+      description: Please paste any relevant logs or error messages
+      placeholder: Paste logs here
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other information that might help us assist you
